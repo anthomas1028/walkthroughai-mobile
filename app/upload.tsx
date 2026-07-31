@@ -1,9 +1,10 @@
 import * as ImageManipulator from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -25,6 +26,89 @@ const UPLOAD_API_URL = `${API_BASE_URL}/api/upload`;
 const FINALIZE_API_URL = `${API_BASE_URL}/api/finalize`;
 
 const JOB_POLL_INTERVAL_MS = 2500;
+
+const ANALYSIS_WAITING_MESSAGES = [
+  {
+    heading: "While you wait…",
+    text: "Why did the inventory label get promoted? It always had the right part number.",
+  },
+  {
+    heading: "Did you know?",
+    text: "Octopuses have three hearts.",
+  },
+  {
+    heading: "While you wait…",
+    text: "I only know 25 letters of the alphabet. I do not know y.",
+  },
+  {
+    heading: "Did you know?",
+    text: "A day on Venus is longer than a year on Venus.",
+  },
+  {
+    heading: "While you wait…",
+    text: "Why was the bolt so confident? It knew it was a perfect fit.",
+  },
+  {
+    heading: "Did you know?",
+    text: "Bananas are berries, but strawberries are not.",
+  },
+  {
+    heading: "While you wait…",
+    text: "What do you call a factory that makes okay products? A satisfactory.",
+  },
+  {
+    heading: "Did you know?",
+    text: "Honey can remain edible for thousands of years when properly sealed.",
+  },
+  {
+    heading: "While you wait…",
+    text: "Why did the shelf apply for a job? It had plenty of experience supporting things.",
+  },
+  {
+    heading: "Did you know?",
+    text: "Sharks existed before trees.",
+  },
+  {
+    heading: "While you wait…",
+    text: "I ordered a chicken and an egg online. I will let you know.",
+  },
+  {
+    heading: "Did you know?",
+    text: "The Eiffel Tower can grow several inches taller during hot weather.",
+  },
+  {
+    heading: "While you wait…",
+    text: "Why did the screw stay calm? It knew how to keep things together.",
+  },
+  {
+    heading: "Did you know?",
+    text: "Wombat droppings are cube-shaped.",
+  },
+  {
+    heading: "While you wait…",
+    text: "What did one wall say to the other? I will meet you at the corner.",
+  },
+  {
+    heading: "Did you know?",
+    text: "A group of flamingos is called a flamboyance.",
+  },
+  {
+    heading: "While you wait…",
+    text: "Why could the bicycle not stand up by itself? It was two-tired.",
+  },
+  {
+    heading: "Did you know?",
+    text: "The shortest war in recorded history lasted less than an hour.",
+  },
+  {
+    heading: "While you wait…",
+    text: "I used to hate facial hair, but then it grew on me.",
+  },
+  {
+    heading: "Did you know?",
+    text: "Sea otters hold hands while sleeping so they do not drift apart.",
+  },
+];
 const JOB_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 type SelectedPhoto = {
@@ -460,6 +544,49 @@ export default function UploadScreen() {
 
   const [jobProgress, setJobProgress] =
     useState(0);
+
+  const [
+    waitingMessageIndex,
+    setWaitingMessageIndex,
+  ] = useState(0);
+
+  const processingProgressAnimation =
+    useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(
+      processingProgressAnimation,
+      {
+        toValue: Math.max(
+          0,
+          Math.min(jobProgress, 100),
+        ),
+        duration: 450,
+        useNativeDriver: false,
+      },
+    ).start();
+  }, [
+    jobProgress,
+    processingProgressAnimation,
+  ]);
+
+
+  useEffect(() => {
+    if (!isProcessing) {
+      setWaitingMessageIndex(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setWaitingMessageIndex(
+        (currentIndex) =>
+          (currentIndex + 1) %
+          ANALYSIS_WAITING_MESSAGES.length,
+      );
+    }, 6500);
+
+    return () => clearInterval(interval);
+  }, [isProcessing]);
 
   const [jobStatusMessage, setJobStatusMessage] =
     useState(
@@ -912,32 +1039,17 @@ export default function UploadScreen() {
   }
 
   function confirmAllResults() {
-    Alert.alert(
-      "Confirm all results?",
-      "This marks every inventory item as reviewed. Confirm that the vendor, part numbers, descriptions, sizes, and quantities are correct.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Confirm All",
-          onPress: () => {
-            setResults((currentResults) =>
-              currentResults.map((result) => ({
-                ...result,
-                is_confirmed: true,
-                review_needed: false,
-              }))
-            );
-
-            setCorrectedWorkbookUrl(null);
-            setEmailSent(false);
-            setEmailedRecipient("");
-          },
-        },
-      ]
+    setResults((currentResults) =>
+      currentResults.map((result) => ({
+        ...result,
+        is_confirmed: true,
+        review_needed: false,
+      }))
     );
+
+    setCorrectedWorkbookUrl(null);
+    setEmailSent(false);
+    setEmailedRecipient("");
   }
 
   function jumpToFirstUnconfirmed() {
@@ -1426,17 +1538,87 @@ export default function UploadScreen() {
               </Text>
 
               <Text
+                style={
+                  styles.processingMessageHeading
+                }
+              >
+                {
+                  ANALYSIS_WAITING_MESSAGES[
+                    waitingMessageIndex
+                  ].heading
+                }
+              </Text>
+
+              <Text
                 style={styles.processingText}
               >
-                {jobStatusMessage}
+                {
+                  ANALYSIS_WAITING_MESSAGES[
+                    waitingMessageIndex
+                  ].text
+                }
               </Text>
 
               <Text
                 style={styles.processingNote}
               >
-                {jobProgress}% complete. Keep this
-                screen open while the app checks
-                the background job.
+                {jobProgress}% complete
+              </Text>
+
+              <View
+                style={
+                  styles.processingProgressTrack
+                }
+              >
+                <Animated.View
+                  style={[
+                    styles.processingProgressFill,
+                    {
+                      width:
+                        processingProgressAnimation.interpolate(
+                          {
+                            inputRange: [0, 100],
+                            outputRange: [
+                              "0%",
+                              "100%",
+                            ],
+                            extrapolate: "clamp",
+                          },
+                        ),
+                    },
+                  ]}
+                />
+              </View>
+
+              <View
+                style={
+                  styles.processingProgressLabels
+                }
+              >
+                <Text
+                  style={
+                    styles.processingProgressLabel
+                  }
+                >
+                  0%
+                </Text>
+
+                <Text
+                  style={
+                    styles.processingProgressLabel
+                  }
+                >
+                  100%
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.processingKeepOpenText
+                }
+              >
+                Keep this screen open while the app
+                checks the background job.
               </Text>
             </View>
           )}
@@ -1670,7 +1852,7 @@ export default function UploadScreen() {
                         ]}
                       >
                         <Text style={styles.confirmAllButtonText}>
-                          Confirm All Remaining
+                          Confirm All
                         </Text>
                       </Pressable>
                     </View>
@@ -2106,75 +2288,76 @@ export default function UploadScreen() {
             </Pressable>
           ) : (
             <>
-              <View style={styles.emailSection}>
-                <Text style={styles.emailLabel}>
-                  Recipient email
-                </Text>
+              {allResultsConfirmed ? (
+                <View style={styles.finalizeCard}>
+                  <View style={styles.finalizeHeaderRow}>
+                    <View style={styles.finalizeTitleArea}>
+                      <Text style={styles.finalizeTitle}>
+                        Finalize walkthrough
+                      </Text>
+                      <Text style={styles.finalizeSubtitle}>
+                        Email the corrected workbook
+                      </Text>
+                    </View>
 
-                <TextInput
-                  value={recipientEmail}
-                  onChangeText={(value) => {
-                    setRecipientEmail(value);
-                    setEmailSent(false);
-                    setEmailedRecipient("");
-                  }}
-                  editable={!isFinalizing}
-                  placeholder="customer@example.com"
-                  placeholderTextColor="#657891"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.emailInput}
-                />
-              </View>
+                    <View style={styles.readyBadge}>
+                      <Text style={styles.readyBadgeText}>Ready</Text>
+                    </View>
+                  </View>
 
-              <Pressable
-                disabled={isFinalizing}
-                onPress={
-                  allResultsConfirmed
-                    ? finalizeAndEmail
-                    : confirmNextItem
-                }
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  isFinalizing &&
-                    styles.primaryButtonDisabled,
-                  pressed &&
-                    !isFinalizing &&
-                    styles.buttonPressed,
-                ]}
-              >
-                {isFinalizing ? (
-                  <View
-                    style={styles.processingRow}
-                  >
-                    <ActivityIndicator
-                      size="small"
-                      color="#FFFFFF"
+                  <View style={styles.compactEmailRow}>
+                    <TextInput
+                      value={recipientEmail}
+                      onChangeText={(value) => {
+                        setRecipientEmail(value);
+                        setEmailSent(false);
+                        setEmailedRecipient("");
+                      }}
+                      editable={!isFinalizing}
+                      placeholder="customer@example.com"
+                      placeholderTextColor="#657891"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      style={styles.compactEmailInput}
                     />
 
-                    <Text
-                      style={
-                        styles.primaryButtonText
-                      }
+                    <Pressable
+                      disabled={isFinalizing}
+                      onPress={finalizeAndEmail}
+                      style={({ pressed }) => [
+                        styles.compactFinalizeButton,
+                        isFinalizing && styles.primaryButtonDisabled,
+                        pressed && !isFinalizing && styles.buttonPressed,
+                      ]}
                     >
-                      Finalizing and Emailing...
-                    </Text>
+                      {isFinalizing ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.compactFinalizeButtonText}>
+                          Send
+                        </Text>
+                      )}
+                    </Pressable>
                   </View>
-                ) : (
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }
-                  >
-                    {allResultsConfirmed
-                      ? "Finalize & Email"
-                      : `Confirm Next (Item ${
-                          firstUnconfirmedIndex + 1
-                        } of ${results.length})`}
+                </View>
+              ) : (
+                <Pressable
+                  disabled={isFinalizing}
+                  onPress={confirmNextItem}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    isFinalizing && styles.primaryButtonDisabled,
+                    pressed && !isFinalizing && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {`Confirm Next (Item ${
+                      firstUnconfirmedIndex + 1
+                    } of ${results.length})`}
                   </Text>
-                )}
-              </Pressable>
+                </Pressable>
+              )}
 
               {correctedWorkbookUrl && (
                 <Pressable
@@ -2701,19 +2884,65 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
 
+  processingMessageHeading: {
+    color: "#62B4FF",
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 16,
+  },
+
   processingText: {
     color: "#9EADC0",
     fontSize: 16,
     lineHeight: 24,
     textAlign: "center",
-    marginTop: 13,
+    marginTop: 6,
+    minHeight: 48,
   },
 
   processingNote: {
     color: "#62B4FF",
-    fontSize: 13,
+    fontSize: 15,
+    fontWeight: "800",
     textAlign: "center",
     marginTop: 20,
+  },
+
+  processingProgressTrack: {
+    width: "100%",
+    height: 14,
+    overflow: "hidden",
+    borderRadius: 7,
+    backgroundColor: "#233A55",
+    marginTop: 16,
+  },
+
+  processingProgressFill: {
+    height: "100%",
+    borderRadius: 7,
+    backgroundColor: "#3B9DFF",
+  },
+
+  processingProgressLabels: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 7,
+  },
+
+  processingProgressLabel: {
+    color: "#7188A4",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  processingKeepOpenText: {
+    color: "#7F94AD",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: 15,
   },
 
   errorCard: {
@@ -3270,25 +3499,85 @@ const styles = StyleSheet.create({
     backgroundColor: "#071421",
   },
 
-  emailSection: {
-    marginBottom: 12,
-  },
-
-  emailLabel: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-
-  emailInput: {
-    minHeight: 56,
+  finalizeCard: {
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#29445F",
+    backgroundColor: "#0F1D2E",
+    padding: 12,
+  },
+
+  finalizeHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+
+  finalizeTitleArea: {
+    flex: 1,
+    paddingRight: 10,
+  },
+
+  finalizeTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  finalizeSubtitle: {
+    color: "#8296AE",
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  readyBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#28785A",
+    backgroundColor: "#15392D",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+
+  readyBadgeText: {
+    color: "#7DE2B3",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  compactEmailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  compactEmailInput: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#36506E",
     backgroundColor: "#112036",
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 14,
+    paddingHorizontal: 12,
+    marginRight: 9,
+  },
+
+  compactFinalizeButton: {
+    minWidth: 82,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#2D6DEB",
     paddingHorizontal: 16,
+  },
+
+  compactFinalizeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
   },
 
   primaryButton: {
@@ -3310,7 +3599,7 @@ const styles = StyleSheet.create({
   },
 
   correctedButton: {
-    minHeight: 57,
+    minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 17,
@@ -3320,12 +3609,12 @@ const styles = StyleSheet.create({
 
   correctedButtonText: {
     color: "#8EF0C5",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
   },
 
   secondaryButton: {
-    minHeight: 57,
+    minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 17,
@@ -3337,7 +3626,7 @@ const styles = StyleSheet.create({
 
   secondaryButtonText: {
     color: "#B9C8DA",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
   },
 
