@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -407,7 +408,11 @@ export default function HomeScreen() {
         <View style={styles.container}>
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-              <Text style={styles.logoIcon}>◎</Text>
+              <Image
+                source={require("../assets/images/icon.png")}
+                style={styles.logoImage}
+                resizeMode="cover"
+              />
             </View>
 
             <View style={styles.headerText}>
@@ -764,11 +769,10 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
 
-  logoIcon: {
-    color: "#FFFFFF",
-    fontSize: 32,
-    fontWeight: "700",
-    lineHeight: 37,
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 17,
   },
 
   headerText: {
