@@ -350,33 +350,36 @@ function getReviewReasons(
 async function preparePhotosForUpload(
   photos: SelectedPhoto[]
 ): Promise<SelectedPhoto[]> {
-  return Promise.all(
-    photos.map(async (photo, index) => {
-      try {
-        const converted = await ImageManipulator.manipulateAsync(
-          photo.uri,
-          [],
-          {
-            compress: 0.92,
-            format: ImageManipulator.SaveFormat.JPEG,
-          }
-        );
+  const preparedPhotos: SelectedPhoto[] = [];
+  const uploadTimestamp = Date.now();
 
-        return {
-          ...photo,
-          uri: converted.uri,
-          fileName: `inventory-photo-${Date.now()}-${index + 1}.jpg`,
-          mimeType: "image/jpeg",
-        };
-      } catch (error) {
-        console.warn("Photo conversion warning:", error);
+  for (const [index, photo] of photos.entries()) {
+    try {
+      const converted = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [],
+        {
+          compress: 0.92,
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
+      );
 
-        throw new Error(
-          `Photo ${index + 1} could not be converted to JPEG. Please select it again and retry.`
-        );
-      }
-    })
-  );
+      preparedPhotos.push({
+        ...photo,
+        uri: converted.uri,
+        fileName: `inventory-photo-${uploadTimestamp}-${index + 1}.jpg`,
+        mimeType: "image/jpeg",
+      });
+    } catch (error) {
+      console.warn("Photo conversion warning:", error);
+
+      throw new Error(
+        `Photo ${index + 1} could not be converted to JPEG. Please select it again and retry.`
+      );
+    }
+  }
+
+  return preparedPhotos;
 }
 
 function getFileName(
