@@ -1100,7 +1100,9 @@ export default function UploadScreen() {
     }
   }
 
-  async function finalizeAndEmail() {
+  async function finalizeWalkthrough(
+    sendEmail: boolean
+  ) {
     const cleanedRecipient =
       recipientEmail.trim();
 
@@ -1114,7 +1116,7 @@ export default function UploadScreen() {
       return;
     }
 
-    if (!cleanedRecipient) {
+    if (sendEmail && !cleanedRecipient) {
       Alert.alert(
         "Recipient email required",
         "Enter the email address that should receive the finalized workbook."
@@ -1122,7 +1124,10 @@ export default function UploadScreen() {
       return;
     }
 
-    if (!isValidEmail(cleanedRecipient)) {
+    if (
+      sendEmail &&
+      !isValidEmail(cleanedRecipient)
+    ) {
       Alert.alert(
         "Invalid email address",
         "Enter a complete email address, such as name@example.com."
@@ -1149,8 +1154,10 @@ export default function UploadScreen() {
               "Mobile Walkthrough",
             customer_id: customerId || null,
             contact_name: selectedContactName || null,
-            recipient_email: cleanedRecipient,
-            send_email: true,
+            recipient_email: sendEmail
+              ? cleanedRecipient
+              : null,
+            send_email: sendEmail,
             results,
           }),
         }
@@ -1187,7 +1194,7 @@ export default function UploadScreen() {
         data.download_url ?? null
       );
 
-      if (data.email_sent) {
+      if (sendEmail && data.email_sent) {
         setEmailSent(true);
         setEmailedRecipient(
           data.recipient_email ||
@@ -1231,7 +1238,7 @@ export default function UploadScreen() {
             },
           ]
         );
-      } else {
+      } else if (sendEmail) {
         setEmailSent(false);
         setEmailedRecipient("");
 
@@ -1257,17 +1264,57 @@ export default function UploadScreen() {
             },
           ]
         );
+      } else {
+        setEmailSent(false);
+        setEmailedRecipient("");
+
+        Alert.alert(
+          "Report ready",
+          "The corrected Excel report was created without sending an email.",
+          [
+            {
+              text: "Done",
+              onPress: () => {
+                if (customerId) {
+                  router.replace({
+                    pathname: "/history",
+                    params: {
+                      customerId,
+                      customerName:
+                        completedCustomer ||
+                        walkthroughName.trim(),
+                    },
+                  });
+                } else {
+                  router.replace("/");
+                }
+              },
+            },
+            {
+              text: "Open Report",
+              onPress: async () => {
+                if (data.download_url) {
+                  await openDownloadAddress(
+                    data.download_url
+                  );
+                }
+              },
+            },
+          ]
+        );
       }
     } catch (error) {
       console.error(
-        "Finalize and email error:",
+        "Finalize walkthrough error:",
         error
       );
 
       const message =
         error instanceof Error
           ? error.message
-          : "The corrected workbook could not be finalized or emailed.";
+          : sendEmail
+            ? "The corrected workbook could not be finalized or emailed."
+            : "The corrected workbook could not be finalized.";
 
       setErrorMessage(message);
 
@@ -2207,31 +2254,6 @@ export default function UploadScreen() {
             )}
         </ScrollView>
 
-        {hasResults && !isProcessing && !isFinalizing && (
-          <View style={styles.stickyReviewBar}>
-            <View style={styles.stickyReviewHeader}>
-              <Text style={styles.stickyReviewTitle}>
-                {allResultsConfirmed
-                  ? "Review complete"
-                  : `Item ${firstUnconfirmedIndex + 1} of ${results.length}`}
-              </Text>
-
-              <Text style={styles.stickyReviewCount}>
-                {confirmedCount}/{results.length} confirmed
-              </Text>
-            </View>
-
-            <View style={styles.stickyProgressTrack}>
-              <View
-                style={[
-                  styles.stickyProgressFill,
-                  { width: `${progressPercent}%` },
-                ]}
-              />
-            </View>
-          </View>
-        )}
-
         <View style={styles.footer}>
           {!hasResults ? (
             <Pressable
@@ -2291,21 +2313,85 @@ export default function UploadScreen() {
             </Pressable>
           ) : (
             <>
+              {!correctedWorkbookUrl && (
+                <View style={styles.compactReviewStatus}>
+                  <View style={styles.compactReviewHeader}>
+                    <Text style={styles.compactReviewTitle}>
+                      {allResultsConfirmed
+                        ? "Review complete"
+                        : `Item ${firstUnconfirmedIndex + 1} of ${results.length}`}
+                    </Text>
+
+                    <Text style={styles.compactReviewCount}>
+                      {confirmedCount}/{results.length} confirmed
+                    </Text>
+                  </View>
+
+                  <View style={styles.compactProgressTrack}>
+                    <View
+                      style={[
+                        styles.compactProgressFill,
+                        { width: `${progressPercent}%` },
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+
               {allResultsConfirmed ? (
-                <View style={styles.finalizeCard}>
+                correctedWorkbookUrl ? null : (
+                  <View style={styles.finalizeCard}>
                   <View style={styles.finalizeHeaderRow}>
                     <View style={styles.finalizeTitleArea}>
                       <Text style={styles.finalizeTitle}>
                         Finalize walkthrough
                       </Text>
                       <Text style={styles.finalizeSubtitle}>
-                        Email the corrected workbook
+                        View the report or email a copy
                       </Text>
                     </View>
 
                     <View style={styles.readyBadge}>
                       <Text style={styles.readyBadgeText}>Ready</Text>
                     </View>
+                  </View>
+
+                  <Pressable
+                    disabled={isFinalizing}
+                    onPress={() =>
+                      finalizeWalkthrough(false)
+                    }
+                    style={({ pressed }) => [
+                      styles.viewReportButton,
+                      isFinalizing &&
+                        styles.primaryButtonDisabled,
+                      pressed &&
+                        !isFinalizing &&
+                        styles.buttonPressed,
+                    ]}
+                  >
+                    {isFinalizing ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#FFFFFF"
+                      />
+                    ) : (
+                      <Text
+                        style={
+                          styles.viewReportButtonText
+                        }
+                      >
+                        View Report
+                      </Text>
+                    )}
+                  </Pressable>
+
+                  <View style={styles.reportChoiceDivider}>
+                    <View style={styles.reportChoiceLine} />
+                    <Text style={styles.reportChoiceText}>
+                      OR EMAIL A COPY
+                    </Text>
+                    <View style={styles.reportChoiceLine} />
                   </View>
 
                   <View style={styles.compactEmailRow}>
@@ -2327,7 +2413,9 @@ export default function UploadScreen() {
 
                     <Pressable
                       disabled={isFinalizing}
-                      onPress={finalizeAndEmail}
+                      onPress={() =>
+                        finalizeWalkthrough(true)
+                      }
                       style={({ pressed }) => [
                         styles.compactFinalizeButton,
                         isFinalizing && styles.primaryButtonDisabled,
@@ -2338,12 +2426,13 @@ export default function UploadScreen() {
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
                         <Text style={styles.compactFinalizeButtonText}>
-                          Send
+                          Email Report
                         </Text>
                       )}
                     </Pressable>
                   </View>
-                </View>
+                  </View>
+                )
               ) : (
                 <Pressable
                   disabled={isFinalizing}
@@ -2355,9 +2444,9 @@ export default function UploadScreen() {
                   ]}
                 >
                   <Text style={styles.primaryButtonText}>
-                    {`Confirm Next (Item ${
+                    {`Confirm Item ${
                       firstUnconfirmedIndex + 1
-                    } of ${results.length})`}
+                    } of ${results.length}`}
                   </Text>
                 </Pressable>
               )}
@@ -2404,7 +2493,7 @@ export default function UploadScreen() {
                 </Pressable>
               )}
 
-              {emailSent && (
+              {correctedWorkbookUrl && (
                 <Pressable
                 onPress={startOver}
                 style={({ pressed }) => [
@@ -2425,10 +2514,11 @@ export default function UploadScreen() {
             </>
           )}
 
-          <Text style={styles.footerNote}>
-            Confirming an item means you reviewed its AI-generated
-            details for accuracy before finalization.
-          </Text>
+          {!hasResults && (
+            <Text style={styles.footerNote}>
+              AI results must be reviewed before finalization.
+            </Text>
+          )}
         </View>
 
         <Modal
@@ -3452,51 +3542,46 @@ const styles = StyleSheet.create({
     color: "#E8B781",
   },
 
-  stickyReviewBar: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#1C2D43",
-    backgroundColor: "#0B192A",
+  compactReviewStatus: {
+    marginBottom: 9,
   },
 
-  stickyReviewHeader: {
+  compactReviewHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
 
-  stickyReviewTitle: {
+  compactReviewTitle: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "900",
   },
 
-  stickyReviewCount: {
+  compactReviewCount: {
     color: "#94A8C0",
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "700",
   },
 
-  stickyProgressTrack: {
-    height: 7,
+  compactProgressTrack: {
+    height: 4,
     overflow: "hidden",
-    borderRadius: 4,
+    borderRadius: 2,
     backgroundColor: "#263950",
-    marginTop: 9,
+    marginTop: 6,
   },
 
-  stickyProgressFill: {
+  compactProgressFill: {
     height: "100%",
-    borderRadius: 4,
+    borderRadius: 2,
     backgroundColor: "#3BD08B",
   },
 
   footer: {
     paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 18,
+    paddingTop: 9,
+    paddingBottom: 10,
     borderTopWidth: 1,
     borderTopColor: "#1C2D43",
     backgroundColor: "#071421",
@@ -3549,6 +3634,39 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  viewReportButton: {
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#176347",
+  },
+
+  viewReportButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  reportChoiceDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 10,
+  },
+
+  reportChoiceLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#29445F",
+  },
+
+  reportChoiceText: {
+    color: "#8296AE",
+    fontSize: 9,
+    fontWeight: "900",
+    marginHorizontal: 9,
+  },
+
   compactEmailRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -3568,7 +3686,7 @@ const styles = StyleSheet.create({
   },
 
   compactFinalizeButton: {
-    minWidth: 82,
+    minWidth: 112,
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
@@ -3584,7 +3702,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    minHeight: 61,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 18,
@@ -3597,7 +3715,7 @@ const styles = StyleSheet.create({
 
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
   },
 

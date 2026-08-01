@@ -336,6 +336,10 @@ export default function HomeScreen() {
     });
   }
 
+  const selectedCustomer = customers.find(
+    (customer) => customer.id === selectedCustomerId
+  );
+
   function renderCustomer({
     item,
   }: {
@@ -350,7 +354,17 @@ export default function HomeScreen() {
     return (
       <Pressable
         accessibilityRole="button"
-        onPress={() => setSelectedCustomerId(item.id)}
+        accessibilityState={{ selected: isSelected }}
+        accessibilityLabel={
+          isSelected
+            ? `${item.company_name}, selected. Tap to clear selection.`
+            : `Select ${item.company_name}`
+        }
+        onPress={() =>
+          setSelectedCustomerId((currentId) =>
+            currentId === item.id ? null : item.id
+          )
+        }
         style={({ pressed }) => [
           styles.customerCard,
           isSelected && styles.customerCardSelected,
@@ -658,72 +672,101 @@ export default function HomeScreen() {
 
           {!showNewCustomerForm ? (
             <View style={styles.bottomArea}>
-              <View style={styles.secondaryActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={selectedCustomerId === null}
-                  onPress={viewDashboard}
-                  style={({ pressed }) => [
-                    styles.secondaryButton,
-                    pressed && styles.buttonPressed,
-                    selectedCustomerId === null &&
-                      styles.buttonDisabled,
-                  ]}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    Dashboard
+              {selectedCustomer ? (
+                <>
+                  <View style={styles.selectedCustomerRow}>
+                    <View style={styles.selectedCustomerTextArea}>
+                      <Text style={styles.selectedCustomerLabel}>
+                        SELECTED CUSTOMER
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={styles.selectedCustomerName}
+                      >
+                        {selectedCustomer.company_name}
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear selected customer"
+                      onPress={() => setSelectedCustomerId(null)}
+                      style={({ pressed }) => [
+                        styles.clearSelectionButton,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text style={styles.clearSelectionButtonText}>
+                        Clear
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={startWalkthrough}
+                    style={({ pressed }) => [
+                      styles.primaryButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      Start Walkthrough
+                    </Text>
+                  </Pressable>
+
+                  <View style={styles.customerActionRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={viewDashboard}
+                      style={({ pressed }) => [
+                        styles.compactActionButton,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text style={styles.compactActionButtonText}>
+                        Dashboard
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={viewHistory}
+                      style={({ pressed }) => [
+                        styles.compactActionButton,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text style={styles.compactActionButtonText}>
+                        History
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={editCustomer}
+                      style={({ pressed }) => [
+                        styles.compactActionButton,
+                        styles.compactActionButtonLast,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text style={styles.compactActionButtonText}>
+                        Edit
+                      </Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.noSelectionCard}>
+                  <Text style={styles.noSelectionTitle}>
+                    No customer selected
                   </Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={selectedCustomerId === null}
-                  onPress={viewHistory}
-                  style={({ pressed }) => [
-                    styles.secondaryButton,
-                    styles.secondaryButtonLast,
-                    pressed && styles.buttonPressed,
-                    selectedCustomerId === null &&
-                      styles.buttonDisabled,
-                  ]}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    View History
+                  <Text style={styles.noSelectionText}>
+                    Tap a customer above to see walkthrough actions.
                   </Text>
-                </Pressable>
-              </View>
-
-              <Pressable
-                accessibilityRole="button"
-                disabled={selectedCustomerId === null}
-                onPress={editCustomer}
-                style={({ pressed }) => [
-                  styles.editCustomerButton,
-                  pressed && styles.buttonPressed,
-                  selectedCustomerId === null &&
-                    styles.buttonDisabled,
-                ]}
-              >
-                <Text style={styles.editCustomerButtonText}>
-                  Edit Customer
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                disabled={selectedCustomerId === null}
-                onPress={startWalkthrough}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.buttonPressed,
-                  selectedCustomerId === null &&
-                    styles.buttonDisabled,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>
-                  Start Walkthrough
-                </Text>
-              </Pressable>
+                </View>
+              )}
 
               <Text style={styles.versionText}>
                 Version 0.1.0
@@ -1042,56 +1085,58 @@ const styles = StyleSheet.create({
   },
 
   bottomArea: {
-    marginTop: 10,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#22314A",
+    paddingTop: 10,
   },
 
-  secondaryActions: {
+  selectedCustomerRow: {
     flexDirection: "row",
-    marginBottom: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 9,
   },
 
-  secondaryButton: {
+  selectedCustomerTextArea: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: "#17243A",
+    paddingRight: 12,
+  },
+
+  selectedCustomerLabel: {
+    color: "#6F8CAD",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+
+  selectedCustomerName: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 2,
+  },
+
+  clearSelectionButton: {
+    minWidth: 58,
+    minHeight: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#31547D",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
+    backgroundColor: "#17243A",
   },
 
-  secondaryButtonLast: {
-    marginRight: 0,
-  },
-
-  secondaryButtonText: {
+  clearSelectionButtonText: {
     color: "#BFDBFE",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-
-  editCustomerButton: {
-    minHeight: 44,
-    borderRadius: 13,
-    backgroundColor: "#0C1524",
-    borderWidth: 1,
-    borderColor: "#26364F",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 10,
-  },
-
-  editCustomerButtonText: {
-    color: "#AAB7CA",
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "900",
   },
 
   primaryButton: {
-    minHeight: 57,
-    borderRadius: 17,
+    minHeight: 50,
+    borderRadius: 14,
     backgroundColor: "#2563EB",
     alignItems: "center",
     justifyContent: "center",
@@ -1107,8 +1152,57 @@ const styles = StyleSheet.create({
 
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  customerActionRow: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
+
+  compactActionButton: {
+    flex: 1,
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#31547D",
+    backgroundColor: "#17243A",
+    marginRight: 7,
+  },
+
+  compactActionButtonLast: {
+    marginRight: 0,
+  },
+
+  compactActionButtonText: {
+    color: "#BFDBFE",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
+  noSelectionCard: {
+    minHeight: 62,
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#26364F",
+    backgroundColor: "#101A2A",
+    paddingHorizontal: 15,
+  },
+
+  noSelectionTitle: {
+    color: "#D4DEEA",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  noSelectionText: {
+    color: "#718096",
+    fontSize: 11,
+    marginTop: 3,
   },
 
   versionText: {
