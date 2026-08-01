@@ -15,9 +15,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 const API_BASE_URL = "https://walkthroughai-api.onrender.com";
 
@@ -134,6 +138,11 @@ type RecognitionResult = {
   notes: string;
   was_edited?: boolean;
   is_confirmed?: boolean;
+};
+
+type SourcePhotoViewer = {
+  uri: string;
+  label: string;
 };
 
 type UploadApiResponse = {
@@ -427,6 +436,35 @@ function getMimeType(photo: SelectedPhoto): string {
   return "image/jpeg";
 }
 
+function getSourcePhotoIndex(
+  sourcePhotoName: string,
+  photoCount: number
+): number | null {
+  const cleanedName = cleanText(sourcePhotoName);
+  const numberedPhotoMatch = cleanedName.match(
+    /(?:photo|image)[-_ ]*0*(\d+)/i
+  );
+
+  if (!numberedPhotoMatch) {
+    return photoCount === 1 ? 0 : null;
+  }
+
+  const oneBasedIndex = Number(
+    numberedPhotoMatch[1]
+  );
+  const zeroBasedIndex = oneBasedIndex - 1;
+
+  if (
+    !Number.isInteger(zeroBasedIndex) ||
+    zeroBasedIndex < 0 ||
+    zeroBasedIndex >= photoCount
+  ) {
+    return null;
+  }
+
+  return zeroBasedIndex;
+}
+
 function isValidEmail(email: string): boolean {
   const cleanedEmail = email.trim();
 
@@ -505,6 +543,14 @@ function EditableField({
 }
 
 export default function UploadScreen() {
+  const { width: windowWidth, height: windowHeight } =
+    useWindowDimensions();
+  const safeAreaInsets = useSafeAreaInsets();
+  const photoViewerImageHeight = Math.max(
+    windowHeight - 120,
+    320
+  );
+
   const params = useLocalSearchParams<{
     photos?: string | string[];
     customerId?: string | string[];
@@ -632,7 +678,14 @@ export default function UploadScreen() {
   const [emailedRecipient, setEmailedRecipient] =
     useState("");
 
+  const [sourcePhotoViewer, setSourcePhotoViewer] =
+    useState<SourcePhotoViewer | null>(null);
+
   const scrollViewRef = useRef<ScrollView>(null);
+  const photoViewerScrollRef =
+    useRef<ScrollView>(null);
+  const lastPhotoViewerTapTime = useRef(0);
+  const photoViewerIsZoomed = useRef(false);
   const reviewSectionY = useRef(0);
   const resultCardPositions = useRef<Record<number, number>>({});
 
@@ -912,6 +965,128 @@ export default function UploadScreen() {
   function cancelEditing() {
     setEditingIndex(null);
     setEditDraft(null);
+  }
+
+  function viewSourcePhoto(
+    result: RecognitionResult
+  ) {
+    const sourcePhotoIndex = getSourcePhotoIndex(
+      result.photo,
+      photos.length
+    );
+
+    if (sourcePhotoIndex === null) {
+      Alert.alert(
+        "Source photo unavailable",
+        "Walkthrough AI could not match this result to one of the selected photos."
+      );
+      return;
+    }
+
+    const sourcePhoto = photos[sourcePhotoIndex];
+
+    if (!sourcePhoto?.uri) {
+      Alert.alert(
+        "Source photo unavailable",
+        "The original photo is no longer available on this screen."
+      );
+      return;
+    }
+
+    setSourcePhotoViewer({
+      uri: sourcePhoto.uri,
+      label:
+        result.photo ||
+        `Photo ${sourcePhotoIndex + 1}`,
+    });
+    lastPhotoViewerTapTime.current = 0;
+    photoViewerIsZoomed.current = false;
+  }
+
+  function handlePhotoViewerTap() {
+    const currentTapTime = Date.now();
+    const elapsedSinceLastTap =
+      currentTapTime -
+      lastPhotoViewerTapTime.current;
+
+    lastPhotoViewerTapTime.current =
+      currentTapTime;
+
+    if (
+      elapsedSinceLastTap <= 0 ||
+      elapsedSinceLastTap > 320
+    ) {
+      return;
+    }
+
+    lastPhotoViewerTapTime.current = 0;
+
+    const shouldZoomIn =
+      !photoViewerIsZoomed.current;
+    const zoomScale = shouldZoomIn ? 2.5 : 1;
+    const targetWidth =
+      windowWidth / zoomScale;
+    const targetHeight =
+      photoViewerImageHeight / zoomScale;
+
+    photoViewerScrollRef.current?.scrollResponderZoomTo(
+      {
+        x: shouldZoomIn
+          ? (windowWidth - targetWidth) / 2
+          : 0,
+        y: shouldZoomIn
+          ? (photoViewerImageHeight - targetHeight) /
+            2
+          : 0,
+        width: targetWidth,
+        height: targetHeight,
+        animated: true,
+      }
+    );
+
+    photoViewerIsZoomed.current = shouldZoomIn;
+  }
+
+  function requestRemoveEditedResult() {
+    if (editingIndex === null || !editDraft) {
+      return;
+    }
+
+    const resultIndex = editingIndex;
+    const resultName =
+      cleanText(editDraft.manufacturer_part_number) ||
+      cleanText(editDraft.vendor_part_number) ||
+      cleanText(editDraft.part_number) ||
+      cleanText(editDraft.description) ||
+      `Item ${resultIndex + 1}`;
+
+    Alert.alert(
+      "Remove false result?",
+      `${resultName} will be removed from this walkthrough and will not appear in the finalized report.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove Result",
+          style: "destructive",
+          onPress: () => {
+            setResults((currentResults) =>
+              currentResults.filter(
+                (_result, index) =>
+                  index !== resultIndex
+              )
+            );
+
+            setCorrectedWorkbookUrl(null);
+            setEmailSent(false);
+            setEmailedRecipient("");
+            cancelEditing();
+          },
+        },
+      ]
+    );
   }
 
   function updateDraft(
@@ -2198,6 +2373,29 @@ export default function UploadScreen() {
                         >
                           <Pressable
                             onPress={() =>
+                              viewSourcePhoto(
+                                result
+                              )
+                            }
+                            style={({
+                              pressed,
+                            }) => [
+                              styles.photoButton,
+                              pressed &&
+                                styles.buttonPressed,
+                            ]}
+                          >
+                            <Text
+                              style={
+                                styles.photoButtonText
+                              }
+                            >
+                              Photo
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() =>
                               beginEditing(index)
                             }
                             style={({
@@ -2522,6 +2720,116 @@ export default function UploadScreen() {
         </View>
 
         <Modal
+          visible={sourcePhotoViewer !== null}
+          animationType="fade"
+          presentationStyle="pageSheet"
+          allowSwipeDismissal
+          onDismiss={() =>
+            setSourcePhotoViewer(null)
+          }
+          onRequestClose={() =>
+            setSourcePhotoViewer(null)
+          }
+        >
+          <View style={styles.photoViewerSafeArea}>
+            <View
+              style={[
+                styles.photoViewerHeader,
+                {
+                  minHeight:
+                    68 + safeAreaInsets.top,
+                  paddingTop:
+                    safeAreaInsets.top,
+                },
+              ]}
+            >
+              <Pressable
+                onPress={() =>
+                  setSourcePhotoViewer(null)
+                }
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.photoViewerCloseButton,
+                  pressed &&
+                    styles.buttonPressed,
+                ]}
+              >
+                <Text
+                  style={
+                    styles.photoViewerCloseText
+                  }
+                >
+                  Close
+                </Text>
+              </Pressable>
+
+              <View style={styles.photoViewerTitleArea}>
+                <Text
+                  numberOfLines={1}
+                  style={styles.photoViewerTitle}
+                >
+                  {sourcePhotoViewer?.label ||
+                    "Source Photo"}
+                </Text>
+                <Text style={styles.photoViewerHint}>
+                  Pinch to zoom
+                </Text>
+              </View>
+
+              <View
+                style={
+                  styles.photoViewerHeaderSpacer
+                }
+              />
+            </View>
+
+            {sourcePhotoViewer && (
+              <ScrollView
+                ref={photoViewerScrollRef}
+                style={styles.photoViewerScroll}
+                contentContainerStyle={
+                  styles.photoViewerContent
+                }
+                centerContent
+                minimumZoomScale={1}
+                maximumZoomScale={5}
+                scrollEventThrottle={16}
+                onScroll={(event) => {
+                  const zoomScale =
+                    event.nativeEvent.zoomScale;
+
+                  if (
+                    typeof zoomScale === "number"
+                  ) {
+                    photoViewerIsZoomed.current =
+                      zoomScale > 1.1;
+                  }
+                }}
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+              >
+                <Pressable
+                  onPress={handlePhotoViewerTap}
+                  style={{
+                    width: windowWidth,
+                    height:
+                      photoViewerImageHeight,
+                  }}
+                >
+                  <Image
+                    source={{
+                      uri: sourcePhotoViewer.uri,
+                    }}
+                    resizeMode="contain"
+                    style={styles.photoViewerImage}
+                  />
+                </Pressable>
+              </ScrollView>
+            )}
+          </View>
+        </Modal>
+
+        <Modal
           visible={
             editingIndex !== null &&
             editDraft !== null
@@ -2741,6 +3049,25 @@ export default function UploadScreen() {
                       }
                     >
                       Save Changes
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={
+                      requestRemoveEditedResult
+                    }
+                    style={({ pressed }) => [
+                      styles.removeResultButton,
+                      pressed &&
+                        styles.buttonPressed,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        styles.removeResultButtonText
+                      }
+                    >
+                      Remove False Result
                     </Text>
                   </Pressable>
                 </ScrollView>
@@ -3501,26 +3828,48 @@ const styles = StyleSheet.create({
   },
 
   resultActionsRow: {
+    flexDirection: "row",
     marginTop: 16,
   },
 
+  photoButton: {
+    flex: 0.8,
+    minHeight: 46,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#3B5F82",
+    backgroundColor: "#15283E",
+    marginRight: 8,
+  },
+
+  photoButtonText: {
+    color: "#A9D3FF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
   editButton: {
-    minHeight: 48,
-    borderRadius: 14,
+    flex: 0.8,
+    minHeight: 46,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#2C67E5",
-    marginBottom: 10,
+    marginRight: 8,
   },
 
   editButtonText: {
     color: "#FFFFFF",
+    fontSize: 12,
     fontWeight: "800",
   },
 
   confirmButton: {
-    minHeight: 48,
-    borderRadius: 14,
+    flex: 1.4,
+    minHeight: 46,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -3530,6 +3879,7 @@ const styles = StyleSheet.create({
 
   confirmButtonText: {
     color: "#70DEAD",
+    fontSize: 11,
     fontWeight: "800",
   },
 
@@ -3773,6 +4123,72 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
 
+  photoViewerSafeArea: {
+    flex: 1,
+    backgroundColor: "#02070D",
+  },
+
+  photoViewerHeader: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#1C2D43",
+    paddingHorizontal: 14,
+  },
+
+  photoViewerCloseButton: {
+    width: 70,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#17283C",
+  },
+
+  photoViewerCloseText: {
+    color: "#BFD5EA",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  photoViewerTitleArea: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 10,
+  },
+
+  photoViewerTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  photoViewerHint: {
+    color: "#71849D",
+    fontSize: 10,
+    marginTop: 2,
+  },
+
+  photoViewerHeaderSpacer: {
+    width: 70,
+  },
+
+  photoViewerScroll: {
+    flex: 1,
+  },
+
+  photoViewerContent: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  photoViewerImage: {
+    width: "100%",
+    height: "100%",
+  },
+
   modalSafeArea: {
     flex: 1,
     backgroundColor: "#071421",
@@ -3889,5 +4305,22 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "800",
+  },
+
+  removeResultButton: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#8A4141",
+    backgroundColor: "#2B171A",
+    marginTop: 12,
+  },
+
+  removeResultButtonText: {
+    color: "#FF9A9A",
+    fontSize: 15,
+    fontWeight: "900",
   },
 });
