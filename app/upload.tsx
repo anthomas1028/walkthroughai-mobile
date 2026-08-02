@@ -1440,52 +1440,12 @@ export default function UploadScreen() {
         setEmailedRecipient("");
 
         Alert.alert(
-          "Workbook created",
-          data.email_error
-            ? `The corrected workbook was created, but the email failed: ${data.email_error}`
-            : "The corrected workbook was created, but the email could not be sent.",
+          "Email not sent",
+          "The report is ready, but the email could not be delivered. You can open the report now or try emailing it again later.",
           [
             {
               text: "OK",
               style: "cancel",
-            },
-            {
-              text: "Open Workbook",
-              onPress: async () => {
-                if (data.download_url) {
-                  await openDownloadAddress(
-                    data.download_url
-                  );
-                }
-              },
-            },
-          ]
-        );
-      } else {
-        setEmailSent(false);
-        setEmailedRecipient("");
-
-        Alert.alert(
-          "Report ready",
-          "The corrected Excel report was created without sending an email.",
-          [
-            {
-              text: "Done",
-              onPress: () => {
-                if (customerId) {
-                  router.replace({
-                    pathname: "/history",
-                    params: {
-                      customerId,
-                      customerName:
-                        completedCustomer ||
-                        walkthroughName.trim(),
-                    },
-                  });
-                } else {
-                  router.replace("/");
-                }
-              },
             },
             {
               text: "Open Report",
@@ -1499,6 +1459,9 @@ export default function UploadScreen() {
             },
           ]
         );
+      } else {
+        setEmailSent(false);
+        setEmailedRecipient("");
       }
     } catch (error) {
       console.error(
