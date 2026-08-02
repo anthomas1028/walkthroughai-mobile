@@ -1,22 +1,33 @@
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 type SelectedPhoto = {
   id: string;
   uri: string;
   fileName: string;
   mimeType: string;
+};
+
+type PhotoViewer = {
+  uri: string;
+  label: string;
 };
 
 const MAX_WALKTHROUGH_PHOTOS = 100;
@@ -53,6 +64,14 @@ function createPhotoId(uri: string, index: number) {
 }
 
 export default function WalkthroughPhotoScreen() {
+  const { width: windowWidth, height: windowHeight } =
+    useWindowDimensions();
+  const safeAreaInsets = useSafeAreaInsets();
+  const photoViewerImageHeight = Math.max(
+    windowHeight - 120,
+    320
+  );
+
   const {
     customerId,
     customerName,
@@ -72,6 +91,11 @@ export default function WalkthroughPhotoScreen() {
 
   const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
+  const [photoViewer, setPhotoViewer] =
+    useState<PhotoViewer | null>(null);
+  const photoViewerScrollRef = useRef<ScrollView>(null);
+  const lastPhotoViewerTapTime = useRef(0);
+  const photoViewerIsZoomed = useRef(false);
 
   const estimatedProcessingTime =
     formatEstimatedProcessingTime(photos.length);
@@ -235,6 +259,60 @@ export default function WalkthroughPhotoScreen() {
     );
   }
 
+  function openPhotoViewer(
+    photo: SelectedPhoto,
+    index: number
+  ) {
+    setPhotoViewer({
+      uri: photo.uri,
+      label: `Photo ${index + 1} of ${photos.length}`,
+    });
+    lastPhotoViewerTapTime.current = 0;
+    photoViewerIsZoomed.current = false;
+  }
+
+  function closePhotoViewer() {
+    setPhotoViewer(null);
+    lastPhotoViewerTapTime.current = 0;
+    photoViewerIsZoomed.current = false;
+  }
+
+  function handlePhotoViewerTap() {
+    const currentTapTime = Date.now();
+    const elapsedSinceLastTap =
+      currentTapTime - lastPhotoViewerTapTime.current;
+
+    lastPhotoViewerTapTime.current = currentTapTime;
+
+    if (
+      elapsedSinceLastTap <= 0 ||
+      elapsedSinceLastTap > 320
+    ) {
+      return;
+    }
+
+    lastPhotoViewerTapTime.current = 0;
+
+    const shouldZoomIn = !photoViewerIsZoomed.current;
+    const zoomScale = shouldZoomIn ? 2.5 : 1;
+    const targetWidth = windowWidth / zoomScale;
+    const targetHeight = photoViewerImageHeight / zoomScale;
+
+    photoViewerScrollRef.current?.scrollResponderZoomTo({
+      x: shouldZoomIn
+        ? (windowWidth - targetWidth) / 2
+        : 0,
+      y: shouldZoomIn
+        ? (photoViewerImageHeight - targetHeight) / 2
+        : 0,
+      width: targetWidth,
+      height: targetHeight,
+      animated: true,
+    });
+
+    photoViewerIsZoomed.current = shouldZoomIn;
+  }
+
   function removeAllPhotos() {
     Alert.alert(
       "Remove all photos?",
@@ -326,7 +404,11 @@ export default function WalkthroughPhotoScreen() {
         >
           <View style={styles.introCard}>
             <View style={styles.cameraIconContainer}>
-              <Text style={styles.cameraIcon}>📷</Text>
+              <Ionicons
+                name="camera-outline"
+                size={38}
+                color="#FFFFFF"
+              />
             </View>
 
             <Text style={styles.introTitle}>
@@ -349,7 +431,13 @@ export default function WalkthroughPhotoScreen() {
                   isOpeningPicker && styles.disabledButton,
                 ]}
               >
-                <Text style={styles.primaryActionIcon}>📸</Text>
+                <View style={styles.primaryActionIconContainer}>
+                  <Ionicons
+                    name="camera"
+                    size={27}
+                    color="#FFFFFF"
+                  />
+                </View>
 
                 <View style={styles.actionTextContainer}>
                   <Text style={styles.primaryActionTitle}>
@@ -372,7 +460,13 @@ export default function WalkthroughPhotoScreen() {
                   isOpeningPicker && styles.disabledButton,
                 ]}
               >
-                <Text style={styles.secondaryActionIcon}>🖼️</Text>
+                <View style={styles.secondaryActionIconContainer}>
+                  <Ionicons
+                    name="images-outline"
+                    size={27}
+                    color="#93C5FD"
+                  />
+                </View>
 
                 <View style={styles.actionTextContainer}>
                   <Text style={styles.secondaryActionTitle}>
@@ -426,9 +520,8 @@ export default function WalkthroughPhotoScreen() {
             </View>
 
             <Text style={styles.capacityNote}>
-              Estimate is based on the proven five-photo concurrency
-              test. Dense rack photos can take longer than clear
-              single-label photos.
+              Processing time may vary based on photo detail and
+              complexity.
             </Text>
           </View>
 
@@ -478,11 +571,26 @@ export default function WalkthroughPhotoScreen() {
                     key={photo.id}
                     style={styles.photoCard}
                   >
-                    <Image
-                      source={{ uri: photo.uri }}
-                      style={styles.photoImage}
-                      resizeMode="cover"
-                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Preview photo ${
+                        index + 1
+                      }`}
+                      accessibilityHint="Opens the full-screen photo viewer"
+                      onPress={() =>
+                        openPhotoViewer(photo, index)
+                      }
+                      style={({ pressed }) => [
+                        styles.photoPreviewButton,
+                        pressed && styles.photoPreviewPressed,
+                      ]}
+                    >
+                      <Image
+                        source={{ uri: photo.uri }}
+                        style={styles.photoImage}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
 
                     <View style={styles.photoNumber}>
                       <Text style={styles.photoNumberText}>
@@ -512,18 +620,23 @@ export default function WalkthroughPhotoScreen() {
           )}
 
           <View style={styles.tipCard}>
-            <Text style={styles.tipIcon}>💡</Text>
+            <View style={styles.tipIconContainer}>
+              <Ionicons
+                name="sparkles-outline"
+                size={23}
+                color="#93C5FD"
+              />
+            </View>
 
             <View style={styles.tipTextContainer}>
               <Text style={styles.tipTitle}>
-                Recognition tip
+                Photo tips
               </Text>
 
               <Text style={styles.tipText}>
-                Keep each label large and readable. For dense
-                racks, take two or three closer photos instead of
-                one wide photo so fractions, thread counts, and
-                small part numbers remain clear.
+                Clear photos create better results. Keep labels easy
+                to read, avoid glare, and add a closer shot for small
+                parts or details.
               </Text>
             </View>
           </View>
@@ -557,6 +670,94 @@ export default function WalkthroughPhotoScreen() {
             </Text>
           </Pressable>
         </View>
+
+        <Modal
+          visible={photoViewer !== null}
+          animationType="fade"
+          presentationStyle="pageSheet"
+          allowSwipeDismissal
+          onDismiss={closePhotoViewer}
+          onRequestClose={closePhotoViewer}
+        >
+          <View style={styles.photoViewerSafeArea}>
+            <View
+              style={[
+                styles.photoViewerHeader,
+                {
+                  minHeight: 68 + safeAreaInsets.top,
+                  paddingTop: safeAreaInsets.top,
+                },
+              ]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close photo preview"
+                onPress={closePhotoViewer}
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.photoViewerCloseButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.photoViewerCloseText}>
+                  Close
+                </Text>
+              </Pressable>
+
+              <View style={styles.photoViewerTitleArea}>
+                <Text
+                  numberOfLines={1}
+                  style={styles.photoViewerTitle}
+                >
+                  {photoViewer?.label || "Selected Photo"}
+                </Text>
+                <Text style={styles.photoViewerHint}>
+                  Pinch or double-tap to zoom
+                </Text>
+              </View>
+
+              <View style={styles.photoViewerHeaderSpacer} />
+            </View>
+
+            {photoViewer && (
+              <ScrollView
+                ref={photoViewerScrollRef}
+                style={styles.photoViewerScroll}
+                contentContainerStyle={styles.photoViewerContent}
+                centerContent
+                minimumZoomScale={1}
+                maximumZoomScale={5}
+                scrollEventThrottle={16}
+                onScroll={(event) => {
+                  const zoomScale = event.nativeEvent.zoomScale;
+
+                  if (typeof zoomScale === "number") {
+                    photoViewerIsZoomed.current = zoomScale > 1.1;
+                  }
+                }}
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+              >
+                <Pressable
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={photoViewer.label}
+                  accessibilityHint="Double-tap to zoom"
+                  onPress={handlePhotoViewerTap}
+                  style={{
+                    width: windowWidth,
+                    height: photoViewerImageHeight,
+                  }}
+                >
+                  <Image
+                    source={{ uri: photoViewer.uri }}
+                    resizeMode="contain"
+                    style={styles.photoViewerImage}
+                  />
+                </Pressable>
+              </ScrollView>
+            )}
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -654,10 +855,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#285BE0",
   },
 
-  cameraIcon: {
-    fontSize: 37,
-  },
-
   introTitle: {
     color: "#FFFFFF",
     fontSize: 27,
@@ -699,13 +896,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
 
-  primaryActionIcon: {
-    fontSize: 30,
+  primaryActionIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
     marginRight: 15,
   },
 
-  secondaryActionIcon: {
-    fontSize: 29,
+  secondaryActionIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#102039",
+    borderWidth: 1,
+    borderColor: "#2D4D72",
     marginRight: 15,
   },
 
@@ -907,6 +1116,15 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
+  photoPreviewButton: {
+    width: "100%",
+    height: "100%",
+  },
+
+  photoPreviewPressed: {
+    opacity: 0.82,
+  },
+
   photoNumber: {
     position: "absolute",
     left: 9,
@@ -957,8 +1175,15 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
 
-  tipIcon: {
-    fontSize: 24,
+  tipIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#152D4A",
+    borderWidth: 1,
+    borderColor: "#2D527D",
     marginRight: 13,
   },
 
@@ -1017,5 +1242,71 @@ const styles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.76,
     transform: [{ scale: 0.99 }],
+  },
+
+  photoViewerSafeArea: {
+    flex: 1,
+    backgroundColor: "#02070D",
+  },
+
+  photoViewerHeader: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#1C2D43",
+    paddingHorizontal: 14,
+  },
+
+  photoViewerCloseButton: {
+    width: 70,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#17283C",
+  },
+
+  photoViewerCloseText: {
+    color: "#BFD5EA",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  photoViewerTitleArea: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 10,
+  },
+
+  photoViewerTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  photoViewerHint: {
+    color: "#71849D",
+    fontSize: 10,
+    marginTop: 2,
+  },
+
+  photoViewerHeaderSpacer: {
+    width: 70,
+  },
+
+  photoViewerScroll: {
+    flex: 1,
+  },
+
+  photoViewerContent: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  photoViewerImage: {
+    width: "100%",
+    height: "100%",
   },
 });
