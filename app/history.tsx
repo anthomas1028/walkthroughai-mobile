@@ -69,6 +69,22 @@ function formatDate(value: string): string {
   });
 }
 
+function isDiscardedWalkthrough(
+  walkthrough: WalkthroughSummary
+): boolean {
+  const normalizedStatus = String(
+    walkthrough.status || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return [
+    "cancelled",
+    "canceled",
+    "discarded",
+  ].includes(normalizedStatus);
+}
+
 export default function HistoryScreen() {
   const params = useLocalSearchParams<{
     customerId?: string;
@@ -132,7 +148,12 @@ export default function HistoryScreen() {
           );
         }
 
-        setWalkthroughs(data.walkthroughs || []);
+        setWalkthroughs(
+          (data.walkthroughs || []).filter(
+            (walkthrough) =>
+              !isDiscardedWalkthrough(walkthrough)
+          )
+        );
       } catch (error) {
         const message =
           error instanceof Error

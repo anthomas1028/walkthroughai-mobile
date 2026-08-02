@@ -197,6 +197,15 @@ type FinalizeApiResponse = {
   details?: string;
 };
 
+type DiscardApiResponse = {
+  success: boolean;
+  discarded?: boolean;
+  history_saved?: boolean;
+  message?: string;
+  error?: string;
+  details?: string;
+};
+
 type EditableFieldProps = {
   label: string;
   value: string;
@@ -645,6 +654,12 @@ export default function UploadScreen() {
   const [isFinalizing, setIsFinalizing] =
     useState(false);
 
+  const [isDiscarding, setIsDiscarding] =
+    useState(false);
+
+  const [currentJobId, setCurrentJobId] =
+    useState("");
+
   const [results, setResults] = useState<
     RecognitionResult[]
   >([]);
@@ -713,7 +728,11 @@ export default function UploadScreen() {
       : 0;
 
   function returnToPhotos() {
-    if (isProcessing || isFinalizing) {
+    if (
+      isProcessing ||
+      isFinalizing ||
+      isDiscarding
+    ) {
       Alert.alert(
         "Please wait",
         "The current operation must finish before leaving this screen."
@@ -858,6 +877,7 @@ export default function UploadScreen() {
 
     try {
       setIsProcessing(true);
+      setCurrentJobId("");
       setJobProgress(0);
       setJobStatusMessage(
         "Preparing photos for upload."
@@ -899,6 +919,8 @@ export default function UploadScreen() {
           "The server accepted the upload but did not return a valid Job ID."
         );
       }
+
+      setCurrentJobId(jobId);
 
       setJobStatusMessage(
         data.message ||
@@ -1502,6 +1524,99 @@ export default function UploadScreen() {
     }
   }
 
+  async function discardWalkthrough() {
+    if (!currentJobId) {
+      Alert.alert(
+        "Cannot discard results",
+        "The original analysis Job ID is unavailable. Return home without publishing, then try another walkthrough."
+      );
+      return;
+    }
+
+    try {
+      setIsDiscarding(true);
+      setErrorMessage("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/jobs/${encodeURIComponent(
+          currentJobId
+        )}/discard`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            reason: "Cancelled from mobile review",
+          }),
+        }
+      );
+
+      const data =
+        await readJsonResponse<DiscardApiResponse>(
+          response
+        );
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            data.details ||
+            `The server returned HTTP ${response.status}.`
+        );
+      }
+
+      setResults([]);
+      setCorrectedWorkbookUrl(null);
+      setEmailSent(false);
+      setEmailedRecipient("");
+      router.replace("/");
+    } catch (error) {
+      console.error(
+        "Discard walkthrough error:",
+        error
+      );
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The results could not be discarded.";
+
+      setErrorMessage(message);
+
+      Alert.alert(
+        "Discard failed",
+        `${message} Nothing was published or emailed.`
+      );
+    } finally {
+      setIsDiscarding(false);
+    }
+  }
+
+  function confirmDiscardWalkthrough() {
+    if (isProcessing || isFinalizing || isDiscarding) {
+      return;
+    }
+
+    Alert.alert(
+      "Don’t publish results",
+      "Discard these results and return home?",
+      [
+        {
+          text: "Keep Reviewing",
+          style: "cancel",
+        },
+        {
+          text: "Discard Results",
+          style: "destructive",
+          onPress: () => {
+            void discardWalkthrough();
+          },
+        },
+      ]
+    );
+  }
+
   async function openDownloadAddress(
     url: string
   ) {
@@ -1560,7 +1675,11 @@ export default function UploadScreen() {
   }
 
   function startOver() {
-    if (isProcessing || isFinalizing) {
+    if (
+      isProcessing ||
+      isFinalizing ||
+      isDiscarding
+    ) {
       return;
     }
 
@@ -1574,7 +1693,9 @@ export default function UploadScreen() {
           <Pressable
             accessibilityRole="button"
             disabled={
-              isProcessing || isFinalizing
+              isProcessing ||
+              isFinalizing ||
+              isDiscarding
             }
             onPress={returnToPhotos}
             style={({ pressed }) => [
@@ -1582,8 +1703,11 @@ export default function UploadScreen() {
               pressed &&
                 !isProcessing &&
                 !isFinalizing &&
+                !isDiscarding &&
                 styles.buttonPressed,
-              (isProcessing || isFinalizing) &&
+              (isProcessing ||
+                isFinalizing ||
+                isDiscarding) &&
                 styles.disabledButton,
             ]}
           >
@@ -2646,6 +2770,35 @@ export default function UploadScreen() {
                       firstUnconfirmedIndex + 1
                     } of ${results.length}`}
                   </Text>
+                </Pressable>
+              )}
+
+              {!correctedWorkbookUrl && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel walkthrough and do not publish results"
+                  disabled={isFinalizing || isDiscarding}
+                  onPress={confirmDiscardWalkthrough}
+                  style={({ pressed }) => [
+                    styles.discardButton,
+                    (isFinalizing || isDiscarding) &&
+                      styles.disabledButton,
+                    pressed &&
+                      !isFinalizing &&
+                      !isDiscarding &&
+                      styles.buttonPressed,
+                  ]}
+                >
+                  {isDiscarding ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#FFB6B6"
+                    />
+                  ) : (
+                    <Text style={styles.discardButtonText}>
+                      Cancel — Don’t Publish Results
+                    </Text>
+                  )}
                 </Pressable>
               )}
 
@@ -4067,6 +4220,25 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "800",
+  },
+
+  discardButton: {
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#7C3E49",
+    backgroundColor: "#2A1720",
+    marginTop: 10,
+    paddingHorizontal: 14,
+  },
+
+  discardButtonText: {
+    color: "#FFB6B6",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   correctedButton: {
