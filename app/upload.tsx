@@ -22,8 +22,8 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { API_BASE_URL, apiFetch } from "../lib/api";
 
-const API_BASE_URL = "https://walkthroughai-api.onrender.com";
 
 const UPLOAD_API_URL = `${API_BASE_URL}/api/upload`;
 
@@ -792,7 +792,7 @@ export default function UploadScreen() {
       }, 180000);
 
       try {
-        const response = await fetch(UPLOAD_API_URL, {
+        const response = await apiFetch(UPLOAD_API_URL, {
           method: "POST",
           body: buildUploadFormData(),
           signal: controller.signal,
@@ -824,7 +824,7 @@ export default function UploadScreen() {
           );
         }
 
-        const response = await fetch(statusUrl, {
+        const response = await apiFetch(statusUrl, {
           method: "GET",
           headers: {
             Accept: "application/json",
@@ -1336,7 +1336,7 @@ export default function UploadScreen() {
       setIsFinalizing(true);
       setErrorMessage("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         FINALIZE_API_URL,
         {
           method: "POST",
@@ -1355,6 +1355,7 @@ export default function UploadScreen() {
               ? cleanedRecipient
               : null,
             send_email: sendEmail,
+            job_id: currentJobId || null,
             results,
           }),
         }
@@ -1500,7 +1501,7 @@ export default function UploadScreen() {
       setIsDiscarding(true);
       setErrorMessage("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/jobs/${encodeURIComponent(
           currentJobId
         )}/discard`,

@@ -16,8 +16,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { API_BASE_URL, apiFetch } from "../lib/api";
 
-const API_BASE_URL = "https://walkthroughai-api.onrender.com";
+import { useAuth } from "../contexts/AuthContext";
+
 
 type Customer = {
   id: number;
@@ -44,6 +46,7 @@ type CustomerResponse = {
 };
 
 export default function HomeScreen() {
+  const { session, workspace, signOut } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null
@@ -75,7 +78,7 @@ export default function HomeScreen() {
           ? `?search=${encodeURIComponent(searchText.trim())}`
           : "";
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${API_BASE_URL}/api/customers${query}`
         );
 
@@ -156,6 +159,28 @@ export default function HomeScreen() {
     setShowNewCustomerForm((currentValue) => !currentValue);
   }
 
+  function confirmSignOut() {
+    Alert.alert(
+      "Sign out?",
+      "You can sign back in to this workspace at any time.",
+      [
+        { text: "Stay Signed In", style: "cancel" },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: () => {
+            signOut().catch((error) => {
+              Alert.alert(
+                "Unable to sign out",
+                error instanceof Error ? error.message : "Please try again."
+              );
+            });
+          },
+        },
+      ]
+    );
+  }
+
   async function saveCustomer() {
     const cleanedCompanyName = companyName.trim();
 
@@ -170,7 +195,7 @@ export default function HomeScreen() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/customers`,
         {
           method: "POST",
@@ -432,10 +457,21 @@ export default function HomeScreen() {
             <View style={styles.headerText}>
               <Text style={styles.title}>Walkthrough AI</Text>
               <Text style={styles.subtitle}>
-                Select a customer to begin an inventory
-                walkthrough.
+                {workspace?.name || "Your private workspace"}
               </Text>
+              <Text style={styles.accountEmail}>{session?.user.email || ""}</Text>
             </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={confirmSignOut}
+              style={({ pressed }) => [
+                styles.signOutButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.signOutButtonText}>Sign Out</Text>
+            </Pressable>
           </View>
 
           <View style={styles.sectionHeader}>
@@ -834,6 +870,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginTop: 3,
+  },
+
+  accountEmail: {
+    color: "#64748B",
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  signOutButton: {
+    borderColor: "#334E70",
+    borderRadius: 10,
+    borderWidth: 1,
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+
+  signOutButtonText: {
+    color: "#A7C7F2",
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   sectionHeader: {

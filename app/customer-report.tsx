@@ -14,8 +14,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { API_BASE_URL, apiFetch } from "../lib/api";
 
-const API_BASE_URL = "https://walkthroughai-api.onrender.com";
 
 type Customer = {
   id: number;
@@ -202,7 +202,7 @@ export default function CustomerReportScreen() {
           sort,
           days
         );
-        const response = await fetch(
+        const response = await apiFetch(
           `${API_BASE_URL}/api/customers/${customerId}/report?${query}`
         );
         const text = await response.text();
@@ -287,7 +287,7 @@ export default function CustomerReportScreen() {
         sort,
         days
       );
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/customers/${customerId}/report/export?${query}`
       );
       const text = await response.text();

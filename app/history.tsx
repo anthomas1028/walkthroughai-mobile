@@ -11,8 +11,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { API_BASE_URL, apiFetch } from "../lib/api";
 
-const API_BASE_URL = "https://walkthroughai-api.onrender.com";
 
 type WalkthroughSummary = {
   id: number;
@@ -126,7 +126,7 @@ export default function HistoryScreen() {
       }
 
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `${API_BASE_URL}/api/customers/${customerId}/walkthroughs?include_archived=${showArchived ? "true" : "false"}`
         );
 
@@ -182,7 +182,7 @@ export default function HistoryScreen() {
     setUpdatingWalkthroughId(walkthrough.id);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/walkthroughs/${walkthrough.id}/archive`,
         {
           method: "PATCH",
@@ -268,7 +268,7 @@ export default function HistoryScreen() {
     setDeletingWalkthroughId(walkthroughId);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/walkthroughs/${walkthroughId}`,
         {
           method: "DELETE",
@@ -352,7 +352,7 @@ export default function HistoryScreen() {
 
     try {
       for (const walkthrough of activeWalkthroughs) {
-        const response = await fetch(
+        const response = await apiFetch(
           `${API_BASE_URL}/api/walkthroughs/${walkthrough.id}/archive`,
           {
             method: "PATCH",
@@ -430,7 +430,7 @@ export default function HistoryScreen() {
 
     try {
       for (const walkthrough of archivedWalkthroughs) {
-        const response = await fetch(
+        const response = await apiFetch(
           `${API_BASE_URL}/api/walkthroughs/${walkthrough.id}`,
           { method: "DELETE" }
         );
