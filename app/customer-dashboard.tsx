@@ -228,6 +228,23 @@ export default function CustomerDashboardScreen() {
     });
   }
 
+  function openReport(
+    reportType: string,
+    vendor: string = ""
+  ) {
+    router.push({
+      pathname: "/customer-report",
+      params: {
+        customerId: String(customerId),
+        customerName:
+          dashboard?.customer.company_name ||
+          fallbackCustomerName,
+        reportType,
+        ...(vendor ? { vendor } : {}),
+      },
+    });
+  }
+
   function renderWalkthrough({
     item,
   }: {
@@ -315,6 +332,7 @@ export default function CustomerDashboardScreen() {
           </View>
         ) : dashboard ? (
           <FlatList
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.content}
             data={dashboard.recent_walkthroughs}
             keyExtractor={(item) => String(item.id)}
@@ -356,52 +374,94 @@ export default function CustomerDashboardScreen() {
                 </View>
 
                 <View style={styles.statGrid}>
-                  <View style={styles.statCard}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => openReport("walkthroughs")}
+                    style={({ pressed }) => [
+                      styles.statCard,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
                     <Text style={styles.statNumber}>
                       {dashboard.total_walkthroughs}
                     </Text>
                     <Text style={styles.statLabel}>
                       Total Walkthroughs
                     </Text>
-                  </View>
+                  </Pressable>
 
-                  <View style={styles.statCard}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => openReport("inventory")}
+                    style={({ pressed }) => [
+                      styles.statCard,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
                     <Text style={styles.statNumber}>
                       {dashboard.total_inventory_items}
                     </Text>
                     <Text style={styles.statLabel}>
                       Inventory Items
                     </Text>
-                  </View>
+                  </Pressable>
 
-                  <View style={styles.statCard}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => openReport("active")}
+                    style={({ pressed }) => [
+                      styles.statCard,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
                     <Text style={styles.statNumber}>
                       {activeWalkthroughs}
                     </Text>
                     <Text style={styles.statLabel}>
                       Active
                     </Text>
-                  </View>
+                  </Pressable>
 
-                  <View style={styles.statCard}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => openReport("archived")}
+                    style={({ pressed }) => [
+                      styles.statCard,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
                     <Text style={styles.statNumber}>
                       {dashboard.archived_walkthroughs}
                     </Text>
                     <Text style={styles.statLabel}>
                       Archived
                     </Text>
-                  </View>
+                  </Pressable>
 
-                  <View style={styles.statCard}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => openReport("photos")}
+                    style={({ pressed }) => [
+                      styles.statCard,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
                     <Text style={styles.statNumber}>
                       {dashboard.total_photos}
                     </Text>
                     <Text style={styles.statLabel}>
                       Photos
                     </Text>
-                  </View>
+                  </Pressable>
 
-                  <View style={styles.statCard}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => openReport("review")}
+                    style={({ pressed }) => [
+                      styles.statCard,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
                     <Text
                       style={[
                         styles.statNumber,
@@ -414,10 +474,17 @@ export default function CustomerDashboardScreen() {
                     <Text style={styles.statLabel}>
                       Review Items
                     </Text>
-                  </View>
+                  </Pressable>
                 </View>
 
-                <View style={styles.lastVisitCard}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => openReport("last")}
+                  style={({ pressed }) => [
+                    styles.lastVisitCard,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
                   <Text style={styles.sectionEyebrow}>
                     LAST WALKTHROUGH
                   </Text>
@@ -426,7 +493,10 @@ export default function CustomerDashboardScreen() {
                       dashboard.last_walkthrough_at
                     )}
                   </Text>
-                </View>
+                  <Text style={styles.reportHint}>
+                    View report ›
+                  </Text>
+                </Pressable>
 
                 <Text style={styles.sectionTitle}>
                   Recent Vendors
@@ -436,14 +506,22 @@ export default function CustomerDashboardScreen() {
                   {dashboard.recent_vendors.length > 0 ? (
                     dashboard.recent_vendors.map(
                       (vendor, index) => (
-                        <View
+                        <Pressable
                           key={`${vendor.vendor}-${index}`}
-                          style={[
+                          accessibilityRole="button"
+                          onPress={() =>
+                            openReport(
+                              "vendor",
+                              vendor.vendor
+                            )
+                          }
+                          style={({ pressed }) => [
                             styles.vendorRow,
                             index ===
                               dashboard.recent_vendors.length -
                                 1 &&
                               styles.vendorRowLast,
+                            pressed && styles.buttonPressed,
                           ]}
                         >
                           <View style={styles.vendorTextArea}>
@@ -461,7 +539,10 @@ export default function CustomerDashboardScreen() {
                               {vendor.item_count}
                             </Text>
                           </View>
-                        </View>
+                          <Text style={styles.vendorArrow}>
+                            ›
+                          </Text>
+                        </Pressable>
                       )
                     )
                   ) : (
@@ -676,6 +757,13 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+  reportHint: {
+    color: "#93C5FD",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 7,
+  },
+
   sectionTitle: {
     color: "#FFFFFF",
     fontSize: 18,
@@ -733,6 +821,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
+  },
+
+  vendorArrow: {
+    color: "#93C5FD",
+    fontSize: 23,
+    fontWeight: "800",
+    marginLeft: 8,
   },
 
   sectionHeaderRow: {

@@ -410,6 +410,7 @@ export default function WalkthroughDetailScreen() {
           </View>
         ) : walkthrough ? (
           <FlatList
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={
               styles.itemList
             }

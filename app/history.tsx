@@ -785,6 +785,7 @@ export default function HistoryScreen() {
           </View>
         ) : (
           <FlatList
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={
               walkthroughs.length === 0
                 ? styles.emptyList
