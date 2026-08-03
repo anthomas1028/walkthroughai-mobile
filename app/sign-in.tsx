@@ -1,16 +1,16 @@
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -98,6 +98,7 @@ export default function SignInScreen() {
       >
         <ScrollView
           contentContainerStyle={styles.content}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -109,8 +110,8 @@ export default function SignInScreen() {
           <Text style={styles.title}>Walkthrough AI</Text>
           <Text style={styles.subtitle}>
             {isCreatingAccount
-              ? "Create your private company workspace."
-              : "Sign in to your customer walkthroughs."}
+              ? "Create an account to begin your first walkthrough."
+              : "Sign in to begin a walkthrough or review previous walkthroughs."}
           </Text>
 
           <View style={styles.card}>
@@ -177,14 +178,16 @@ export default function SignInScreen() {
               <Text style={styles.secondaryButtonText}>
                 {isCreatingAccount
                   ? "Already have an account? Sign in"
-                  : "New to Walkthrough AI? Create account"}
+                  : "New here? Create an account"}
               </Text>
             </Pressable>
           </View>
 
-          <Text style={styles.privacyText}>
-            Each workspace has its own customers, walkthroughs, photos, and reports.
-          </Text>
+          <View style={styles.differenceSection}>
+            <Text style={styles.differenceTitle}>
+              Capture. Review. Report.
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -197,37 +200,37 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 28,
-    paddingVertical: 36,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
   },
   logo: {
-    width: 92,
-    height: 92,
-    borderRadius: 24,
+    width: 72,
+    height: 72,
+    borderRadius: 19,
     alignSelf: "center",
-    marginBottom: 24,
+    marginBottom: 14,
   },
   title: {
     color: "#FFFFFF",
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: "900",
     textAlign: "center",
   },
   subtitle: {
     color: "#94A3B8",
-    fontSize: 17,
-    lineHeight: 25,
+    fontSize: 16,
+    lineHeight: 22,
     textAlign: "center",
-    marginTop: 10,
-    marginBottom: 28,
+    marginTop: 8,
+    marginBottom: 18,
   },
   card: {
     backgroundColor: "#101D31",
     borderColor: "#29415F",
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 20,
-    gap: 14,
+    padding: 16,
+    gap: 10,
   },
   input: {
     backgroundColor: "#0B1628",
@@ -236,7 +239,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: "#FFFFFF",
     fontSize: 17,
-    minHeight: 56,
+    minHeight: 50,
     paddingHorizontal: 16,
   },
   primaryButton: {
@@ -244,17 +247,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#2F6FEB",
     borderRadius: 14,
     justifyContent: "center",
-    minHeight: 58,
-    marginTop: 4,
+    minHeight: 52,
+    marginTop: 2,
   },
   primaryButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
-  secondaryButton: { alignItems: "center", paddingHorizontal: 8, paddingVertical: 12 },
+  secondaryButton: { alignItems: "center", paddingHorizontal: 8, paddingVertical: 8 },
   secondaryButtonText: { color: "#83B9FF", fontSize: 15, fontWeight: "700", textAlign: "center" },
-  privacyText: {
-    color: "#64748B",
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 22,
+  differenceSection: {
+    marginTop: 16,
+    paddingHorizontal: 12,
+  },
+  differenceTitle: {
+    color: "#A7CFFF",
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0.4,
     textAlign: "center",
   },
   pressed: { opacity: 0.82 },

@@ -10,13 +10,12 @@ function AuthenticatedStack() {
   const { session, isLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const isOnSignInScreen = segments[0] === "sign-in";
 
   useEffect(() => {
     if (isLoading) {
       return;
     }
-
-    const isOnSignInScreen = segments[0] === "sign-in";
 
     if (!session && !isOnSignInScreen) {
       router.replace("/sign-in");
@@ -25,7 +24,11 @@ function AuthenticatedStack() {
     }
   }, [isLoading, router, segments, session]);
 
-  if (isLoading) {
+  const isRedirecting =
+    (!session && !isOnSignInScreen) ||
+    Boolean(session && isOnSignInScreen);
+
+  if (isLoading || isRedirecting) {
     return (
       <View style={styles.loadingScreen}>
         <ActivityIndicator color="#60A5FA" size="large" />
