@@ -33,6 +33,8 @@ type Customer = {
   state: string | null;
   postal_code: string | null;
   notes: string | null;
+  is_archived: boolean;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -55,8 +57,12 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingCustomer, setIsUpdatingCustomer] = useState(false);
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [customerView, setCustomerView] = useState<"active" | "archived">(
+    "active"
+  );
 
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
@@ -74,9 +80,17 @@ export default function HomeScreen() {
       }
 
       try {
-        const query = searchText.trim()
-          ? `?search=${encodeURIComponent(searchText.trim())}`
-          : "";
+        const queryParts = [
+          `archived=${customerView === "archived" ? "true" : "false"}`,
+        ];
+
+        if (searchText.trim()) {
+          queryParts.push(
+            `search=${encodeURIComponent(searchText.trim())}`
+          );
+        }
+
+        const query = `?${queryParts.join("&")}`;
 
         const response = await apiFetch(
           `${API_BASE_URL}/api/customers${query}`
@@ -131,7 +145,7 @@ export default function HomeScreen() {
         setIsRefreshing(false);
       }
     },
-    [searchText]
+    [customerView, searchText]
   );
 
   useEffect(() => {
@@ -361,6 +375,75 @@ export default function HomeScreen() {
     });
   }
 
+  async function restoreCustomer(customer: Customer) {
+    setIsUpdatingCustomer(true);
+
+    try {
+      const response = await apiFetch(
+        `${API_BASE_URL}/api/customers/${customer.id}/archive`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ is_archived: false }),
+        }
+      );
+
+      const responseText = await response.text();
+      let data: CustomerResponse;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          "Walkthrough AI received an unexpected response. Please try again."
+        );
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Walkthrough AI couldn’t restore this customer."
+        );
+      }
+
+      setCustomers((currentCustomers) =>
+        currentCustomers.filter((item) => item.id !== customer.id)
+      );
+      setSelectedCustomerId(null);
+
+      Alert.alert(
+        "Customer restored",
+        `${customer.company_name} is active again.`
+      );
+    } catch (error) {
+      Alert.alert(
+        "Unable to restore customer",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setIsUpdatingCustomer(false);
+    }
+  }
+
+  function confirmRestoreCustomer() {
+    if (!selectedCustomer) {
+      return;
+    }
+
+    Alert.alert(
+      "Restore customer?",
+      `${selectedCustomer.company_name} will return to your active customer list.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Restore",
+          onPress: () => restoreCustomer(selectedCustomer),
+        },
+      ]
+    );
+  }
+
   const selectedCustomer = customers.find(
     (customer) => customer.id === selectedCustomerId
   );
@@ -430,6 +513,10 @@ export default function HomeScreen() {
                 {location}
               </Text>
             ) : null}
+
+            {item.is_archived ? (
+              <Text style={styles.archivedBadge}>Archived</Text>
+            ) : null}
           </View>
         </View>
       </Pressable>
@@ -477,18 +564,20 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Customers</Text>
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={toggleNewCustomerForm}
-              style={({ pressed }) => [
-                styles.addCustomerButton,
-                pressed && styles.buttonPressed,
-              ]}
-            >
-              <Text style={styles.addCustomerButtonText}>
-                {showNewCustomerForm ? "Cancel" : "+ Add"}
-              </Text>
-            </Pressable>
+            {customerView === "active" || showNewCustomerForm ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={toggleNewCustomerForm}
+                style={({ pressed }) => [
+                  styles.addCustomerButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.addCustomerButtonText}>
+                  {showNewCustomerForm ? "Cancel" : "+ Add"}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           {showNewCustomerForm ? (
@@ -623,6 +712,55 @@ export default function HomeScreen() {
             </ScrollView>
           ) : (
             <>
+              <View style={styles.customerViewTabs}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: customerView === "active" }}
+                  onPress={() => {
+                    setSelectedCustomerId(null);
+                    setCustomerView("active");
+                  }}
+                  style={[
+                    styles.customerViewTab,
+                    customerView === "active" && styles.customerViewTabSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.customerViewTabText,
+                      customerView === "active" &&
+                        styles.customerViewTabTextSelected,
+                    ]}
+                  >
+                    Active
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: customerView === "archived" }}
+                  onPress={() => {
+                    setSelectedCustomerId(null);
+                    setCustomerView("archived");
+                  }}
+                  style={[
+                    styles.customerViewTab,
+                    styles.customerViewTabLast,
+                    customerView === "archived" && styles.customerViewTabSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.customerViewTabText,
+                      customerView === "archived" &&
+                        styles.customerViewTabTextSelected,
+                    ]}
+                  >
+                    Archived
+                  </Text>
+                </Pressable>
+              </View>
+
               <View style={styles.searchRow}>
                 <TextInput
                   autoCapitalize="none"
@@ -692,12 +830,15 @@ export default function HomeScreen() {
                       </Text>
 
                       <Text style={styles.emptyTitle}>
-                        No customers found
+                        {customerView === "archived"
+                          ? "No archived customers"
+                          : "No customers found"}
                       </Text>
 
                       <Text style={styles.emptyDescription}>
-                        Add your first customer or change
-                        the search.
+                        {customerView === "archived"
+                          ? "Customers you archive will appear here."
+                          : "Add your first customer or change the search."}
                       </Text>
                     </View>
                   }
@@ -713,7 +854,9 @@ export default function HomeScreen() {
                   <View style={styles.selectedCustomerRow}>
                     <View style={styles.selectedCustomerTextArea}>
                       <Text style={styles.selectedCustomerLabel}>
-                        SELECTED CUSTOMER
+                        {customerView === "archived"
+                          ? "ARCHIVED CUSTOMER"
+                          : "SELECTED CUSTOMER"}
                       </Text>
                       <Text
                         numberOfLines={1}
@@ -738,18 +881,39 @@ export default function HomeScreen() {
                     </Pressable>
                   </View>
 
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={startWalkthrough}
-                    style={({ pressed }) => [
-                      styles.primaryButton,
-                      pressed && styles.buttonPressed,
-                    ]}
-                  >
-                    <Text style={styles.primaryButtonText}>
-                      Start Walkthrough
-                    </Text>
-                  </Pressable>
+                  {customerView === "active" ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={startWalkthrough}
+                      style={({ pressed }) => [
+                        styles.primaryButton,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        Start Walkthrough
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={isUpdatingCustomer}
+                      onPress={confirmRestoreCustomer}
+                      style={({ pressed }) => [
+                        styles.restoreButton,
+                        pressed && styles.buttonPressed,
+                        isUpdatingCustomer && styles.buttonDisabled,
+                      ]}
+                    >
+                      {isUpdatingCustomer ? (
+                        <ActivityIndicator color="#BFDBFE" />
+                      ) : (
+                        <Text style={styles.restoreButtonText}>
+                          Restore Customer
+                        </Text>
+                      )}
+                    </Pressable>
+                  )}
 
                   <View style={styles.customerActionRow}>
                     <Pressable
@@ -788,7 +952,7 @@ export default function HomeScreen() {
                       ]}
                     >
                       <Text style={styles.compactActionButtonText}>
-                        Edit
+                        {customerView === "archived" ? "Manage" : "Edit"}
                       </Text>
                     </Pressable>
                   </View>
@@ -929,6 +1093,43 @@ const styles = StyleSheet.create({
     marginBottom: 13,
   },
 
+  customerViewTabs: {
+    flexDirection: "row",
+    padding: 4,
+    marginBottom: 11,
+    borderRadius: 13,
+    backgroundColor: "#101A2A",
+    borderWidth: 1,
+    borderColor: "#26364F",
+  },
+
+  customerViewTab: {
+    flex: 1,
+    minHeight: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    marginRight: 4,
+  },
+
+  customerViewTabLast: {
+    marginRight: 0,
+  },
+
+  customerViewTabSelected: {
+    backgroundColor: "#1E3A5F",
+  },
+
+  customerViewTabText: {
+    color: "#718096",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  customerViewTabTextSelected: {
+    color: "#BFDBFE",
+  },
+
   searchInput: {
     flex: 1,
     height: 48,
@@ -1027,6 +1228,16 @@ const styles = StyleSheet.create({
     color: "#718096",
     fontSize: 12,
     marginTop: 4,
+  },
+
+  archivedBadge: {
+    alignSelf: "flex-start",
+    color: "#FBBF24",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 7,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
 
   loadingContainer: {
@@ -1209,6 +1420,22 @@ const styles = StyleSheet.create({
 
   primaryButtonText: {
     color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  restoreButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+    backgroundColor: "#17243A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  restoreButtonText: {
+    color: "#BFDBFE",
     fontSize: 16,
     fontWeight: "900",
   },

@@ -28,6 +28,8 @@ type Customer = {
   state: string | null;
   postal_code: string | null;
   notes: string | null;
+  is_archived: boolean;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -48,6 +50,11 @@ export default function CustomerEditScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isManaging, setIsManaging] = useState(false);
+  const [isArchived, setIsArchived] = useState(false);
+  const [savedCompanyName, setSavedCompanyName] = useState("");
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
@@ -98,6 +105,10 @@ export default function CustomerEditScreen() {
       const customer = data.customer;
 
       setCompanyName(customer.company_name || "");
+      setSavedCompanyName(customer.company_name || "");
+      setIsArchived(Boolean(customer.is_archived));
+      setShowDeleteConfirmation(false);
+      setDeleteConfirmation("");
       setContactName(customer.contact_name || "");
       setEmail(customer.email || "");
       setPhone(customer.phone || "");
@@ -205,6 +216,145 @@ export default function CustomerEditScreen() {
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function updateArchiveStatus(nextArchived: boolean) {
+    setIsManaging(true);
+
+    try {
+      const response = await apiFetch(
+        `${API_BASE_URL}/api/customers/${customerId}/archive`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ is_archived: nextArchived }),
+        }
+      );
+
+      const responseText = await response.text();
+      let data: CustomerResponse;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          "Walkthrough AI received an unexpected response. Please try again."
+        );
+      }
+
+      if (!response.ok || !data.success || !data.customer) {
+        throw new Error(
+          data.error || "Walkthrough AI couldn’t update this customer. Please try again."
+        );
+      }
+
+      Alert.alert(
+        nextArchived ? "Customer archived" : "Customer restored",
+        nextArchived
+          ? `${data.customer.company_name} was moved to Archived Customers.`
+          : `${data.customer.company_name} was restored to Active Customers.`,
+        [{ text: "OK", onPress: () => router.back() }]
+      );
+    } catch (error) {
+      Alert.alert(
+        "Unable to update customer",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setIsManaging(false);
+    }
+  }
+
+  function confirmArchiveCustomer() {
+    Alert.alert(
+      "Archive customer?",
+      `${savedCompanyName} will move to Archived Customers. Its walkthrough history, photos, reports, and dashboards will remain available.`,
+      [
+        { text: "Keep Active", style: "cancel" },
+        {
+          text: "Archive Customer",
+          style: "destructive",
+          onPress: () => {
+            updateArchiveStatus(true).catch(() => undefined);
+          },
+        },
+      ]
+    );
+  }
+
+  function confirmRestoreCustomer() {
+    Alert.alert(
+      "Restore customer?",
+      `${savedCompanyName} will return to Active Customers.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Restore Customer",
+          onPress: () => {
+            updateArchiveStatus(false).catch(() => undefined);
+          },
+        },
+      ]
+    );
+  }
+
+  async function permanentlyDeleteCustomer() {
+    if (deleteConfirmation.trim() !== savedCompanyName) {
+      Alert.alert(
+        "Company name does not match",
+        `Type ${savedCompanyName} exactly to confirm permanent deletion.`
+      );
+      return;
+    }
+
+    setIsManaging(true);
+
+    try {
+      const response = await apiFetch(
+        `${API_BASE_URL}/api/customers/${customerId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            confirmation: deleteConfirmation.trim(),
+          }),
+        }
+      );
+
+      const responseText = await response.text();
+      let data: CustomerResponse;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          "Walkthrough AI received an unexpected response. Please try again."
+        );
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Walkthrough AI couldn’t permanently delete this customer."
+        );
+      }
+
+      Alert.alert(
+        "Customer deleted",
+        `${savedCompanyName} and its saved walkthrough records were permanently deleted.`,
+        [{ text: "OK", onPress: () => router.back() }]
+      );
+    } catch (error) {
+      Alert.alert(
+        "Unable to delete customer",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setIsManaging(false);
     }
   }
 
@@ -382,16 +532,142 @@ export default function CustomerEditScreen() {
                     value={notes}
                   />
                 </View>
+
+                <View style={styles.managementCard}>
+                  <Text style={styles.managementTitle}>Customer Management</Text>
+
+                  {isArchived ? (
+                    <>
+                      <Text style={styles.managementDescription}>
+                        This customer is archived. Its walkthrough history,
+                        photos, reports, and dashboards are still preserved.
+                      </Text>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={isManaging}
+                        onPress={confirmRestoreCustomer}
+                        style={({ pressed }) => [
+                          styles.restoreButton,
+                          pressed && styles.buttonPressed,
+                          isManaging && styles.buttonDisabled,
+                        ]}
+                      >
+                        <Text style={styles.restoreButtonText}>
+                          Restore Customer
+                        </Text>
+                      </Pressable>
+
+                      <View style={styles.dangerDivider} />
+
+                      <Text style={styles.dangerTitle}>Permanent deletion</Text>
+                      <Text style={styles.dangerDescription}>
+                        This permanently removes the customer and all saved
+                        walkthrough records, results, reports, and history. It
+                        cannot be undone.
+                      </Text>
+
+                      {showDeleteConfirmation ? (
+                        <View style={styles.deleteConfirmationCard}>
+                          <Text style={styles.deleteInstruction}>
+                            Type {savedCompanyName} exactly to continue.
+                          </Text>
+                          <TextInput
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            onChangeText={setDeleteConfirmation}
+                            placeholder="Type company name"
+                            placeholderTextColor="#64748B"
+                            style={styles.deleteInput}
+                            value={deleteConfirmation}
+                          />
+
+                          <View style={styles.deleteActionRow}>
+                            <Pressable
+                              accessibilityRole="button"
+                              onPress={() => {
+                                setShowDeleteConfirmation(false);
+                                setDeleteConfirmation("");
+                              }}
+                              style={({ pressed }) => [
+                                styles.cancelDeleteButton,
+                                pressed && styles.buttonPressed,
+                              ]}
+                            >
+                              <Text style={styles.cancelDeleteButtonText}>Cancel</Text>
+                            </Pressable>
+
+                            <Pressable
+                              accessibilityRole="button"
+                              disabled={
+                                isManaging ||
+                                deleteConfirmation.trim() !== savedCompanyName
+                              }
+                              onPress={permanentlyDeleteCustomer}
+                              style={({ pressed }) => [
+                                styles.confirmDeleteButton,
+                                pressed && styles.buttonPressed,
+                                (isManaging ||
+                                  deleteConfirmation.trim() !== savedCompanyName) &&
+                                  styles.buttonDisabled,
+                              ]}
+                            >
+                              {isManaging ? (
+                                <ActivityIndicator color="#FFFFFF" />
+                              ) : (
+                                <Text style={styles.confirmDeleteButtonText}>
+                                  Delete Permanently
+                                </Text>
+                              )}
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => setShowDeleteConfirmation(true)}
+                          style={({ pressed }) => [
+                            styles.showDeleteButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          <Text style={styles.showDeleteButtonText}>
+                            Delete Permanently
+                          </Text>
+                        </Pressable>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.managementDescription}>
+                        Archive this customer to remove it from the active list
+                        without losing any walkthrough data.
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={isManaging}
+                        onPress={confirmArchiveCustomer}
+                        style={({ pressed }) => [
+                          styles.archiveButton,
+                          pressed && styles.buttonPressed,
+                          isManaging && styles.buttonDisabled,
+                        ]}
+                      >
+                        <Text style={styles.archiveButtonText}>Archive Customer</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </View>
               </ScrollView>
 
               <Pressable
                 accessibilityRole="button"
-                disabled={isSaving}
+                disabled={isSaving || isManaging}
                 onPress={saveCustomer}
                 style={({ pressed }) => [
                   styles.saveButton,
                   pressed && styles.buttonPressed,
-                  isSaving && styles.buttonDisabled,
+                  (isSaving || isManaging) && styles.buttonDisabled,
                 ]}
               >
                 {isSaving ? (
@@ -481,6 +757,160 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#26364F",
     padding: 16,
+  },
+
+  managementCard: {
+    backgroundColor: "#121C2D",
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: "#26364F",
+    padding: 16,
+    marginTop: 14,
+  },
+
+  managementTitle: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+
+  managementDescription: {
+    color: "#94A3B8",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+
+  archiveButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    backgroundColor: "#2A2113",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  archiveButtonText: {
+    color: "#FCD34D",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  restoreButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+    backgroundColor: "#172B4D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  restoreButtonText: {
+    color: "#BFDBFE",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  dangerDivider: {
+    height: 1,
+    backgroundColor: "#3B2630",
+    marginVertical: 18,
+  },
+
+  dangerTitle: {
+    color: "#FCA5A5",
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 7,
+  },
+
+  dangerDescription: {
+    color: "#94A3B8",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 13,
+  },
+
+  showDeleteButton: {
+    minHeight: 48,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#7F1D1D",
+    backgroundColor: "#2B151A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  showDeleteButtonText: {
+    color: "#FCA5A5",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  deleteConfirmationCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#7F1D1D",
+    backgroundColor: "#160E12",
+    padding: 13,
+  },
+
+  deleteInstruction: {
+    color: "#FCA5A5",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+
+  deleteInput: {
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#7F1D1D",
+    backgroundColor: "#0C1524",
+    color: "#FFFFFF",
+    fontSize: 14,
+    paddingHorizontal: 13,
+    marginBottom: 11,
+  },
+
+  deleteActionRow: {
+    flexDirection: "row",
+  },
+
+  cancelDeleteButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#334155",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+
+  cancelDeleteButtonText: {
+    color: "#CBD5E1",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  confirmDeleteButton: {
+    flex: 1.45,
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: "#B91C1C",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  confirmDeleteButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
   },
 
   sectionTitle: {
