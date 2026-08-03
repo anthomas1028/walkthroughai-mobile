@@ -1652,7 +1652,15 @@ export default function UploadScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.screen}>
+      <KeyboardAvoidingView
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : undefined
+        }
+        style={styles.keyboardAvoidingView}
+      >
+        <View style={styles.screen}>
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
@@ -3192,7 +3200,8 @@ export default function UploadScreen() {
             </KeyboardAvoidingView>
           </SafeAreaView>
         </Modal>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -3201,6 +3210,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#071421",
+  },
+
+  keyboardAvoidingView: {
+    flex: 1,
   },
 
   screen: {
