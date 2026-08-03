@@ -1,19 +1,19 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { API_BASE_URL, apiFetch } from "../lib/api";
 
-const API_BASE_URL = "https://walkthroughai-api.onrender.com";
 
 type WalkthroughSummary = {
   id: number;
@@ -109,7 +109,7 @@ export default function ArchivedHistoryScreen() {
           );
         }
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${API_BASE_URL}/api/customers/${customerId}/walkthroughs?${searchParameters.toString()}`
         );
 
@@ -166,7 +166,7 @@ export default function ArchivedHistoryScreen() {
     setRestoringId(walkthrough.id);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/walkthroughs/${walkthrough.id}/archive`,
         {
           method: "PATCH",
