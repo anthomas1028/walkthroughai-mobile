@@ -48,7 +48,7 @@ type CustomerResponse = {
 };
 
 export default function HomeScreen() {
-  const { session, workspace, signOut } = useAuth();
+  const { session, workspace } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null
@@ -171,28 +171,6 @@ export default function HomeScreen() {
 
   function toggleNewCustomerForm() {
     setShowNewCustomerForm((currentValue) => !currentValue);
-  }
-
-  function confirmSignOut() {
-    Alert.alert(
-      "Sign out?",
-      "You can sign back in to this workspace at any time.",
-      [
-        { text: "Stay Signed In", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: () => {
-            signOut().catch((error) => {
-              Alert.alert(
-                "Unable to sign out",
-                error instanceof Error ? error.message : "Please try again."
-              );
-            });
-          },
-        },
-      ]
-    );
   }
 
   async function saveCustomer() {
@@ -551,13 +529,13 @@ export default function HomeScreen() {
 
             <Pressable
               accessibilityRole="button"
-              onPress={confirmSignOut}
+              onPress={() => router.push("/account")}
               style={({ pressed }) => [
-                styles.signOutButton,
+                styles.accountButton,
                 pressed && styles.buttonPressed,
               ]}
             >
-              <Text style={styles.signOutButtonText}>Sign Out</Text>
+              <Text style={styles.accountButtonText}>Account</Text>
             </Pressable>
           </View>
 
@@ -1042,7 +1020,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  signOutButton: {
+  accountButton: {
     borderColor: "#334E70",
     borderRadius: 10,
     borderWidth: 1,
@@ -1051,7 +1029,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
-  signOutButtonText: {
+  accountButtonText: {
     color: "#A7C7F2",
     fontSize: 12,
     fontWeight: "700",

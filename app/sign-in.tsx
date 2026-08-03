@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import * as ExpoLinking from "expo-linking";
 import { useState } from "react";
 import {
@@ -22,6 +23,7 @@ export default function SignInScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit() {
@@ -139,17 +141,37 @@ export default function SignInScreen() {
               value={email}
             />
 
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              onChangeText={setPassword}
-              onSubmitEditing={submit}
-              placeholder="Password"
-              placeholderTextColor="#64748B"
-              secureTextEntry
-              style={styles.input}
-              value={password}
-            />
+            <View style={styles.passwordInputRow}>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={setPassword}
+                onSubmitEditing={submit}
+                placeholder="Password"
+                placeholderTextColor="#64748B"
+                secureTextEntry={!isPasswordVisible}
+                style={styles.passwordInput}
+                value={password}
+              />
+              <Pressable
+                accessibilityLabel={
+                  isPasswordVisible ? "Hide password" : "Show password"
+                }
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => setIsPasswordVisible((current) => !current)}
+                style={({ pressed }) => [
+                  styles.passwordVisibilityButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  color="#94A3B8"
+                  name={isPasswordVisible ? "eye-off-outline" : "eye-outline"}
+                  size={22}
+                />
+              </Pressable>
+            </View>
 
             <Pressable
               disabled={isSubmitting}
@@ -243,6 +265,29 @@ const styles = StyleSheet.create({
     fontSize: 17,
     minHeight: 50,
     paddingHorizontal: 16,
+  },
+  passwordInputRow: {
+    alignItems: "center",
+    backgroundColor: "#0B1628",
+    borderColor: "#334E70",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 50,
+  },
+  passwordInput: {
+    color: "#FFFFFF",
+    flex: 1,
+    fontSize: 17,
+    minHeight: 48,
+    paddingLeft: 16,
+    paddingRight: 8,
+  },
+  passwordVisibilityButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 14,
   },
   primaryButton: {
     alignItems: "center",
