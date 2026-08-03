@@ -1,15 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
+  ActionSheetIOS,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -23,6 +27,13 @@ type SelectedPhoto = {
   uri: string;
   fileName: string;
   mimeType: string;
+  location: string;
+};
+
+type LocationGroup = {
+  id: string;
+  name: string;
+  photos: SelectedPhoto[];
 };
 
 type PhotoViewer = {
@@ -30,91 +41,261 @@ type PhotoViewer = {
   label: string;
 };
 
+type AreaModalMode = "create" | "rename";
+
+type AreaModalState = {
+  visible: boolean;
+  mode: AreaModalMode;
+  groupId: string | null;
+};
+
 const MAX_WALKTHROUGH_PHOTOS = 100;
 const MEASURED_SECONDS_PER_PHOTO = 2.8;
 
+function createId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 function formatEstimatedProcessingTime(photoCount: number): string {
-  if (photoCount <= 0) {
-    return "Add photos to see an estimate";
-  }
+  if (photoCount <= 0) return "Add photos to see an estimate";
 
   const estimatedSeconds = Math.max(
     15,
     Math.round(photoCount * MEASURED_SECONDS_PER_PHOTO)
   );
 
-  if (estimatedSeconds < 60) {
-    return `About ${estimatedSeconds} seconds`;
-  }
+  if (estimatedSeconds < 60) return `About ${estimatedSeconds} seconds`;
 
   const minutes = Math.floor(estimatedSeconds / 60);
   const seconds = estimatedSeconds % 60;
 
-  if (seconds === 0) {
-    return `About ${minutes} ${
-      minutes === 1 ? "minute" : "minutes"
-    }`;
-  }
-
-  return `About ${minutes} min ${seconds} sec`;
-}
-
-function createPhotoId(uri: string, index: number) {
-  return `${Date.now()}-${index}-${uri}`;
+  return seconds === 0
+    ? `About ${minutes} ${minutes === 1 ? "minute" : "minutes"}`
+    : `About ${minutes} min ${seconds} sec`;
 }
 
 export default function WalkthroughPhotoScreen() {
-  const { width: windowWidth, height: windowHeight } =
-    useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
-  const photoViewerImageHeight = Math.max(
-    windowHeight - 120,
-    320
-  );
+  const photoViewerImageHeight = Math.max(windowHeight - 120, 320);
 
-  const {
-    customerId,
-    customerName,
-    customerEmail,
-    contactName,
-  } = useLocalSearchParams<{
-    customerId?: string;
-    customerName?: string;
-    customerEmail?: string;
-    contactName?: string;
-  }>();
+  const { customerId, customerName, customerEmail, contactName } =
+    useLocalSearchParams<{
+      customerId?: string;
+      customerName?: string;
+      customerEmail?: string;
+      contactName?: string;
+    }>();
 
   const selectedCustomerName =
     typeof customerName === "string" && customerName.trim()
       ? customerName.trim()
       : "Selected Customer";
 
-  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
+  const [groups, setGroups] = useState<LocationGroup[]>([]);
+  const [areaModal, setAreaModal] = useState<AreaModalState>({
+    visible: false,
+    mode: "create",
+    groupId: null,
+  });
+  const [areaNameDraft, setAreaNameDraft] = useState("");
+  const [photoActionGroupId, setPhotoActionGroupId] = useState<string | null>(
+    null
+  );
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
-  const [photoViewer, setPhotoViewer] =
-    useState<PhotoViewer | null>(null);
+  const [photoViewer, setPhotoViewer] = useState<PhotoViewer | null>(null);
+
+  const areaInputRef = useRef<TextInput>(null);
   const photoViewerScrollRef = useRef<ScrollView>(null);
   const lastPhotoViewerTapTime = useRef(0);
   const photoViewerIsZoomed = useRef(false);
 
-  const estimatedProcessingTime =
-    formatEstimatedProcessingTime(photos.length);
-
-  const capacityPercent = Math.round(
-    (photos.length / MAX_WALKTHROUGH_PHOTOS) * 100
+  const photos = useMemo(
+    () => groups.flatMap((group) => group.photos),
+    [groups]
   );
 
-  async function takePhoto() {
+  const estimatedProcessingTime = formatEstimatedProcessingTime(photos.length);
+
+  function openCreateAreaModal() {
+    setAreaNameDraft("");
+    setAreaModal({ visible: true, mode: "create", groupId: null });
+    setTimeout(() => areaInputRef.current?.focus(), 300);
+  }
+
+  function openRenameAreaModal(group: LocationGroup) {
+    setAreaNameDraft(group.name);
+    setAreaModal({ visible: true, mode: "rename", groupId: group.id });
+    setTimeout(() => areaInputRef.current?.focus(), 300);
+  }
+
+  function closeAreaModal() {
+    setAreaModal({ visible: false, mode: "create", groupId: null });
+    setAreaNameDraft("");
+  }
+
+  function saveArea() {
+    const cleanedName = areaNameDraft.trim();
+
+    if (!cleanedName) {
+      Alert.alert(
+        "Enter an area name",
+        "Use a name such as Maintenance Area, Production, or Shipping."
+      );
+      return;
+    }
+
+    const duplicateExists = groups.some(
+      (group) =>
+        group.id !== areaModal.groupId &&
+        group.name.trim().toLowerCase() === cleanedName.toLowerCase()
+    );
+
+    if (duplicateExists) {
+      Alert.alert("Area already exists", "Use a different area name.");
+      return;
+    }
+
+    if (areaModal.mode === "rename" && areaModal.groupId) {
+      setGroups((current) =>
+        current.map((group) =>
+          group.id === areaModal.groupId
+            ? {
+                ...group,
+                name: cleanedName,
+                photos: group.photos.map((photo) => ({
+                  ...photo,
+                  location: cleanedName,
+                })),
+              }
+            : group
+        )
+      );
+    } else {
+      setGroups((current) => [
+        ...current,
+        {
+          id: createId("area"),
+          name: cleanedName,
+          photos: [],
+        },
+      ]);
+    }
+
+    closeAreaModal();
+  }
+
+  function removeArea(group: LocationGroup) {
+    const photoText =
+      group.photos.length === 0
+        ? ""
+        : ` and its ${group.photos.length} selected ${
+            group.photos.length === 1 ? "photo" : "photos"
+          }`;
+
+    Alert.alert(
+      "Delete area?",
+      `Delete ${group.name}${photoText}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () =>
+            setGroups((current) =>
+              current.filter((item) => item.id !== group.id)
+            ),
+        },
+      ]
+    );
+  }
+
+  function showAreaMenu(group: LocationGroup) {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Cancel", "Rename Area", "Delete Area"],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 2,
+          title: group.name,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) openRenameAreaModal(group);
+          if (buttonIndex === 2) removeArea(group);
+        }
+      );
+      return;
+    }
+
+    Alert.alert(group.name, "Choose an action", [
+      { text: "Rename Area", onPress: () => openRenameAreaModal(group) },
+      { text: "Delete Area", style: "destructive", onPress: () => removeArea(group) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
+  function addAssetsToGroup(
+    groupId: string,
+    assets: ImagePicker.ImagePickerAsset[]
+  ) {
+    setGroups((currentGroups) => {
+      const currentCount = currentGroups.reduce(
+        (total, group) => total + group.photos.length,
+        0
+      );
+      const remainingSlots = MAX_WALKTHROUGH_PHOTOS - currentCount;
+
+      if (remainingSlots <= 0) {
+        Alert.alert(
+          "100-photo limit reached",
+          "Remove a photo before adding another one."
+        );
+        return currentGroups;
+      }
+
+      const targetGroup = currentGroups.find((group) => group.id === groupId);
+      if (!targetGroup) return currentGroups;
+
+      const existingUris = new Set(
+        currentGroups.flatMap((group) => group.photos.map((photo) => photo.uri))
+      );
+      const uniqueAssets = assets.filter((asset) => !existingUris.has(asset.uri));
+      const acceptedAssets = uniqueAssets.slice(0, remainingSlots);
+
+      if (uniqueAssets.length > remainingSlots) {
+        Alert.alert(
+          "Some photos were not added",
+          `WalkthroughAI supports up to ${MAX_WALKTHROUGH_PHOTOS} photos per walkthrough.`
+        );
+      }
+
+      const newPhotos: SelectedPhoto[] = acceptedAssets.map((asset, index) => ({
+        id: createId(`photo-${index}`),
+        uri: asset.uri,
+        fileName:
+          asset.fileName ??
+          `inventory-photo-${Date.now()}-${index + 1}.jpg`,
+        mimeType: asset.mimeType ?? "image/jpeg",
+        location: targetGroup.name,
+      }));
+
+      return currentGroups.map((group) =>
+        group.id === groupId
+          ? { ...group, photos: [...group.photos, ...newPhotos] }
+          : group
+      );
+    });
+  }
+
+  async function takePhoto(groupId: string) {
     try {
       setIsOpeningPicker(true);
-
-      const permission =
-        await ImagePicker.requestCameraPermissionsAsync();
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
 
       if (!permission.granted) {
         Alert.alert(
           "Camera permission needed",
-          "Please allow camera access so Walkthrough AI can photograph inventory labels."
+          "Please allow camera access so WalkthroughAI can photograph inventory labels."
         );
         return;
       }
@@ -125,54 +306,21 @@ export default function WalkthroughPhotoScreen() {
         allowsEditing: false,
       });
 
-      if (result.canceled || result.assets.length === 0) {
-        return;
+      if (!result.canceled && result.assets.length > 0) {
+        addAssetsToGroup(groupId, result.assets);
       }
-
-      const newPhotos = result.assets.map((asset, index) => ({
-        id: createPhotoId(asset.uri, index),
-        uri: asset.uri,
-        fileName:
-          asset.fileName ??
-          `inventory-photo-${Date.now()}-${index + 1}.jpg`,
-        mimeType: asset.mimeType ?? "image/jpeg",
-      }));
-
-      setPhotos((currentPhotos) => {
-        const remainingSlots =
-          MAX_WALKTHROUGH_PHOTOS -
-          currentPhotos.length;
-
-        if (remainingSlots <= 0) {
-          Alert.alert(
-            "100-photo limit reached",
-            "Remove a photo before adding another one."
-          );
-
-          return currentPhotos;
-        }
-
-        return [
-          ...currentPhotos,
-          ...newPhotos.slice(0, remainingSlots),
-        ];
-      });
     } catch (error) {
       console.error("Camera error:", error);
-
-      Alert.alert(
-        "Camera error",
-        "Walkthrough AI could not open the camera. Please try again."
-      );
+      Alert.alert("Camera error", "The camera could not be opened. Try again.");
     } finally {
       setIsOpeningPicker(false);
+      setPhotoActionGroupId(null);
     }
   }
 
-  async function choosePhotos() {
+  async function choosePhotos(groupId: string) {
     try {
       setIsOpeningPicker(true);
-
       const permission =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -184,88 +332,52 @@ export default function WalkthroughPhotoScreen() {
         return;
       }
 
-      const result =
-        await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          allowsMultipleSelection: true,
-          allowsEditing: false,
-          quality: 0.85,
-          selectionLimit: MAX_WALKTHROUGH_PHOTOS,
-          orderedSelection: true,
-        });
-
-      if (result.canceled || result.assets.length === 0) {
-        return;
-      }
-
-      const newPhotos = result.assets.map((asset, index) => ({
-        id: createPhotoId(asset.uri, index),
-        uri: asset.uri,
-        fileName:
-          asset.fileName ??
-          `inventory-photo-${Date.now()}-${index + 1}.jpg`,
-        mimeType: asset.mimeType ?? "image/jpeg",
-      }));
-
-      setPhotos((currentPhotos) => {
-        const existingUris = new Set(
-          currentPhotos.map((photo) => photo.uri)
-        );
-
-        const uniqueNewPhotos = newPhotos.filter(
-          (photo) => !existingUris.has(photo.uri)
-        );
-
-        const remainingSlots =
-          MAX_WALKTHROUGH_PHOTOS -
-          currentPhotos.length;
-
-        if (remainingSlots <= 0) {
-          Alert.alert(
-            "100-photo limit reached",
-            "Remove a photo before selecting another one."
-          );
-
-          return currentPhotos;
-        }
-
-        if (uniqueNewPhotos.length > remainingSlots) {
-          Alert.alert(
-            "Some photos were not added",
-            `Walkthrough AI supports up to ${MAX_WALKTHROUGH_PHOTOS} photos per walkthrough.`
-          );
-        }
-
-        return [
-          ...currentPhotos,
-          ...uniqueNewPhotos.slice(0, remainingSlots),
-        ];
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        allowsEditing: false,
+        quality: 0.85,
+        selectionLimit: MAX_WALKTHROUGH_PHOTOS,
+        orderedSelection: true,
       });
+
+      if (!result.canceled && result.assets.length > 0) {
+        addAssetsToGroup(groupId, result.assets);
+      }
     } catch (error) {
       console.error("Photo-library error:", error);
-
       Alert.alert(
         "Photo-library error",
-        "Walkthrough AI could not open your photos. Please try again."
+        "Your photos could not be opened. Try again."
       );
     } finally {
       setIsOpeningPicker(false);
+      setPhotoActionGroupId(null);
     }
   }
 
-  function removePhoto(photoId: string) {
-    setPhotos((currentPhotos) =>
-      currentPhotos.filter((photo) => photo.id !== photoId)
+  function removePhoto(groupId: string, photoId: string) {
+    setGroups((current) =>
+      current.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              photos: group.photos.filter((photo) => photo.id !== photoId),
+            }
+          : group
+      )
     );
   }
 
   function openPhotoViewer(
     photo: SelectedPhoto,
-    index: number
+    locationName: string,
+    index: number,
+    count: number
   ) {
     setPhotoViewer({
       uri: photo.uri,
-      label: `Photo ${index + 1} of ${photos.length}`,
+      label: `${locationName} · Photo ${index + 1} of ${count}`,
     });
     lastPhotoViewerTapTime.current = 0;
     photoViewerIsZoomed.current = false;
@@ -279,32 +391,20 @@ export default function WalkthroughPhotoScreen() {
 
   function handlePhotoViewerTap() {
     const currentTapTime = Date.now();
-    const elapsedSinceLastTap =
-      currentTapTime - lastPhotoViewerTapTime.current;
-
+    const elapsed = currentTapTime - lastPhotoViewerTapTime.current;
     lastPhotoViewerTapTime.current = currentTapTime;
 
-    if (
-      elapsedSinceLastTap <= 0 ||
-      elapsedSinceLastTap > 320
-    ) {
-      return;
-    }
+    if (elapsed <= 0 || elapsed > 320) return;
 
     lastPhotoViewerTapTime.current = 0;
-
     const shouldZoomIn = !photoViewerIsZoomed.current;
     const zoomScale = shouldZoomIn ? 2.5 : 1;
     const targetWidth = windowWidth / zoomScale;
     const targetHeight = photoViewerImageHeight / zoomScale;
 
     photoViewerScrollRef.current?.scrollResponderZoomTo({
-      x: shouldZoomIn
-        ? (windowWidth - targetWidth) / 2
-        : 0,
-      y: shouldZoomIn
-        ? (photoViewerImageHeight - targetHeight) / 2
-        : 0,
+      x: shouldZoomIn ? (windowWidth - targetWidth) / 2 : 0,
+      y: shouldZoomIn ? (photoViewerImageHeight - targetHeight) / 2 : 0,
       width: targetWidth,
       height: targetHeight,
       animated: true,
@@ -313,29 +413,11 @@ export default function WalkthroughPhotoScreen() {
     photoViewerIsZoomed.current = shouldZoomIn;
   }
 
-  function removeAllPhotos() {
-    Alert.alert(
-      "Remove all photos?",
-      "This will clear every selected inventory photo.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Remove All",
-          style: "destructive",
-          onPress: () => setPhotos([]),
-        },
-      ]
-    );
-  }
-
   function continueToUpload() {
     if (photos.length === 0) {
       Alert.alert(
         "Add at least one photo",
-        "Take a new inventory photo or select one from your photo library before continuing."
+        "Create an area and add inventory photos before continuing."
       );
       return;
     }
@@ -344,20 +426,18 @@ export default function WalkthroughPhotoScreen() {
       pathname: "/upload",
       params: {
         photos: JSON.stringify(photos),
-        customerId:
-          typeof customerId === "string" ? customerId : "",
+        customerId: typeof customerId === "string" ? customerId : "",
         customerName: selectedCustomerName,
         customerEmail:
-          typeof customerEmail === "string"
-            ? customerEmail
-            : "",
-        contactName:
-          typeof contactName === "string"
-            ? contactName
-            : "",
+          typeof customerEmail === "string" ? customerEmail : "",
+        contactName: typeof contactName === "string" ? contactName : "",
       },
     });
   }
+
+  const locationSummary = `${groups.length} ${
+    groups.length === 1 ? "area" : "areas"
+  } · ${photos.length} ${photos.length === 1 ? "photo" : "photos"}`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -372,28 +452,15 @@ export default function WalkthroughPhotoScreen() {
               pressed && styles.buttonPressed,
             ]}
           >
-            <Text style={styles.backArrow}>‹</Text>
+            <Ionicons name="chevron-back" size={30} color="#FFFFFF" />
           </Pressable>
 
           <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>
-              Inventory Photos
-            </Text>
-
-            <Text
-              numberOfLines={1}
-              style={styles.customerName}
-            >
+            <Text style={styles.headerTitle}>Inventory Photos</Text>
+            <Text numberOfLines={1} style={styles.customerName}>
               {selectedCustomerName}
             </Text>
-
-            <Text style={styles.headerSubtitle}>
-              {photos.length === 0
-                ? "No photos selected"
-                : `${photos.length} ${
-                    photos.length === 1 ? "photo" : "photos"
-                  } selected · ${MAX_WALKTHROUGH_PHOTOS} max`}
-            </Text>
+            <Text style={styles.headerSubtitle}>{locationSummary}</Text>
           </View>
         </View>
 
@@ -401,243 +468,161 @@ export default function WalkthroughPhotoScreen() {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.introCard}>
-            <View style={styles.cameraIconContainer}>
-              <Ionicons
-                name="camera-outline"
-                size={38}
-                color="#FFFFFF"
-              />
-            </View>
-
-            <Text style={styles.introTitle}>
-              Add Inventory Photos
-            </Text>
-
-            <Text style={styles.introText}>
-              Photograph labels, bins, boxes, packaging, and
-              visible part information.
-            </Text>
-
-            <View style={styles.actionButtons}>
-              <Pressable
-                accessibilityRole="button"
-                disabled={isOpeningPicker}
-                onPress={takePhoto}
-                style={({ pressed }) => [
-                  styles.primaryAction,
-                  pressed && styles.buttonPressed,
-                  isOpeningPicker && styles.disabledButton,
-                ]}
-              >
-                <View style={styles.primaryActionIconContainer}>
-                  <Ionicons
-                    name="camera"
-                    size={27}
-                    color="#FFFFFF"
-                  />
-                </View>
-
-                <View style={styles.actionTextContainer}>
-                  <Text style={styles.primaryActionTitle}>
-                    Take Photo
-                  </Text>
-
-                  <Text style={styles.primaryActionSubtitle}>
-                    Open your phone camera
-                  </Text>
-                </View>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                disabled={isOpeningPicker}
-                onPress={choosePhotos}
-                style={({ pressed }) => [
-                  styles.secondaryAction,
-                  pressed && styles.buttonPressed,
-                  isOpeningPicker && styles.disabledButton,
-                ]}
-              >
-                <View style={styles.secondaryActionIconContainer}>
-                  <Ionicons
-                    name="images-outline"
-                    size={27}
-                    color="#93C5FD"
-                  />
-                </View>
-
-                <View style={styles.actionTextContainer}>
-                  <Text style={styles.secondaryActionTitle}>
-                    Choose Photos
-                  </Text>
-
-                  <Text style={styles.secondaryActionSubtitle}>
-                    Select up to 100 existing photos
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.capacityCard}>
-            <View style={styles.capacityTopRow}>
-              <View style={styles.capacityCountBlock}>
-                <Text style={styles.capacityLabel}>
-                  Walkthrough size
-                </Text>
-                <Text style={styles.capacityValue}>
-                  {photos.length} of {MAX_WALKTHROUGH_PHOTOS} photos
-                </Text>
-              </View>
-
-              <View style={styles.estimateBadge}>
-                <Text style={styles.estimateBadgeLabel}>
-                  Estimated analysis
-                </Text>
-                <Text
-                  numberOfLines={2}
-                  style={styles.estimateBadgeValue}
-                >
-                  {estimatedProcessingTime}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.capacityTrack}>
-              <View
-                style={[
-                  styles.capacityFill,
-                  {
-                    width: `${Math.max(
-                      0,
-                      Math.min(capacityPercent, 100)
-                    )}%`,
-                  },
-                ]}
-              />
-            </View>
-
-            <Text style={styles.capacityNote}>
-              Processing time may vary based on photo detail and
-              complexity.
-            </Text>
-          </View>
-
-          {photos.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyIcon}>＋</Text>
-
-              <Text style={styles.emptyTitle}>
-                No inventory photos yet
+          <View style={styles.toolbar}>
+            <View style={styles.toolbarText}>
+              <Text style={styles.toolbarTitle}>Areas</Text>
+              <Text style={styles.toolbarSubtitle}>
+                Group photos by where they were taken.
               </Text>
+            </View>
 
+            {groups.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={openCreateAreaModal}
+                style={({ pressed }) => [
+                  styles.addAreaButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Ionicons name="add" size={19} color="#FFFFFF" />
+                <Text style={styles.addAreaButtonText}>Add Area</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {groups.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="location-outline" size={30} color="#93C5FD" />
+              </View>
+              <Text style={styles.emptyTitle}>No areas yet</Text>
               <Text style={styles.emptyText}>
-                Your selected photos will appear here before
-                they are sent for recognition.
+                Create an area, then add the photos taken there.
               </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={openCreateAreaModal}
+                style={({ pressed }) => [
+                  styles.addFirstAreaButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
+                <Text style={styles.addFirstAreaButtonText}>Add First Area</Text>
+              </Pressable>
             </View>
           ) : (
-            <View style={styles.photoSection}>
-              <View style={styles.photoSectionHeader}>
-                <View>
-                  <Text style={styles.photoSectionTitle}>
-                    Selected Photos
-                  </Text>
-
-                  <Text style={styles.photoSectionSubtitle}>
-                    Review each image before continuing.
-                  </Text>
-                </View>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={removeAllPhotos}
-                  style={({ pressed }) => [
-                    styles.clearButton,
-                    pressed && styles.buttonPressed,
-                  ]}
-                >
-                  <Text style={styles.clearButtonText}>
-                    Clear All
-                  </Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.photoGrid}>
-                {photos.map((photo, index) => (
-                  <View
-                    key={photo.id}
-                    style={styles.photoCard}
-                  >
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Preview photo ${
-                        index + 1
-                      }`}
-                      accessibilityHint="Opens the full-screen photo viewer"
-                      onPress={() =>
-                        openPhotoViewer(photo, index)
-                      }
-                      style={({ pressed }) => [
-                        styles.photoPreviewButton,
-                        pressed && styles.photoPreviewPressed,
-                      ]}
-                    >
-                      <Image
-                        source={{ uri: photo.uri }}
-                        style={styles.photoImage}
-                        resizeMode="cover"
-                      />
-                    </Pressable>
-
-                    <View style={styles.photoNumber}>
-                      <Text style={styles.photoNumberText}>
-                        {index + 1}
+            <View style={styles.areaList}>
+              {groups.map((group) => (
+                <View key={group.id} style={styles.areaCard}>
+                  <View style={styles.areaHeader}>
+                    <View style={styles.areaHeaderText}>
+                      <Text numberOfLines={1} style={styles.areaName}>
+                        {group.name}
+                      </Text>
+                      <Text style={styles.areaMeta}>
+                        {group.photos.length} {group.photos.length === 1 ? "photo" : "photos"}
                       </Text>
                     </View>
 
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove photo ${
-                        index + 1
-                      }`}
-                      onPress={() => removePhoto(photo.id)}
+                      accessibilityLabel={`More options for ${group.name}`}
+                      onPress={() => showAreaMenu(group)}
                       style={({ pressed }) => [
-                        styles.removeButton,
+                        styles.moreButton,
                         pressed && styles.buttonPressed,
                       ]}
                     >
-                      <Text style={styles.removeButtonText}>
-                        ×
-                      </Text>
+                      <Ionicons name="ellipsis-horizontal" size={22} color="#AFC3DA" />
                     </Pressable>
                   </View>
-                ))}
-              </View>
+
+                  {group.photos.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.thumbnailRow}
+                    >
+                      {group.photos.map((photo, index) => (
+                        <View key={photo.id} style={styles.thumbnailCard}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Preview photo ${index + 1}`}
+                            onPress={() =>
+                              openPhotoViewer(
+                                photo,
+                                group.name,
+                                index,
+                                group.photos.length
+                              )
+                            }
+                            style={({ pressed }) => [
+                              styles.thumbnailButton,
+                              pressed && styles.thumbnailPressed,
+                            ]}
+                          >
+                            <Image
+                              source={{ uri: photo.uri }}
+                              resizeMode="cover"
+                              style={styles.thumbnailImage}
+                            />
+                          </Pressable>
+
+                          <View style={styles.photoIndexBadge}>
+                            <Text style={styles.photoIndexText}>{index + 1}</Text>
+                          </View>
+
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove photo ${index + 1}`}
+                            onPress={() => removePhoto(group.id, photo.id)}
+                            style={({ pressed }) => [
+                              styles.removePhotoButton,
+                              pressed && styles.buttonPressed,
+                            ]}
+                          >
+                            <Ionicons name="close" size={15} color="#FFFFFF" />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.areaEmptyText}>
+                      No photos added yet.
+                    </Text>
+                  )}
+
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isOpeningPicker}
+                    onPress={() => setPhotoActionGroupId(group.id)}
+                    style={({ pressed }) => [
+                      styles.addPhotosButton,
+                      pressed && styles.buttonPressed,
+                      isOpeningPicker && styles.disabledButton,
+                    ]}
+                  >
+                    <Ionicons name="add" size={20} color="#93C5FD" />
+                    <Text style={styles.addPhotosButtonText}>Add Photos</Text>
+                  </Pressable>
+                </View>
+              ))}
             </View>
           )}
 
-          <View style={styles.tipCard}>
-            <View style={styles.tipIconContainer}>
-              <Ionicons
-                name="sparkles-outline"
-                size={23}
-                color="#93C5FD"
-              />
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryIconWrap}>
+              <Ionicons name="sparkles-outline" size={20} color="#7CE3B8" />
             </View>
-
-            <View style={styles.tipTextContainer}>
-              <Text style={styles.tipTitle}>
-                Photo tips
+            <View style={styles.summaryTextWrap}>
+              <Text style={styles.summaryMain}>
+                {photos.length} {photos.length === 1 ? "photo" : "photos"} across {groups.length} {groups.length === 1 ? "area" : "areas"}
               </Text>
-
-              <Text style={styles.tipText}>
-                Clear photos create better results. Keep labels easy
-                to read, avoid glare, and add a closer shot for small
-                parts or details.
-              </Text>
+              <Text style={styles.summarySub}>{estimatedProcessingTime}</Text>
             </View>
           </View>
         </ScrollView>
@@ -648,18 +633,14 @@ export default function WalkthroughPhotoScreen() {
             onPress={continueToUpload}
             style={({ pressed }) => [
               styles.continueButton,
-              photos.length === 0 &&
-                styles.continueButtonDisabled,
-              pressed &&
-                photos.length > 0 &&
-                styles.buttonPressed,
+              photos.length === 0 && styles.continueButtonDisabled,
+              pressed && photos.length > 0 && styles.buttonPressed,
             ]}
           >
             <Text
               style={[
                 styles.continueButtonText,
-                photos.length === 0 &&
-                  styles.continueButtonTextDisabled,
+                photos.length === 0 && styles.continueButtonTextDisabled,
               ]}
             >
               {photos.length === 0
@@ -670,6 +651,148 @@ export default function WalkthroughPhotoScreen() {
             </Text>
           </Pressable>
         </View>
+
+        <Modal
+          visible={areaModal.visible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={closeAreaModal}
+        >
+          <SafeAreaView style={styles.modalSafeArea}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={styles.modalKeyboardView}
+            >
+              <View style={styles.modalHeader}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={closeAreaModal}
+                  style={({ pressed }) => [
+                    styles.modalCancelButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </Pressable>
+
+                <Text style={styles.modalTitle}>
+                  {areaModal.mode === "rename" ? "Rename Area" : "Add an Area"}
+                </Text>
+
+                <View style={styles.modalHeaderSpacer} />
+              </View>
+
+              <ScrollView
+                contentContainerStyle={styles.modalContent}
+                keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets
+              >
+                <View style={styles.modalIconWrap}>
+                  <Ionicons name="location-outline" size={32} color="#93C5FD" />
+                </View>
+                <Text style={styles.modalPrompt}>Name this area</Text>
+                <Text style={styles.modalHelp}>
+                  Use the name people at this facility will recognize.
+                </Text>
+
+                <TextInput
+                  ref={areaInputRef}
+                  value={areaNameDraft}
+                  onChangeText={setAreaNameDraft}
+                  placeholder="Example: Maintenance Area"
+                  placeholderTextColor="#6F829A"
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  onSubmitEditing={saveArea}
+                  style={styles.areaInput}
+                />
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={saveArea}
+                  style={({ pressed }) => [
+                    styles.modalSaveButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={styles.modalSaveButtonText}>
+                    {areaModal.mode === "rename" ? "Save Name" : "Create Area"}
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </SafeAreaView>
+        </Modal>
+
+        <Modal
+          visible={photoActionGroupId !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPhotoActionGroupId(null)}
+        >
+          <Pressable
+            style={styles.actionOverlay}
+            onPress={() => setPhotoActionGroupId(null)}
+          >
+            <Pressable style={styles.actionSheet} onPress={() => undefined}>
+              <View style={styles.actionSheetHandle} />
+              <Text style={styles.actionSheetTitle}>Add Photos</Text>
+              <Text style={styles.actionSheetSubtitle}>
+                Choose how you want to add photos to this area.
+              </Text>
+
+              <Pressable
+                disabled={!photoActionGroupId || isOpeningPicker}
+                onPress={() => {
+                  if (photoActionGroupId) void takePhoto(photoActionGroupId);
+                }}
+                style={({ pressed }) => [
+                  styles.actionOption,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <View style={styles.actionOptionIconPrimary}>
+                  <Ionicons name="camera" size={24} color="#FFFFFF" />
+                </View>
+                <View style={styles.actionOptionText}>
+                  <Text style={styles.actionOptionTitle}>Take Photo</Text>
+                  <Text style={styles.actionOptionSubtitle}>Open your phone camera</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#7E91A8" />
+              </Pressable>
+
+              <Pressable
+                disabled={!photoActionGroupId || isOpeningPicker}
+                onPress={() => {
+                  if (photoActionGroupId) void choosePhotos(photoActionGroupId);
+                }}
+                style={({ pressed }) => [
+                  styles.actionOption,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <View style={styles.actionOptionIconSecondary}>
+                  <Ionicons name="images-outline" size={24} color="#93C5FD" />
+                </View>
+                <View style={styles.actionOptionText}>
+                  <Text style={styles.actionOptionTitle}>Choose Photos</Text>
+                  <Text style={styles.actionOptionSubtitle}>Select from your photo library</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#7E91A8" />
+              </Pressable>
+
+              <Pressable
+                onPress={() => setPhotoActionGroupId(null)}
+                style={({ pressed }) => [
+                  styles.actionCancelButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.actionCancelText}>Cancel</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <Modal
           visible={photoViewer !== null}
@@ -691,35 +814,26 @@ export default function WalkthroughPhotoScreen() {
             >
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Close photo preview"
                 onPress={closePhotoViewer}
-                hitSlop={12}
                 style={({ pressed }) => [
                   styles.photoViewerCloseButton,
                   pressed && styles.buttonPressed,
                 ]}
               >
-                <Text style={styles.photoViewerCloseText}>
-                  Close
-                </Text>
+                <Text style={styles.photoViewerCloseText}>Close</Text>
               </Pressable>
 
               <View style={styles.photoViewerTitleArea}>
-                <Text
-                  numberOfLines={1}
-                  style={styles.photoViewerTitle}
-                >
+                <Text numberOfLines={1} style={styles.photoViewerTitle}>
                   {photoViewer?.label || "Selected Photo"}
                 </Text>
-                <Text style={styles.photoViewerHint}>
-                  Pinch or double-tap to zoom
-                </Text>
+                <Text style={styles.photoViewerHint}>Pinch or double-tap to zoom</Text>
               </View>
 
               <View style={styles.photoViewerHeaderSpacer} />
             </View>
 
-            {photoViewer && (
+            {photoViewer ? (
               <ScrollView
                 ref={photoViewerScrollRef}
                 style={styles.photoViewerScroll}
@@ -727,10 +841,8 @@ export default function WalkthroughPhotoScreen() {
                 centerContent
                 minimumZoomScale={1}
                 maximumZoomScale={5}
-                scrollEventThrottle={16}
                 onScroll={(event) => {
                   const zoomScale = event.nativeEvent.zoomScale;
-
                   if (typeof zoomScale === "number") {
                     photoViewerIsZoomed.current = zoomScale > 1.1;
                   }
@@ -739,14 +851,8 @@ export default function WalkthroughPhotoScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <Pressable
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel={photoViewer.label}
-                  accessibilityHint="Double-tap to zoom"
                   onPress={handlePhotoViewerTap}
-                  style={{
-                    width: windowWidth,
-                    height: photoViewerImageHeight,
-                  }}
+                  style={{ width: windowWidth, height: photoViewerImageHeight }}
                 >
                   <Image
                     source={{ uri: photoViewer.uri }}
@@ -755,7 +861,7 @@ export default function WalkthroughPhotoScreen() {
                   />
                 </Pressable>
               </ScrollView>
-            )}
+            ) : null}
           </View>
         </Modal>
       </View>
@@ -768,287 +874,115 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#071421",
   },
-
   screen: {
     flex: 1,
     backgroundColor: "#071421",
   },
-
   header: {
     minHeight: 106,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 22,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#1C2D43",
   },
-
   backButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
+    width: 52,
+    height: 52,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#122034",
     borderWidth: 1,
     borderColor: "#2B3E59",
   },
-
-  backArrow: {
-    color: "#FFFFFF",
-    fontSize: 48,
-    lineHeight: 51,
-    fontWeight: "300",
-    marginTop: -5,
-  },
-
   headerTextContainer: {
     flex: 1,
-    marginLeft: 18,
+    marginLeft: 16,
   },
-
   headerTitle: {
     color: "#FFFFFF",
     fontSize: 25,
     fontWeight: "800",
   },
-
   customerName: {
     color: "#60A5FA",
     fontSize: 14,
     fontWeight: "700",
     marginTop: 3,
   },
-
   headerSubtitle: {
     color: "#8FA1B9",
-    fontSize: 14,
+    fontSize: 13,
     marginTop: 4,
   },
-
   scrollView: {
     flex: 1,
   },
-
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 22,
-    paddingBottom: 34,
+    paddingBottom: 122,
   },
-
-  introCard: {
-    backgroundColor: "#111E31",
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "#2A3E59",
-    padding: 22,
-  },
-
-  cameraIconContainer: {
-    width: 76,
-    height: 76,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "center",
-    backgroundColor: "#285BE0",
-  },
-
-  introTitle: {
-    color: "#FFFFFF",
-    fontSize: 27,
-    fontWeight: "800",
-    textAlign: "center",
-    marginTop: 20,
-  },
-
-  introText: {
-    color: "#A1AFC3",
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: "center",
-    marginTop: 10,
-  },
-
-  actionButtons: {
-    marginTop: 22,
-    gap: 12,
-  },
-
-  primaryAction: {
-    minHeight: 78,
+  toolbar: {
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#2D68EB",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-  },
-
-  secondaryAction: {
-    minHeight: 78,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#17263A",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#344A67",
-    paddingHorizontal: 18,
-  },
-
-  primaryActionIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.14)",
-    marginRight: 15,
-  },
-
-  secondaryActionIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#102039",
-    borderWidth: 1,
-    borderColor: "#2D4D72",
-    marginRight: 15,
-  },
-
-  actionTextContainer: {
-    flex: 1,
-  },
-
-  primaryActionTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-
-  primaryActionSubtitle: {
-    color: "#DDE8FF",
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  secondaryActionTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-
-  secondaryActionSubtitle: {
-    color: "#96A7BD",
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  capacityCard: {
-    backgroundColor: "#0D1A2B",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#263C58",
-    padding: 16,
-    marginTop: 16,
-  },
-
-  capacityTopRow: {
-    gap: 12,
-  },
-
-  capacityCountBlock: {
-    width: "100%",
-  },
-
-  capacityLabel: {
-    color: "#8FA1B9",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  capacityValue: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
-    marginTop: 3,
-  },
-
-  estimateBadge: {
-    width: "100%",
     alignItems: "flex-start",
-    backgroundColor: "#102A25",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#22634F",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    justifyContent: "space-between",
+    marginBottom: 18,
   },
-
-  estimateBadgeLabel: {
-    color: "#8FCBB7",
-    fontSize: 10,
-    fontWeight: "700",
+  toolbarText: {
+    flex: 1,
+    paddingRight: 12,
   },
-
-  estimateBadgeValue: {
-    color: "#7CE3B8",
-    fontSize: 14,
-    lineHeight: 19,
+  toolbarTitle: {
+    color: "#FFFFFF",
+    fontSize: 23,
     fontWeight: "800",
-    marginTop: 2,
-    flexShrink: 1,
   },
-
-  capacityTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: "#1A2A40",
-    overflow: "hidden",
-    marginTop: 14,
-  },
-
-  capacityFill: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: "#2D68EB",
-  },
-
-  capacityNote: {
-    color: "#8799B1",
-    fontSize: 12,
+  toolbarSubtitle: {
+    color: "#8FA1B9",
+    fontSize: 13,
     lineHeight: 18,
-    marginTop: 10,
+    marginTop: 4,
   },
-
-  emptyCard: {
-    minHeight: 220,
+  addAreaButton: {
+    minHeight: 38,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0D1A2B",
+    borderRadius: 12,
+    backgroundColor: "#2D68EB",
+    paddingHorizontal: 12,
+    gap: 5,
+  },
+  addAreaButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  emptyState: {
+    minHeight: 290,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#263C58",
-    borderStyle: "dashed",
-    marginTop: 20,
-    padding: 26,
+    backgroundColor: "#0D1A2B",
+    padding: 28,
   },
-
-  emptyIcon: {
-    color: "#58ABFF",
-    fontSize: 52,
-    fontWeight: "200",
+  emptyIconWrap: {
+    width: 66,
+    height: 66,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#132941",
   },
-
   emptyTitle: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: "800",
-    marginTop: 8,
+    marginTop: 18,
   },
-
   emptyText: {
     color: "#91A2B8",
     fontSize: 14,
@@ -1056,199 +990,356 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
-
-  photoSection: {
-    marginTop: 24,
-  },
-
-  photoSectionHeader: {
+  addFirstAreaButton: {
+    minHeight: 50,
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-
-  photoSectionTitle: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "800",
-  },
-
-  photoSectionSubtitle: {
-    color: "#899CB5",
-    fontSize: 13,
-    marginTop: 3,
-  },
-
-  clearButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "#2B1720",
-    borderWidth: 1,
-    borderColor: "#743244",
-  },
-
-  clearButtonText: {
-    color: "#FF809C",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-
-  photoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-
-  photoCard: {
-    width: "48%",
-    aspectRatio: 1,
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundColor: "#15243A",
-    borderWidth: 1,
-    borderColor: "#304B6A",
-  },
-
-  photoImage: {
-    width: "100%",
-    height: "100%",
-  },
-
-  photoPreviewButton: {
-    width: "100%",
-    height: "100%",
-  },
-
-  photoPreviewPressed: {
-    opacity: 0.82,
-  },
-
-  photoNumber: {
-    position: "absolute",
-    left: 9,
-    bottom: 9,
-    minWidth: 31,
-    height: 31,
-    paddingHorizontal: 8,
-    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(6, 18, 31, 0.88)",
-  },
-
-  photoNumberText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-
-  removeButton: {
-    position: "absolute",
-    right: 9,
-    top: 9,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(10, 20, 34, 0.92)",
-    borderWidth: 1,
-    borderColor: "#71829A",
-  },
-
-  removeButtonText: {
-    color: "#FFFFFF",
-    fontSize: 25,
-    lineHeight: 27,
-    fontWeight: "500",
-  },
-
-  tipCard: {
-    flexDirection: "row",
-    backgroundColor: "#102039",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#294568",
-    padding: 18,
+    borderRadius: 15,
+    backgroundColor: "#2D68EB",
+    paddingHorizontal: 20,
     marginTop: 22,
+    gap: 8,
   },
-
-  tipIconContainer: {
-    width: 40,
-    height: 40,
+  addFirstAreaButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  areaList: {
+    gap: 14,
+  },
+  areaCard: {
+    borderRadius: 20,
+    backgroundColor: "#0F1D2E",
+    padding: 16,
+  },
+  areaHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  areaHeaderText: {
+    flex: 1,
+  },
+  areaName: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  areaMeta: {
+    color: "#8093AA",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  moreButton: {
+    width: 42,
+    height: 42,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#152D4A",
-    borderWidth: 1,
-    borderColor: "#2D527D",
-    marginRight: 13,
+    backgroundColor: "#16263A",
   },
-
-  tipTextContainer: {
-    flex: 1,
+  thumbnailRow: {
+    gap: 10,
+    paddingVertical: 15,
   },
-
-  tipTitle: {
+  thumbnailCard: {
+    width: 108,
+    height: 108,
+    borderRadius: 15,
+    overflow: "hidden",
+    backgroundColor: "#15243A",
+  },
+  thumbnailButton: {
+    width: "100%",
+    height: "100%",
+  },
+  thumbnailImage: {
+    width: "100%",
+    height: "100%",
+  },
+  thumbnailPressed: {
+    opacity: 0.82,
+  },
+  photoIndexBadge: {
+    position: "absolute",
+    left: 7,
+    bottom: 7,
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 7,
+    backgroundColor: "rgba(5, 15, 27, 0.86)",
+  },
+  photoIndexText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: "800",
   },
-
-  tipText: {
-    color: "#9DAEC3",
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 5,
+  removePhotoButton: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(5, 15, 27, 0.90)",
   },
-
+  areaEmptyText: {
+    color: "#7F92A9",
+    fontSize: 13,
+    paddingVertical: 18,
+  },
+  addPhotosButton: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: "#14263D",
+    gap: 7,
+  },
+  addPhotosButtonText: {
+    color: "#BFDBFE",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  summaryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 17,
+    backgroundColor: "#0F2824",
+    padding: 14,
+    marginTop: 18,
+  },
+  summaryIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#153A32",
+    marginRight: 12,
+  },
+  summaryTextWrap: {
+    flex: 1,
+  },
+  summaryMain: {
+    color: "#DDF9EE",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  summarySub: {
+    color: "#7CE3B8",
+    fontSize: 12,
+    marginTop: 4,
+  },
   footer: {
     paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 18,
+    paddingTop: 10,
+    paddingBottom: 12,
     backgroundColor: "#071421",
     borderTopWidth: 1,
     borderTopColor: "#1C2D43",
   },
-
   continueButton: {
-    minHeight: 60,
+    minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 18,
     backgroundColor: "#2D68EB",
   },
-
   continueButtonDisabled: {
     backgroundColor: "#1A2A40",
   },
-
   continueButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
   },
-
   continueButtonTextDisabled: {
     color: "#71839C",
   },
-
-  disabledButton: {
-    opacity: 0.55,
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: "#071421",
   },
-
-  buttonPressed: {
-    opacity: 0.76,
-    transform: [{ scale: 0.99 }],
+  modalKeyboardView: {
+    flex: 1,
   },
-
+  modalHeader: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#1C2D43",
+    paddingHorizontal: 16,
+  },
+  modalCancelButton: {
+    width: 72,
+    minHeight: 40,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  modalCancelText: {
+    color: "#93C5FD",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  modalTitle: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  modalHeaderSpacer: {
+    width: 72,
+  },
+  modalContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 34,
+    paddingBottom: 40,
+  },
+  modalIconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#132941",
+    alignSelf: "center",
+  },
+  modalPrompt: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 22,
+  },
+  modalHelp: {
+    color: "#91A2B8",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  areaInput: {
+    minHeight: 58,
+    borderRadius: 16,
+    backgroundColor: "#111E31",
+    color: "#FFFFFF",
+    fontSize: 17,
+    paddingHorizontal: 16,
+    marginTop: 28,
+  },
+  modalSaveButton: {
+    minHeight: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
+    backgroundColor: "#2D68EB",
+    marginTop: 14,
+  },
+  modalSaveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  actionOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(1, 7, 14, 0.62)",
+  },
+  actionSheet: {
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: "#0D1A2B",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
+  },
+  actionSheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "#3C4F66",
+    alignSelf: "center",
+    marginBottom: 18,
+  },
+  actionSheetTitle: {
+    color: "#FFFFFF",
+    fontSize: 21,
+    fontWeight: "800",
+  },
+  actionSheetSubtitle: {
+    color: "#8FA1B9",
+    fontSize: 13,
+    marginTop: 5,
+    marginBottom: 16,
+  },
+  actionOption: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 17,
+    backgroundColor: "#132239",
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  actionOptionIconPrimary: {
+    width: 45,
+    height: 45,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2D68EB",
+    marginRight: 13,
+  },
+  actionOptionIconSecondary: {
+    width: 45,
+    height: 45,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#112B48",
+    marginRight: 13,
+  },
+  actionOptionText: {
+    flex: 1,
+  },
+  actionOptionTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  actionOptionSubtitle: {
+    color: "#8598AE",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  actionCancelButton: {
+    minHeight: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+    backgroundColor: "#17263A",
+    marginTop: 4,
+  },
+  actionCancelText: {
+    color: "#BFDBFE",
+    fontSize: 14,
+    fontWeight: "800",
+  },
   photoViewerSafeArea: {
     flex: 1,
     backgroundColor: "#02070D",
   },
-
   photoViewerHeader: {
     minHeight: 68,
     flexDirection: "row",
@@ -1257,7 +1348,6 @@ const styles = StyleSheet.create({
     borderBottomColor: "#1C2D43",
     paddingHorizontal: 14,
   },
-
   photoViewerCloseButton: {
     width: 70,
     minHeight: 40,
@@ -1266,47 +1356,46 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#17283C",
   },
-
   photoViewerCloseText: {
     color: "#BFD5EA",
     fontSize: 13,
     fontWeight: "900",
   },
-
   photoViewerTitleArea: {
     flex: 1,
     alignItems: "center",
     paddingHorizontal: 10,
   },
-
   photoViewerTitle: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "900",
   },
-
   photoViewerHint: {
     color: "#71849D",
     fontSize: 10,
     marginTop: 2,
   },
-
   photoViewerHeaderSpacer: {
     width: 70,
   },
-
   photoViewerScroll: {
     flex: 1,
   },
-
   photoViewerContent: {
     flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-
   photoViewerImage: {
     width: "100%",
     height: "100%",
+  },
+  disabledButton: {
+    opacity: 0.55,
+  },
+  buttonPressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.99 }],
   },
 });

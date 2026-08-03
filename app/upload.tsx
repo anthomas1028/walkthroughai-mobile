@@ -120,10 +120,12 @@ type SelectedPhoto = {
   uri: string;
   fileName: string;
   mimeType: string;
+  location: string;
 };
 
 type RecognitionResult = {
   photo: string;
+  location: string;
   vendor: string;
   manufacturer: string;
   manufacturer_part_number: string;
@@ -240,13 +242,18 @@ function parsePhotos(
       return [];
     }
 
-    return parsedValue.filter(
+    return parsedValue
+      .filter(
       (item): item is SelectedPhoto =>
         typeof item === "object" &&
         item !== null &&
         typeof (item as SelectedPhoto).id === "string" &&
         typeof (item as SelectedPhoto).uri === "string"
-    );
+      )
+      .map((item) => ({
+        ...item,
+        location: cleanText((item as Partial<SelectedPhoto>).location),
+      }));
   }
 
   try {
@@ -276,6 +283,7 @@ function normalizeResult(
 
   return {
     photo: cleanText(value.photo),
+    location: cleanText(value.location),
     vendor: cleanText(value.vendor),
     manufacturer: cleanText(value.manufacturer),
     manufacturer_part_number: cleanText(
@@ -664,6 +672,14 @@ export default function UploadScreen() {
     RecognitionResult[]
   >([]);
 
+  const [reviewMode, setReviewMode] = useState<
+    "area" | "all"
+  >("area");
+
+  const [collapsedAreas, setCollapsedAreas] = useState<
+    Record<string, boolean>
+  >({});
+
   const [
     originalWorkbookUrl,
     setOriginalWorkbookUrl,
@@ -706,6 +722,36 @@ export default function UploadScreen() {
 
   const photoCount = photos.length;
   const hasResults = results.length > 0;
+
+  const reviewGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { location: string; items: Array<{ result: RecognitionResult; index: number }> }
+    >();
+
+    results.forEach((result, index) => {
+      const location = cleanText(result.location) || "Unassigned Area";
+      const existingGroup = groups.get(location);
+
+      if (existingGroup) {
+        existingGroup.items.push({ result, index });
+      } else {
+        groups.set(location, {
+          location,
+          items: [{ result, index }],
+        });
+      }
+    });
+
+    return Array.from(groups.values());
+  }, [results]);
+
+  function toggleAreaCollapsed(location: string) {
+    setCollapsedAreas((current) => ({
+      ...current,
+      [location]: !current[location],
+    }));
+  }
 
   const confirmedCount = results.filter(
     (result) => result.is_confirmed
@@ -778,6 +824,13 @@ export default function UploadScreen() {
           uploadFile as unknown as Blob
         );
       });
+
+      formData.append(
+        "photo_locations",
+        JSON.stringify(
+          preparedPhotos.map((photo) => cleanText(photo.location))
+        )
+      );
 
       return formData;
     }
@@ -1141,6 +1194,7 @@ export default function UploadScreen() {
 
     const updatedResult: RecognitionResult = {
       ...editDraft,
+      location: cleanText(editDraft.location),
       vendor: cleanText(editDraft.vendor),
       manufacturer: cleanText(
         editDraft.manufacturer
@@ -2187,26 +2241,439 @@ export default function UploadScreen() {
                   }}
                   style={styles.resultsHeader}
                 >
-                  <Text style={styles.resultsTitle}>
-                    Review Results
-                  </Text>
-
-                  <View
-                    style={
-                      styles.resultCountBadge
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.resultCountText
-                      }
-                    >
-                      {results.length}
+                  <View>
+                    <Text style={styles.resultsTitle}>
+                      Review Results
                     </Text>
+                    <Text style={styles.resultsSubtitle}>
+                      {reviewMode === "area"
+                        ? `${reviewGroups.length} ${reviewGroups.length === 1 ? "area" : "areas"}`
+                        : `${results.length} ${results.length === 1 ? "item" : "items"}`}
+                    </Text>
+                  </View>
+
+                  <View style={styles.reviewModeToggle}>
+                    <Pressable
+                      onPress={() => setReviewMode("area")}
+                      style={[
+                        styles.reviewModeOption,
+                        reviewMode === "area" && styles.reviewModeOptionActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.reviewModeText,
+                          reviewMode === "area" && styles.reviewModeTextActive,
+                        ]}
+                      >
+                        By Area
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setReviewMode("all")}
+                      style={[
+                        styles.reviewModeOption,
+                        reviewMode === "all" && styles.reviewModeOptionActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.reviewModeText,
+                          reviewMode === "all" && styles.reviewModeTextActive,
+                        ]}
+                      >
+                        All
+                      </Text>
+                    </Pressable>
                   </View>
                 </View>
 
-                {results.map(
+                {reviewMode === "area"
+                  ? reviewGroups.map((group) => {
+                      const isCollapsed = Boolean(collapsedAreas[group.location]);
+                      const confirmedInArea = group.items.filter(
+                        ({ result }) => result.is_confirmed
+                      ).length;
+
+                      return (
+                        <View key={group.location} style={styles.areaReviewSection}>
+                          <Pressable
+                            onPress={() => toggleAreaCollapsed(group.location)}
+                            style={({ pressed }) => [
+                              styles.areaReviewHeader,
+                              pressed && styles.buttonPressed,
+                            ]}
+                          >
+                            <View style={styles.areaReviewTitleRow}>
+                              <View style={styles.areaIcon}>
+                                <Text style={styles.areaIconText}>⌖</Text>
+                              </View>
+                              <View style={styles.areaReviewTitleContainer}>
+                                <Text style={styles.areaReviewTitle}>
+                                  {group.location}
+                                </Text>
+                                <Text style={styles.areaReviewMeta}>
+                                  {group.items.length} {group.items.length === 1 ? "item" : "items"} · {confirmedInArea} confirmed
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.areaChevron}>
+                              {isCollapsed ? "+" : "−"}
+                            </Text>
+                          </Pressable>
+
+                          {!isCollapsed && (
+                            <View style={styles.areaReviewItems}>
+                {group.items.map(
+                  ({ result, index }) => {
+                    const confidence =
+                      getConfidencePercent(
+                        result.confidence
+                      );
+
+                    const displayedPartNumber =
+                      result.manufacturer_part_number ||
+                      result.part_number;
+
+                    const reviewReasons =
+                      getReviewReasons(result);
+
+                    return (
+                      <View
+                        key={`${result.photo}-${index}`}
+                        onLayout={(event) => {
+                          resultCardPositions.current[index] =
+                            event.nativeEvent.layout.y +
+                            reviewSectionY.current;
+                        }}
+                        style={[
+                          styles.resultCard,
+                          !result.is_confirmed &&
+                            styles.resultCardNeedsReview,
+                          result.is_confirmed &&
+                            styles.resultCardConfirmed,
+                        ]}
+                      >
+                        <View
+                          style={
+                            styles.resultCardHeader
+                          }
+                        >
+                          <View
+                            style={
+                              styles.resultNumber
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.resultNumberText
+                              }
+                            >
+                              {index + 1}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={
+                              styles.resultHeaderTextContainer
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.resultCardTitle
+                              }
+                            >
+                              {result.description ||
+                                displayedPartNumber ||
+                                result.vendor ||
+                                "Inventory item"}
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.resultPhotoName
+                              }
+                            >
+                              {result.photo ||
+                                `Photo ${
+                                  index + 1
+                                }`}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={
+                              styles.badgeColumn
+                            }
+                          >
+                            {result.was_edited && (
+                              <View
+                                style={
+                                  styles.editedBadge
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.editedBadgeText
+                                  }
+                                >
+                                  Edited
+                                </Text>
+                              </View>
+                            )}
+
+                            <View
+                              style={[
+                                styles.reviewBadge,
+                                result.is_confirmed
+                                  ? styles.reviewBadgeReady
+                                  : styles.reviewBadgeNeeded,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.reviewBadgeText,
+                                  result.is_confirmed
+                                    ? styles.reviewBadgeTextReady
+                                    : styles.reviewBadgeTextNeeded,
+                                ]}
+                              >
+                                {result.is_confirmed
+                                  ? "Confirmed"
+                                  : "Review"}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {!result.is_confirmed &&
+                          reviewReasons.length > 0 && (
+                            <View
+                              style={
+                                styles.reviewReasonCard
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.reviewReasonTitle
+                                }
+                              >
+                                Why this item needs review
+                              </Text>
+
+                              {reviewReasons.map(
+                                (reason) => (
+                                  <View
+                                    key={reason}
+                                    style={
+                                      styles.reviewReasonRow
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.reviewReasonBullet
+                                      }
+                                    >
+                                      •
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.reviewReasonText
+                                      }
+                                    >
+                                      {reason}
+                                    </Text>
+                                  </View>
+                                )
+                              )}
+                            </View>
+                          )}
+
+                        <ResultField
+                          label="Location"
+                          value={result.location}
+                        />
+
+                        <ResultField
+                          label="Vendor"
+                          value={result.vendor}
+                        />
+
+                        <ResultField
+                          label="Manufacturer"
+                          value={
+                            result.manufacturer
+                          }
+                        />
+
+                        <ResultField
+                          label="Manufacturer part number"
+                          value={
+                            displayedPartNumber
+                          }
+                        />
+
+                        <ResultField
+                          label="Vendor part number"
+                          value={
+                            result.vendor_part_number
+                          }
+                        />
+
+                        <ResultField
+                          label="Description"
+                          value={
+                            result.description
+                          }
+                        />
+
+                        <ResultField
+                          label="Size or specification"
+                          value={
+                            result.size_specification
+                          }
+                        />
+
+                        <ResultField
+                          label="Package quantity"
+                          value={
+                            result.package_quantity
+                          }
+                        />
+
+                        <View
+                          style={
+                            styles.confidenceSection
+                          }
+                        >
+                          <View
+                            style={
+                              styles.confidenceHeader
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.resultFieldLabel
+                              }
+                            >
+                              AI confidence
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.confidenceValue
+                              }
+                            >
+                              {confidence}%
+                            </Text>
+                          </View>
+
+                          <View
+                            style={
+                              styles.confidenceTrack
+                            }
+                          >
+                            <View
+                              style={[
+                                styles.confidenceFill,
+                                {
+                                  width: `${confidence}%`,
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+
+                        <View
+                          style={
+                            styles.resultActionsRow
+                          }
+                        >
+                          <Pressable
+                            onPress={() =>
+                              viewSourcePhoto(
+                                result
+                              )
+                            }
+                            style={({
+                              pressed,
+                            }) => [
+                              styles.photoButton,
+                              pressed &&
+                                styles.buttonPressed,
+                            ]}
+                          >
+                            <Text
+                              style={
+                                styles.photoButtonText
+                              }
+                            >
+                              Photo
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() =>
+                              beginEditing(index)
+                            }
+                            style={({
+                              pressed,
+                            }) => [
+                              styles.editButton,
+                              pressed &&
+                                styles.buttonPressed,
+                            ]}
+                          >
+                            <Text
+                              style={
+                                styles.editButtonText
+                              }
+                            >
+                              Edit Item
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            onPress={() =>
+                              toggleConfirmed(
+                                index
+                              )
+                            }
+                            style={({
+                              pressed,
+                            }) => [
+                              styles.confirmButton,
+                              result.is_confirmed &&
+                                styles.unconfirmButton,
+                              pressed &&
+                                styles.buttonPressed,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.confirmButtonText,
+                                result.is_confirmed &&
+                                  styles.unconfirmButtonText,
+                              ]}
+                            >
+                              {result.is_confirmed
+                                ? "Mark Unreviewed"
+                                : "Confirm Correct"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  }
+                )}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })
+                  : results.map(
                   (result, index) => {
                     const confidence =
                       getConfidencePercent(
@@ -2371,6 +2838,11 @@ export default function UploadScreen() {
                               )}
                             </View>
                           )}
+
+                        <ResultField
+                          label="Location"
+                          value={result.location}
+                        />
 
                         <ResultField
                           label="Vendor"
@@ -3042,6 +3514,18 @@ export default function UploadScreen() {
                       marks this item as confirmed.
                     </Text>
                   </View>
+
+                  <EditableField
+                    label="Location"
+                    value={editDraft.location}
+                    onChangeText={(value) =>
+                      updateDraft(
+                        "location",
+                        value
+                      )
+                    }
+                    placeholder="Example: Maintenance Area"
+                  />
 
                   <EditableField
                     label="Vendor"
@@ -3735,6 +4219,110 @@ const styles = StyleSheet.create({
   confirmAllButtonText: {
     color: "#72E1B2",
     fontWeight: "800",
+  },
+
+  resultsSubtitle: {
+    color: "#8295AE",
+    fontSize: 13,
+    marginTop: 3,
+  },
+
+  reviewModeToggle: {
+    flexDirection: "row",
+    borderRadius: 12,
+    padding: 3,
+    backgroundColor: "#17263A",
+    borderWidth: 1,
+    borderColor: "#2B405B",
+  },
+
+  reviewModeOption: {
+    minHeight: 34,
+    paddingHorizontal: 13,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  reviewModeOptionActive: {
+    backgroundColor: "#2E6DEA",
+  },
+
+  reviewModeText: {
+    color: "#91A2B8",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  reviewModeTextActive: {
+    color: "#FFFFFF",
+  },
+
+  areaReviewSection: {
+    marginBottom: 18,
+  },
+
+  areaReviewHeader: {
+    minHeight: 68,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#315378",
+    backgroundColor: "#14263C",
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+
+  areaReviewTitleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  areaIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1E4772",
+    marginRight: 11,
+  },
+
+  areaIconText: {
+    color: "#8BC6FF",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  areaReviewTitleContainer: {
+    flex: 1,
+  },
+
+  areaReviewTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  areaReviewMeta: {
+    color: "#8EA1B9",
+    fontSize: 12,
+    marginTop: 3,
+  },
+
+  areaChevron: {
+    color: "#8EC8FF",
+    fontSize: 24,
+    fontWeight: "500",
+    marginLeft: 12,
+  },
+
+  areaReviewItems: {
+    paddingLeft: 4,
   },
 
   resultsHeader: {

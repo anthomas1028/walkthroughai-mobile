@@ -21,6 +21,7 @@ type WalkthroughItem = {
   walkthrough_id: number;
   item_number: number;
   photo: string | null;
+  location: string | null;
   vendor: string | null;
   manufacturer: string | null;
   manufacturer_part_number: string | null;
@@ -322,6 +323,7 @@ export default function WalkthroughDetailScreen() {
           </View>
         </View>
 
+        <DetailRow label="Location" value={item.location} />
         <DetailRow label="Vendor" value={item.vendor} />
         <DetailRow
           label="Manufacturer"
