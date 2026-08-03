@@ -30,6 +30,12 @@ type WorkspaceResponse = {
   message?: string;
 };
 
+type AccountDeletionResponse = {
+  success: boolean;
+  error?: string;
+  message?: string;
+};
+
 export default function AccountScreen() {
   const { session, workspace, refreshWorkspace, signOut } = useAuth();
 
@@ -45,10 +51,15 @@ export default function AccountScreen() {
   const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
     useState(false);
+  const [deletionPassword, setDeletionPassword] = useState("");
+  const [deletionConfirmation, setDeletionConfirmation] = useState("");
+  const [isDeletionPasswordVisible, setIsDeletionPasswordVisible] =
+    useState(false);
 
   const [isSavingWorkspace, setIsSavingWorkspace] = useState(false);
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   useEffect(() => {
     setWorkspaceName(workspace?.name || "");
@@ -262,6 +273,118 @@ export default function AccountScreen() {
     );
   }
 
+  async function prepareAccountDeletion() {
+    const email = session?.user.email || "";
+
+    if (!email) {
+      Alert.alert("Account unavailable", "Your sign-in email could not be loaded.");
+      return;
+    }
+
+    if (!deletionPassword) {
+      Alert.alert(
+        "Current password required",
+        "Enter your current password before deleting your account."
+      );
+      return;
+    }
+
+    if (deletionConfirmation.trim() !== "DELETE") {
+      Alert.alert(
+        "Type DELETE to continue",
+        "Enter DELETE exactly as shown before deleting your account."
+      );
+      return;
+    }
+
+    setIsDeletingAccount(true);
+
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: deletionPassword,
+      });
+
+      if (signInError) {
+        throw new Error("Your current password is incorrect.");
+      }
+
+      setIsDeletingAccount(false);
+
+      Alert.alert(
+        "Permanently delete account?",
+        "This cannot be undone. Your workspace, customers, walkthrough history, inventory results, reports, and sign-in will be permanently deleted.",
+        [
+          { text: "Keep Account", style: "cancel" },
+          {
+            text: "Delete Forever",
+            style: "destructive",
+            onPress: () => {
+              deleteAccount().catch((error) => {
+                Alert.alert(
+                  "Unable to delete account",
+                  error instanceof Error ? error.message : "Please try again."
+                );
+                setIsDeletingAccount(false);
+              });
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert(
+        "Unable to verify password",
+        error instanceof Error ? error.message : "Please try again."
+      );
+      setIsDeletingAccount(false);
+    }
+  }
+
+  async function deleteAccount() {
+    setIsDeletingAccount(true);
+
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/me/account`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      });
+
+      const responseText = await response.text();
+      let data: AccountDeletionResponse;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          "Walkthrough AI received an unexpected response. Please try again."
+        );
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.message || "Walkthrough AI couldn’t delete the account."
+        );
+      }
+
+      const { error: signOutError } = await supabase.auth.signOut({
+        scope: "local",
+      });
+
+      if (signOutError) {
+        throw signOutError;
+      }
+
+      setDeletionPassword("");
+      setDeletionConfirmation("");
+      router.replace("/");
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -452,6 +575,55 @@ export default function AccountScreen() {
               </Pressable>
             </View>
 
+            <View style={[styles.card, styles.dangerCard]}>
+              <Text style={styles.dangerLabel}>DANGER ZONE</Text>
+              <Text style={styles.cardTitle}>Permanently delete account</Text>
+              <Text style={styles.dangerDescription}>
+                This permanently removes your workspace, customers, walkthrough
+                history, inventory results, reports, and sign-in. This action
+                cannot be undone.
+              </Text>
+
+              <PasswordInput
+                isVisible={isDeletionPasswordVisible}
+                onChangeText={setDeletionPassword}
+                onToggleVisibility={() =>
+                  setIsDeletionPasswordVisible((current) => !current)
+                }
+                placeholder="Current password"
+                textContentType="password"
+                value={deletionPassword}
+              />
+
+              <TextInput
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!isDeletingAccount}
+                onChangeText={setDeletionConfirmation}
+                placeholder="Type DELETE"
+                placeholderTextColor="#7F1D1D"
+                style={[styles.input, styles.dangerInput]}
+                value={deletionConfirmation}
+              />
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={isDeletingAccount}
+                onPress={prepareAccountDeletion}
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  pressed && styles.buttonPressed,
+                  isDeletingAccount && styles.buttonDisabled,
+                ]}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>Delete My Account</Text>
+                )}
+              </Pressable>
+            </View>
+
             <Text style={styles.versionText}>Version 0.1.0</Text>
           </ScrollView>
         </View>
@@ -583,8 +755,21 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+  dangerCard: {
+    borderColor: "#7F1D1D",
+    backgroundColor: "#211319",
+  },
+
   cardLabel: {
     color: "#60A5FA",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+
+  dangerLabel: {
+    color: "#F87171",
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.8,
@@ -612,6 +797,13 @@ const styles = StyleSheet.create({
     marginBottom: 13,
   },
 
+  dangerDescription: {
+    color: "#FCA5A5",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 13,
+  },
+
   input: {
     minHeight: 49,
     borderRadius: 13,
@@ -622,6 +814,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingHorizontal: 14,
     marginBottom: 11,
+  },
+
+  dangerInput: {
+    borderColor: "#7F1D1D",
   },
 
   passwordInputRow: {
@@ -693,6 +889,22 @@ const styles = StyleSheet.create({
 
   signOutButtonText: {
     color: "#FCA5A5",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  deleteButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: "#B91C1C",
+    borderWidth: 1,
+    borderColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  deleteButtonText: {
+    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "800",
   },
