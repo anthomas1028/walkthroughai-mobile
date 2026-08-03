@@ -1,12 +1,13 @@
 import type { Session } from "@supabase/supabase-js";
 import {
-    createContext,
-    ReactNode,
-    useContext,
-    useEffect,
-    useMemo,
-    useState,
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
+import { Linking } from "react-native";
 
 import { API_BASE_URL, apiFetch } from "../lib/api";
 import { supabase } from "../lib/supabase";
@@ -26,6 +27,63 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function getAuthParameter(url: string, name: string): string | null {
+  const queryStart = url.indexOf("?");
+  const hashStart = url.indexOf("#");
+  const queryEnd = hashStart >= 0 ? hashStart : url.length;
+
+  const queryParameters =
+    queryStart >= 0
+      ? new URLSearchParams(url.slice(queryStart + 1, queryEnd))
+      : null;
+  const hashParameters =
+    hashStart >= 0 ? new URLSearchParams(url.slice(hashStart + 1)) : null;
+
+  return hashParameters?.get(name) ?? queryParameters?.get(name) ?? null;
+}
+
+async function applyAuthCallback(url: string | null) {
+  if (!url) {
+    return;
+  }
+
+  const errorDescription = getAuthParameter(url, "error_description");
+
+  if (errorDescription) {
+    throw new Error(errorDescription.replace(/\+/g, " "));
+  }
+
+  const authorizationCode = getAuthParameter(url, "code");
+
+  if (authorizationCode) {
+    const { error } = await supabase.auth.exchangeCodeForSession(
+      authorizationCode
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    return;
+  }
+
+  const accessToken = getAuthParameter(url, "access_token");
+  const refreshToken = getAuthParameter(url, "refresh_token");
+
+  if (!accessToken || !refreshToken) {
+    return;
+  }
+
+  const { error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -71,6 +129,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       isMounted = false;
       subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleUrl({ url }: { url: string }) {
+      applyAuthCallback(url).catch((error) => {
+        console.warn("Authentication link error:", error);
+      });
+    }
+
+    Linking.getInitialURL()
+      .then(applyAuthCallback)
+      .catch((error) => {
+        console.warn("Initial authentication link error:", error);
+      });
+
+    const subscription = Linking.addEventListener("url", handleUrl);
+
+    return () => {
+      subscription.remove();
     };
   }, []);
 

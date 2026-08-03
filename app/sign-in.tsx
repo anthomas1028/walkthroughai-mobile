@@ -1,3 +1,4 @@
+import * as ExpoLinking from "expo-linking";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -56,6 +57,7 @@ export default function SignInScreen() {
             data: {
               workspace_name: cleanedWorkspaceName,
             },
+            emailRedirectTo: ExpoLinking.createURL("/"),
           },
         });
 
