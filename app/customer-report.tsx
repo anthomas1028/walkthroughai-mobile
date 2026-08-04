@@ -43,7 +43,6 @@ type ReportRecord = {
   last_seen_at?: string;
   photo?: string | null;
   vendor?: string | null;
-  vendors?: string | null;
   manufacturer?: string | null;
   manufacturer_part_number?: string | null;
   vendor_part_number?: string | null;
@@ -204,6 +203,12 @@ export default function CustomerReportScreen() {
     isUniquePartsReport ? selectedVendor : ""
   );
   const [inventoryArea, setInventoryArea] = useState("");
+  const [draftInventoryVendor, setDraftInventoryVendor] = useState(
+    isUniquePartsReport ? selectedVendor : ""
+  );
+  const [draftInventoryArea, setDraftInventoryArea] = useState("");
+  const [availableInventoryVendors, setAvailableInventoryVendors] = useState<string[]>([]);
+  const [availableInventoryAreas, setAvailableInventoryAreas] = useState<string[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedPart, setSelectedPart] = useState<ReportRecord | null>(null);
   const [photoViewer, setPhotoViewer] = useState<{ uri: string; label: string } | null>(null);
@@ -255,6 +260,17 @@ export default function CustomerReportScreen() {
         }
 
         setReport(data.report);
+
+        if (isUniquePartsReport) {
+          setAvailableInventoryVendors((current) =>
+            Array.from(new Set([...current, ...(data.report?.available_vendors || [])]))
+              .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+          );
+          setAvailableInventoryAreas((current) =>
+            Array.from(new Set([...current, ...(data.report?.available_areas || [])]))
+              .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+          );
+        }
       } catch (error) {
         Alert.alert(
           "Unable to load report",
@@ -459,6 +475,36 @@ export default function CustomerReportScreen() {
       item.part_number ||
       ""
     );
+  }
+
+  const activeFilterCount =
+    Number(Boolean(inventoryArea)) + Number(Boolean(inventoryVendor));
+
+  function filterButtonLabel(): string {
+    if (!activeFilterCount) return "Filters";
+    if (activeFilterCount === 1) {
+      return inventoryArea ? `Area: ${inventoryArea}` : `Vendor: ${inventoryVendor}`;
+    }
+    return `${activeFilterCount} Filters`;
+  }
+
+  function openInventoryFilters() {
+    setDraftInventoryArea(inventoryArea);
+    setDraftInventoryVendor(inventoryVendor);
+    setFilterModalVisible(true);
+  }
+
+  function applyInventoryFilters() {
+    setInventoryArea(draftInventoryArea);
+    setInventoryVendor(draftInventoryVendor);
+    setFilterModalVisible(false);
+  }
+
+  function clearInventoryFilters() {
+    setInventoryArea("");
+    setInventoryVendor("");
+    setDraftInventoryArea("");
+    setDraftInventoryVendor("");
   }
 
   function renderRecord({ item }: { item: ReportRecord }) {
@@ -700,17 +746,31 @@ export default function CustomerReportScreen() {
           <>
             <View style={styles.inventoryFilterRow}>
               <Pressable
-                onPress={() => setFilterModalVisible(true)}
-                style={({ pressed }) => [styles.inventoryFilterButton, pressed && styles.buttonPressed]}
+                onPress={openInventoryFilters}
+                style={({ pressed }) => [
+                  styles.inventoryFilterButton,
+                  activeFilterCount > 0 && styles.inventoryFilterButtonActive,
+                  pressed && styles.buttonPressed,
+                ]}
               >
-                <Ionicons name="options-outline" size={18} color="#BFDBFE" />
-                <Text style={styles.inventoryFilterButtonText}>
-                  {inventoryArea || inventoryVendor ? "Filters Applied" : "Area & Vendor"}
+                <Ionicons
+                  name="options-outline"
+                  size={18}
+                  color={activeFilterCount > 0 ? "#FFFFFF" : "#BFDBFE"}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.inventoryFilterButtonText,
+                    activeFilterCount > 0 && styles.inventoryFilterButtonTextActive,
+                  ]}
+                >
+                  {filterButtonLabel()}
                 </Text>
               </Pressable>
-              {(inventoryArea || inventoryVendor) ? (
+              {activeFilterCount > 0 ? (
                 <Pressable
-                  onPress={() => { setInventoryArea(""); setInventoryVendor(""); }}
+                  onPress={clearInventoryFilters}
                   style={({ pressed }) => [styles.clearFiltersButton, pressed && styles.buttonPressed]}
                 >
                   <Text style={styles.clearFiltersText}>Clear</Text>
@@ -816,30 +876,69 @@ export default function CustomerReportScreen() {
         )}
       </View>
 
-      <Modal visible={filterModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setFilterModalVisible(false)}>
+      <Modal
+        visible={filterModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
         <SafeAreaView style={styles.modalSafeArea}>
           <View style={styles.modalHeader}>
             <Pressable onPress={() => setFilterModalVisible(false)} style={styles.modalCloseButton}>
-              <Text style={styles.modalCloseText}>Done</Text>
+              <Text style={styles.modalCloseText}>Cancel</Text>
             </Pressable>
             <Text style={styles.modalTitle}>Filter Unique Parts</Text>
-            <View style={styles.modalHeaderSpacer} />
+            <Pressable onPress={applyInventoryFilters} style={styles.modalApplyButton}>
+              <Text style={styles.modalApplyText}>Apply</Text>
+            </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.filterModalContent}>
+            <Text style={styles.filterHelpText}>
+              Choose an area, a vendor, or both. Results update after you tap Apply.
+            </Text>
+
             <Text style={styles.filterSectionTitle}>Area</Text>
-            {["", ...(report?.available_areas || [])].map((areaName) => (
-              <Pressable key={`area-${areaName || "all"}`} onPress={() => setInventoryArea(areaName)} style={styles.filterOption}>
+            {["", ...availableInventoryAreas].map((areaName) => (
+              <Pressable
+                key={`area-${areaName || "all"}`}
+                onPress={() => setDraftInventoryArea(areaName)}
+                style={styles.filterOption}
+              >
                 <Text style={styles.filterOptionText}>{areaName || "All Areas"}</Text>
-                {inventoryArea === areaName ? <Ionicons name="checkmark-circle" size={22} color="#60A5FA" /> : null}
+                {draftInventoryArea === areaName ? (
+                  <Ionicons name="checkmark-circle" size={22} color="#60A5FA" />
+                ) : null}
               </Pressable>
             ))}
+
             <Text style={styles.filterSectionTitle}>Vendor</Text>
-            {["", ...(report?.available_vendors || [])].map((vendorName) => (
-              <Pressable key={`vendor-${vendorName || "all"}`} onPress={() => setInventoryVendor(vendorName)} style={styles.filterOption}>
+            {["", ...availableInventoryVendors].map((vendorName) => (
+              <Pressable
+                key={`vendor-${vendorName || "all"}`}
+                onPress={() => setDraftInventoryVendor(vendorName)}
+                style={styles.filterOption}
+              >
                 <Text style={styles.filterOptionText}>{vendorName || "All Vendors"}</Text>
-                {inventoryVendor === vendorName ? <Ionicons name="checkmark-circle" size={22} color="#60A5FA" /> : null}
+                {draftInventoryVendor === vendorName ? (
+                  <Ionicons name="checkmark-circle" size={22} color="#60A5FA" />
+                ) : null}
               </Pressable>
             ))}
+
+            {(draftInventoryArea || draftInventoryVendor) ? (
+              <Pressable
+                onPress={() => {
+                  setDraftInventoryArea("");
+                  setDraftInventoryVendor("");
+                }}
+                style={({ pressed }) => [
+                  styles.resetModalFiltersButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.resetModalFiltersText}>Reset Selections</Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1019,8 +1118,10 @@ const styles = StyleSheet.create({
   emptyTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
   emptyText: { color: "#8FA2BA", fontSize: 12, marginTop: 7, textAlign: "center" },
   inventoryFilterRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  inventoryFilterButton: { minHeight: 40, flex: 1, borderRadius: 12, borderWidth: 1, borderColor: "#2B405B", backgroundColor: "#101B2C", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
-  inventoryFilterButtonText: { color: "#BFDBFE", fontSize: 12, fontWeight: "800" },
+  inventoryFilterButton: { minHeight: 40, flex: 1, borderRadius: 12, borderWidth: 1, borderColor: "#2B405B", backgroundColor: "#101B2C", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 12 },
+  inventoryFilterButtonActive: { borderColor: "#3B82F6", backgroundColor: "#16396D" },
+  inventoryFilterButtonText: { flexShrink: 1, color: "#BFDBFE", fontSize: 12, fontWeight: "800" },
+  inventoryFilterButtonTextActive: { color: "#FFFFFF" },
   clearFiltersButton: { minHeight: 40, paddingHorizontal: 15, borderRadius: 12, backgroundColor: "#17263A", alignItems: "center", justifyContent: "center", marginLeft: 8 },
   clearFiltersText: { color: "#93C5FD", fontSize: 12, fontWeight: "800" },
   uniquePartCard: { borderRadius: 16, borderWidth: 1, borderColor: "#283C57", backgroundColor: "#111D2F", marginBottom: 9, overflow: "hidden" },
@@ -1039,10 +1140,15 @@ const styles = StyleSheet.create({
   modalCloseText: { color: "#93C5FD", fontSize: 14, fontWeight: "700" },
   modalTitle: { flex: 1, color: "#FFFFFF", fontSize: 17, fontWeight: "800", textAlign: "center" },
   modalHeaderSpacer: { width: 72 },
+  modalApplyButton: { width: 72, minHeight: 40, alignItems: "flex-end", justifyContent: "center" },
+  modalApplyText: { color: "#60A5FA", fontSize: 14, fontWeight: "900" },
   filterModalContent: { padding: 20, paddingBottom: 40 },
+  filterHelpText: { color: "#8FA2BA", fontSize: 13, lineHeight: 19, marginBottom: 8 },
   filterSectionTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "800", marginTop: 8, marginBottom: 10 },
   filterOption: { minHeight: 52, borderBottomWidth: 1, borderBottomColor: "#26364F", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   filterOptionText: { color: "#D8E2F0", fontSize: 15 },
+  resetModalFiltersButton: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: "#31547D", alignItems: "center", justifyContent: "center", marginTop: 24 },
+  resetModalFiltersText: { color: "#93C5FD", fontSize: 14, fontWeight: "800" },
   partDetailContent: { padding: 20, paddingBottom: 40 },
   partDetailTitle: { color: "#FFFFFF", fontSize: 22, lineHeight: 29, fontWeight: "800" },
   partDetailNumber: { color: "#93C5FD", fontSize: 16, fontWeight: "700", marginTop: 7 },
