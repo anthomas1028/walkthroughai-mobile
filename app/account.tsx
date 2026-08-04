@@ -575,6 +575,30 @@ export default function AccountScreen() {
               </Pressable>
             </View>
 
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>HELP & FEEDBACK</Text>
+              <Text style={styles.cardTitle}>How can we help?</Text>
+              <Text style={styles.cardDescription}>
+                Report a bug, suggest an improvement, or ask for help.
+              </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/help-feedback")}
+                style={({ pressed }) => [
+                  styles.feedbackButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Ionicons
+                  color="#FFFFFF"
+                  name="chatbubble-ellipses-outline"
+                  size={20}
+                />
+                <Text style={styles.feedbackButtonText}>Open Help & Feedback</Text>
+              </Pressable>
+            </View>
+
             <View style={[styles.card, styles.dangerCard]}>
               <Text style={styles.dangerLabel}>DANGER ZONE</Text>
               <Text style={styles.cardTitle}>Permanently delete account</Text>
@@ -624,7 +648,7 @@ export default function AccountScreen() {
               </Pressable>
             </View>
 
-            <Text style={styles.versionText}>Version 0.1.0</Text>
+            <Text style={styles.versionText}>Version 2.0.0</Text>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -873,6 +897,22 @@ const styles = StyleSheet.create({
 
   secondaryButtonText: {
     color: "#BFDBFE",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  feedbackButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: "#2563EB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  feedbackButtonText: {
+    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "800",
   },

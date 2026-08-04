@@ -1023,8 +1023,20 @@ export default function HomeScreen() {
                 </View>
               )}
 
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/help-feedback")}
+                style={({ pressed }) => [
+                  styles.feedbackButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.feedbackButtonIcon}>💬</Text>
+                <Text style={styles.feedbackButtonText}>Help & Feedback</Text>
+              </Pressable>
+
               <Text style={styles.versionText}>
-                Version 0.1.0
+                Version 2.0.0
               </Text>
             </View>
           ) : null}
@@ -1626,6 +1638,29 @@ const styles = StyleSheet.create({
     color: "#718096",
     fontSize: 11,
     marginTop: 3,
+  },
+
+  feedbackButton: {
+    minHeight: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#31547D",
+    backgroundColor: "#101A2A",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+
+  feedbackButtonIcon: {
+    fontSize: 15,
+    marginRight: 7,
+  },
+
+  feedbackButtonText: {
+    color: "#BFDBFE",
+    fontSize: 12,
+    fontWeight: "900",
   },
 
   versionText: {
