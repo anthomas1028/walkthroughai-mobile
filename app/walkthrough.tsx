@@ -99,9 +99,6 @@ export default function WalkthroughPhotoScreen() {
     groupId: null,
   });
   const [areaNameDraft, setAreaNameDraft] = useState("");
-  const [photoActionGroupId, setPhotoActionGroupId] = useState<string | null>(
-    null
-  );
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
   const [photoViewer, setPhotoViewer] = useState<PhotoViewer | null>(null);
 
@@ -314,7 +311,6 @@ export default function WalkthroughPhotoScreen() {
       Alert.alert("Camera error", "The camera could not be opened. Try again.");
     } finally {
       setIsOpeningPicker(false);
-      setPhotoActionGroupId(null);
     }
   }
 
@@ -352,7 +348,6 @@ export default function WalkthroughPhotoScreen() {
       );
     } finally {
       setIsOpeningPicker(false);
-      setPhotoActionGroupId(null);
     }
   }
 
@@ -596,19 +591,39 @@ export default function WalkthroughPhotoScreen() {
                     </Text>
                   )}
 
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={isOpeningPicker}
-                    onPress={() => setPhotoActionGroupId(group.id)}
-                    style={({ pressed }) => [
-                      styles.addPhotosButton,
-                      pressed && styles.buttonPressed,
-                      isOpeningPicker && styles.disabledButton,
-                    ]}
-                  >
-                    <Ionicons name="add" size={20} color="#93C5FD" />
-                    <Text style={styles.addPhotosButtonText}>Add Photos</Text>
-                  </Pressable>
+                  <View style={styles.photoActionRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Take a photo for ${group.name}`}
+                      disabled={isOpeningPicker}
+                      onPress={() => void takePhoto(group.id)}
+                      style={({ pressed }) => [
+                        styles.photoActionButton,
+                        styles.takePhotoButton,
+                        pressed && styles.buttonPressed,
+                        isOpeningPicker && styles.disabledButton,
+                      ]}
+                    >
+                      <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                      <Text style={styles.takePhotoButtonText}>Take Photo</Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Choose photos for ${group.name}`}
+                      disabled={isOpeningPicker}
+                      onPress={() => void choosePhotos(group.id)}
+                      style={({ pressed }) => [
+                        styles.photoActionButton,
+                        styles.choosePhotosButton,
+                        pressed && styles.buttonPressed,
+                        isOpeningPicker && styles.disabledButton,
+                      ]}
+                    >
+                      <Ionicons name="images-outline" size={20} color="#93C5FD" />
+                      <Text style={styles.choosePhotosButtonText}>Choose Photos</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ))}
             </View>
@@ -722,76 +737,6 @@ export default function WalkthroughPhotoScreen() {
               </ScrollView>
             </KeyboardAvoidingView>
           </SafeAreaView>
-        </Modal>
-
-        <Modal
-          visible={photoActionGroupId !== null}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setPhotoActionGroupId(null)}
-        >
-          <Pressable
-            style={styles.actionOverlay}
-            onPress={() => setPhotoActionGroupId(null)}
-          >
-            <Pressable style={styles.actionSheet} onPress={() => undefined}>
-              <View style={styles.actionSheetHandle} />
-              <Text style={styles.actionSheetTitle}>Add Photos</Text>
-              <Text style={styles.actionSheetSubtitle}>
-                Choose how you want to add photos to this area.
-              </Text>
-
-              <Pressable
-                disabled={!photoActionGroupId || isOpeningPicker}
-                onPress={() => {
-                  if (photoActionGroupId) void takePhoto(photoActionGroupId);
-                }}
-                style={({ pressed }) => [
-                  styles.actionOption,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <View style={styles.actionOptionIconPrimary}>
-                  <Ionicons name="camera" size={24} color="#FFFFFF" />
-                </View>
-                <View style={styles.actionOptionText}>
-                  <Text style={styles.actionOptionTitle}>Take Photo</Text>
-                  <Text style={styles.actionOptionSubtitle}>Open your phone camera</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#7E91A8" />
-              </Pressable>
-
-              <Pressable
-                disabled={!photoActionGroupId || isOpeningPicker}
-                onPress={() => {
-                  if (photoActionGroupId) void choosePhotos(photoActionGroupId);
-                }}
-                style={({ pressed }) => [
-                  styles.actionOption,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <View style={styles.actionOptionIconSecondary}>
-                  <Ionicons name="images-outline" size={24} color="#93C5FD" />
-                </View>
-                <View style={styles.actionOptionText}>
-                  <Text style={styles.actionOptionTitle}>Choose Photos</Text>
-                  <Text style={styles.actionOptionSubtitle}>Select from your photo library</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#7E91A8" />
-              </Pressable>
-
-              <Pressable
-                onPress={() => setPhotoActionGroupId(null)}
-                style={({ pressed }) => [
-                  styles.actionCancelButton,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <Text style={styles.actionCancelText}>Cancel</Text>
-              </Pressable>
-            </Pressable>
-          </Pressable>
         </Modal>
 
         <Modal
@@ -1094,18 +1039,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     paddingVertical: 18,
   },
-  addPhotosButton: {
-    minHeight: 46,
+  photoActionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  photoActionButton: {
+    flex: 1,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
-    backgroundColor: "#14263D",
     gap: 7,
   },
-  addPhotosButtonText: {
+  takePhotoButton: {
+    backgroundColor: "#2D68EB",
+  },
+  choosePhotosButton: {
+    backgroundColor: "#14263D",
+    borderWidth: 1,
+    borderColor: "#24405F",
+  },
+  takePhotoButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  choosePhotosButtonText: {
     color: "#BFDBFE",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   summaryCard: {
@@ -1249,91 +1211,6 @@ const styles = StyleSheet.create({
   modalSaveButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "800",
-  },
-  actionOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(1, 7, 14, 0.62)",
-  },
-  actionSheet: {
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    backgroundColor: "#0D1A2B",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 28,
-  },
-  actionSheetHandle: {
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: "#3C4F66",
-    alignSelf: "center",
-    marginBottom: 18,
-  },
-  actionSheetTitle: {
-    color: "#FFFFFF",
-    fontSize: 21,
-    fontWeight: "800",
-  },
-  actionSheetSubtitle: {
-    color: "#8FA1B9",
-    fontSize: 13,
-    marginTop: 5,
-    marginBottom: 16,
-  },
-  actionOption: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 17,
-    backgroundColor: "#132239",
-    paddingHorizontal: 14,
-    marginBottom: 10,
-  },
-  actionOptionIconPrimary: {
-    width: 45,
-    height: 45,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2D68EB",
-    marginRight: 13,
-  },
-  actionOptionIconSecondary: {
-    width: 45,
-    height: 45,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#112B48",
-    marginRight: 13,
-  },
-  actionOptionText: {
-    flex: 1,
-  },
-  actionOptionTitle: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  actionOptionSubtitle: {
-    color: "#8598AE",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  actionCancelButton: {
-    minHeight: 50,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 15,
-    backgroundColor: "#17263A",
-    marginTop: 4,
-  },
-  actionCancelText: {
-    color: "#BFDBFE",
-    fontSize: 14,
     fontWeight: "800",
   },
   photoViewerSafeArea: {
