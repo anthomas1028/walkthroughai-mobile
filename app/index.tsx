@@ -37,6 +37,8 @@ type Customer = {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  is_demo?: boolean;
+  is_read_only?: boolean;
 };
 
 type CustomerResponse = {
@@ -47,9 +49,16 @@ type CustomerResponse = {
   message?: string;
 };
 
+type DemoCustomerResponse = {
+  success: boolean;
+  demo_customer?: Customer | null;
+  error?: string;
+};
+
 export default function HomeScreen() {
   const { session, workspace } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [demoCustomer, setDemoCustomer] = useState<Customer | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null
   );
@@ -72,6 +81,22 @@ export default function HomeScreen() {
   const [state, setState] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [notes, setNotes] = useState("");
+
+  const loadDemoCustomer = useCallback(async () => {
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/demo-customer`);
+      const responseText = await response.text();
+      const data: DemoCustomerResponse = JSON.parse(responseText);
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Demo customer unavailable.");
+      }
+
+      setDemoCustomer(data.demo_customer || null);
+    } catch {
+      setDemoCustomer(null);
+    }
+  }, []);
 
   const loadCustomers = useCallback(
     async (showLoadingIndicator: boolean = true) => {
@@ -150,12 +175,14 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadCustomers();
-  }, [loadCustomers]);
+    loadDemoCustomer();
+  }, [loadCustomers, loadDemoCustomer]);
 
   useFocusEffect(
     useCallback(() => {
       loadCustomers(false);
-    }, [loadCustomers])
+      loadDemoCustomer();
+    }, [loadCustomers, loadDemoCustomer])
   );
 
   function resetNewCustomerForm() {
@@ -262,6 +289,22 @@ export default function HomeScreen() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function openDemoDashboard() {
+    if (!demoCustomer) {
+      return;
+    }
+
+    router.push({
+      pathname: "/customer-dashboard",
+      params: {
+        customerId: String(demoCustomer.id),
+        customerName: demoCustomer.company_name,
+        readOnly: "true",
+        demo: "true",
+      },
+    });
   }
 
   function startWalkthrough() {
@@ -538,6 +581,40 @@ export default function HomeScreen() {
               <Text style={styles.accountButtonText}>Account</Text>
             </Pressable>
           </View>
+
+          {demoCustomer && !showNewCustomerForm ? (
+            <View style={styles.demoSection}>
+              <View style={styles.demoSectionHeader}>
+                <Text style={styles.demoSectionTitle}>Demo Workspace</Text>
+                <View style={styles.demoBadge}>
+                  <Text style={styles.demoBadgeText}>VIEW ONLY</Text>
+                </View>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View Test Customer A demo dashboard"
+                onPress={openDemoDashboard}
+                style={({ pressed }) => [
+                  styles.demoCard,
+                  pressed && styles.customerCardPressed,
+                ]}
+              >
+                <View style={styles.demoIcon}>
+                  <Text style={styles.demoIconText}>D</Text>
+                </View>
+                <View style={styles.demoTextArea}>
+                  <Text style={styles.demoCustomerName}>
+                    {demoCustomer.company_name}
+                  </Text>
+                  <Text style={styles.demoDescription}>
+                    Explore a completed customer dashboard, walkthroughs, parts, and photos.
+                  </Text>
+                </View>
+                <Text style={styles.demoArrow}>›</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Customers</Text>
@@ -1032,6 +1109,90 @@ const styles = StyleSheet.create({
   accountButtonText: {
     color: "#A7C7F2",
     fontSize: 12,
+    fontWeight: "700",
+  },
+
+  demoSection: {
+    marginBottom: 20,
+  },
+
+  demoSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+
+  demoSectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  demoBadge: {
+    borderRadius: 999,
+    backgroundColor: "#17372E",
+    borderWidth: 1,
+    borderColor: "#2A6A55",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+
+  demoBadgeText: {
+    color: "#86EFAC",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+
+  demoCard: {
+    minHeight: 96,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#14243A",
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#31547D",
+    padding: 15,
+  },
+
+  demoIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#1D4ED8",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 13,
+  },
+
+  demoIconText: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: "900",
+  },
+
+  demoTextArea: {
+    flex: 1,
+    paddingRight: 8,
+  },
+
+  demoCustomerName: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  demoDescription: {
+    color: "#94A3B8",
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+
+  demoArrow: {
+    color: "#93C5FD",
+    fontSize: 28,
     fontWeight: "700",
   },
 

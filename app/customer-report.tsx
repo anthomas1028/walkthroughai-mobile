@@ -1,19 +1,24 @@
+import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
+  Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE_URL, apiFetch } from "../lib/api";
 
 
@@ -51,6 +56,13 @@ type ReportRecord = {
   is_confirmed?: boolean;
   was_edited?: boolean;
   email_sent?: boolean;
+  location?: string | null;
+  locations?: string[];
+  vendors?: string[] | string | null;
+  walkthrough_ids?: number[];
+  appearance_count?: number;
+  location_count?: number;
+  photo_url?: string | null;
 };
 
 type CustomerReport = {
@@ -59,6 +71,8 @@ type CustomerReport = {
   report_title: string;
   record_count: number;
   records: ReportRecord[];
+  available_vendors?: string[];
+  available_areas?: string[];
 };
 
 type ReportResponse = {
@@ -133,6 +147,7 @@ function confidenceText(value?: number): string {
 function buildQuery(
   reportType: string,
   vendor: string,
+  area: string,
   search: string,
   sort: string,
   days: number
@@ -145,6 +160,10 @@ function buildQuery(
 
   if (vendor) {
     query.set("vendor", vendor);
+  }
+
+  if (area) {
+    query.set("area", area);
   }
 
   if (search.trim()) {
@@ -168,6 +187,10 @@ export default function CustomerReportScreen() {
   const reportType =
     singleParam(params.reportType) || "walkthroughs";
   const selectedVendor = singleParam(params.vendor);
+  const isUniquePartsReport = reportType === "inventory";
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const safeAreaInsets = useSafeAreaInsets();
+  const viewerHeight = Math.max(windowHeight - 120, 320);
 
   const [report, setReport] = useState<CustomerReport | null>(null);
   const [searchDraft, setSearchDraft] = useState("");
@@ -177,6 +200,16 @@ export default function CustomerReportScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [inventoryVendor, setInventoryVendor] = useState(
+    isUniquePartsReport ? selectedVendor : ""
+  );
+  const [inventoryArea, setInventoryArea] = useState("");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [selectedPart, setSelectedPart] = useState<ReportRecord | null>(null);
+  const [photoViewer, setPhotoViewer] = useState<{ uri: string; label: string } | null>(null);
+  const photoViewerScrollRef = useRef<ScrollView>(null);
+  const lastPhotoViewerTapTime = useRef(0);
+  const photoViewerIsZoomed = useRef(false);
 
   const loadReport = useCallback(
     async (showLoading: boolean = true) => {
@@ -197,7 +230,8 @@ export default function CustomerReportScreen() {
       try {
         const query = buildQuery(
           reportType,
-          selectedVendor,
+          isUniquePartsReport ? inventoryVendor : selectedVendor,
+          isUniquePartsReport ? inventoryArea : "",
           appliedSearch,
           sort,
           days
@@ -238,6 +272,9 @@ export default function CustomerReportScreen() {
       days,
       reportType,
       selectedVendor,
+      inventoryVendor,
+      inventoryArea,
+      isUniquePartsReport,
       sort,
     ]
   );
@@ -282,7 +319,8 @@ export default function CustomerReportScreen() {
     try {
       const query = buildQuery(
         reportType,
-        selectedVendor,
+        isUniquePartsReport ? inventoryVendor : selectedVendor,
+        isUniquePartsReport ? inventoryArea : "",
         appliedSearch,
         sort,
         days
@@ -369,7 +407,117 @@ export default function CustomerReportScreen() {
     return cleanedPhotoName || "Inventory Photo";
   }
 
+  function openPartPhoto(item: ReportRecord) {
+    if (!item.photo_url) {
+      Alert.alert(
+        "Source photo unavailable",
+        "This part does not have a saved source photo."
+      );
+      return;
+    }
+
+    setPhotoViewer({
+      uri: item.photo_url,
+      label: `${item.description || displayPartNumber(item) || "Unique Part"} · ${item.photo || "Source Photo"}`,
+    });
+    lastPhotoViewerTapTime.current = 0;
+    photoViewerIsZoomed.current = false;
+  }
+
+  function closePhotoViewer() {
+    setPhotoViewer(null);
+    lastPhotoViewerTapTime.current = 0;
+    photoViewerIsZoomed.current = false;
+  }
+
+  function handlePhotoViewerTap() {
+    const now = Date.now();
+    const elapsed = now - lastPhotoViewerTapTime.current;
+    lastPhotoViewerTapTime.current = now;
+    if (elapsed <= 0 || elapsed > 320) return;
+
+    lastPhotoViewerTapTime.current = 0;
+    const shouldZoomIn = !photoViewerIsZoomed.current;
+    const zoomScale = shouldZoomIn ? 2.5 : 1;
+    const targetWidth = windowWidth / zoomScale;
+    const targetHeight = viewerHeight / zoomScale;
+
+    photoViewerScrollRef.current?.scrollResponderZoomTo({
+      x: shouldZoomIn ? (windowWidth - targetWidth) / 2 : 0,
+      y: shouldZoomIn ? (viewerHeight - targetHeight) / 2 : 0,
+      width: targetWidth,
+      height: targetHeight,
+      animated: true,
+    });
+    photoViewerIsZoomed.current = shouldZoomIn;
+  }
+
+  function displayPartNumber(item: ReportRecord): string {
+    return (
+      item.manufacturer_part_number ||
+      item.vendor_part_number ||
+      item.part_number ||
+      ""
+    );
+  }
+
   function renderRecord({ item }: { item: ReportRecord }) {
+    if (reportType === "inventory") {
+      const partNumber = displayPartNumber(item) || "No part number";
+      const locations = item.locations || (item.location ? [item.location] : []);
+      const vendorNames = Array.isArray(item.vendors)
+        ? item.vendors
+        : item.vendor
+          ? [item.vendor]
+          : [];
+
+      return (
+        <View style={styles.uniquePartCard}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setSelectedPart(item)}
+            style={({ pressed }) => [
+              styles.uniquePartMain,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <View style={styles.uniquePartText}>
+              <Text numberOfLines={2} style={styles.uniquePartTitle}>
+                {item.description || partNumber}
+              </Text>
+              <Text numberOfLines={1} style={styles.uniquePartNumber}>
+                {partNumber}
+              </Text>
+              <Text numberOfLines={1} style={styles.uniquePartMeta}>
+                {vendorNames.join(", ") || "Vendor not identified"}
+                {locations.length ? ` · ${locations.join(", ")}` : ""}
+              </Text>
+              <Text style={styles.uniquePartSubtext}>
+                Last seen {formatDate(item.last_seen_at)} · {item.walkthrough_count || 0} {item.walkthrough_count === 1 ? "walkthrough" : "walkthroughs"}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#93C5FD" />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={!item.photo_url}
+            onPress={() => openPartPhoto(item)}
+            style={({ pressed }) => [
+              styles.uniquePartPhotoButton,
+              !item.photo_url && styles.disabledButton,
+              pressed && item.photo_url && styles.buttonPressed,
+            ]}
+          >
+            <Ionicons name="image-outline" size={19} color={item.photo_url ? "#93C5FD" : "#52657D"} />
+            <Text style={[styles.uniquePartPhotoText, !item.photo_url && styles.uniquePartPhotoTextDisabled]}>
+              Latest Photo
+            </Text>
+          </Pressable>
+        </View>
+      );
+    }
+
     if (reportType === "vendors") {
       const vendorName = item.vendor || "Unknown vendor";
 
@@ -459,7 +607,7 @@ export default function CustomerReportScreen() {
       );
     }
 
-    const displayPartNumber =
+    const fallbackPartNumber =
       item.manufacturer_part_number ||
       item.vendor_part_number ||
       item.part_number ||
@@ -479,7 +627,7 @@ export default function CustomerReportScreen() {
             <Text style={styles.recordTitle}>
               {item.description || "Inventory item"}
             </Text>
-            <Text style={styles.partNumber}>{displayPartNumber}</Text>
+            <Text style={styles.partNumber}>{fallbackPartNumber}</Text>
           </View>
           <View style={styles.confidenceBadge}>
             <Text style={styles.confidenceText}>
@@ -548,57 +696,72 @@ export default function CustomerReportScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.filterRow}>
-          {DATE_OPTIONS.map((option, index) => (
-            <Pressable
-              key={option.value}
-              onPress={() => setDays(option.value)}
-              style={({ pressed }) => [
-                styles.chip,
-                index === DATE_OPTIONS.length - 1 && styles.lastChip,
-                days === option.value && styles.chipSelected,
-                pressed && styles.buttonPressed,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  days === option.value && styles.chipTextSelected,
-                ]}
+        {isUniquePartsReport ? (
+          <>
+            <View style={styles.inventoryFilterRow}>
+              <Pressable
+                onPress={() => setFilterModalVisible(true)}
+                style={({ pressed }) => [styles.inventoryFilterButton, pressed && styles.buttonPressed]}
               >
-                {option.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.filterRow}>
-          {SORT_OPTIONS.map((option, index) => (
-            <Pressable
-              key={option.value}
-              onPress={() => setSort(option.value)}
-              style={({ pressed }) => [
-                styles.chip,
-                index === SORT_OPTIONS.length - 1 && styles.lastChip,
-                sort === option.value && styles.chipSelected,
-                pressed && styles.buttonPressed,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  sort === option.value && styles.chipTextSelected,
-                ]}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+                <Ionicons name="options-outline" size={18} color="#BFDBFE" />
+                <Text style={styles.inventoryFilterButtonText}>
+                  {inventoryArea || inventoryVendor ? "Filters Applied" : "Area & Vendor"}
+                </Text>
+              </Pressable>
+              {(inventoryArea || inventoryVendor) ? (
+                <Pressable
+                  onPress={() => { setInventoryArea(""); setInventoryVendor(""); }}
+                  style={({ pressed }) => [styles.clearFiltersButton, pressed && styles.buttonPressed]}
+                >
+                  <Text style={styles.clearFiltersText}>Clear</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={styles.filterRow}>
+              {[
+                { value: "newest", label: "Last Seen" },
+                { value: "part_asc", label: "Part #" },
+                { value: "description_asc", label: "Description" },
+              ].map((option, index, values) => (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setSort(option.value)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    index === values.length - 1 && styles.lastChip,
+                    sort === option.value && styles.chipSelected,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={[styles.chipText, sort === option.value && styles.chipTextSelected]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.filterRow}>
+              {DATE_OPTIONS.map((option, index) => (
+                <Pressable key={option.value} onPress={() => setDays(option.value)} style={({ pressed }) => [styles.chip, index === DATE_OPTIONS.length - 1 && styles.lastChip, days === option.value && styles.chipSelected, pressed && styles.buttonPressed]}>
+                  <Text style={[styles.chipText, days === option.value && styles.chipTextSelected]}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.filterRow}>
+              {SORT_OPTIONS.map((option, index) => (
+                <Pressable key={option.value} onPress={() => setSort(option.value)} style={({ pressed }) => [styles.chip, index === SORT_OPTIONS.length - 1 && styles.lastChip, sort === option.value && styles.chipSelected, pressed && styles.buttonPressed]}>
+                  <Text style={[styles.chipText, sort === option.value && styles.chipTextSelected]}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
 
         <View style={styles.reportToolbar}>
           <Text style={styles.recordCount}>
-            {report?.record_count || 0} records
+            {report?.record_count || 0} {isUniquePartsReport ? ((report?.record_count || 0) === 1 ? "unique part" : "unique parts") : "records"}
           </Text>
           <Pressable
             disabled={isExporting}
@@ -652,6 +815,80 @@ export default function CustomerReportScreen() {
           />
         )}
       </View>
+
+      <Modal visible={filterModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setFilterModalVisible(false)}>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setFilterModalVisible(false)} style={styles.modalCloseButton}>
+              <Text style={styles.modalCloseText}>Done</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>Filter Unique Parts</Text>
+            <View style={styles.modalHeaderSpacer} />
+          </View>
+          <ScrollView contentContainerStyle={styles.filterModalContent}>
+            <Text style={styles.filterSectionTitle}>Area</Text>
+            {["", ...(report?.available_areas || [])].map((areaName) => (
+              <Pressable key={`area-${areaName || "all"}`} onPress={() => setInventoryArea(areaName)} style={styles.filterOption}>
+                <Text style={styles.filterOptionText}>{areaName || "All Areas"}</Text>
+                {inventoryArea === areaName ? <Ionicons name="checkmark-circle" size={22} color="#60A5FA" /> : null}
+              </Pressable>
+            ))}
+            <Text style={styles.filterSectionTitle}>Vendor</Text>
+            {["", ...(report?.available_vendors || [])].map((vendorName) => (
+              <Pressable key={`vendor-${vendorName || "all"}`} onPress={() => setInventoryVendor(vendorName)} style={styles.filterOption}>
+                <Text style={styles.filterOptionText}>{vendorName || "All Vendors"}</Text>
+                {inventoryVendor === vendorName ? <Ionicons name="checkmark-circle" size={22} color="#60A5FA" /> : null}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={selectedPart !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedPart(null)}>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setSelectedPart(null)} style={styles.modalCloseButton}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>Part Details</Text>
+            <View style={styles.modalHeaderSpacer} />
+          </View>
+          {selectedPart ? (
+            <ScrollView contentContainerStyle={styles.partDetailContent}>
+              <Text style={styles.partDetailTitle}>{selectedPart.description || displayPartNumber(selectedPart) || "Unique Part"}</Text>
+              {displayPartNumber(selectedPart) ? <Text style={styles.partDetailNumber}>{displayPartNumber(selectedPart)}</Text> : null}
+              <View style={styles.partDetailCard}>
+                <Text style={styles.partDetailLabel}>Vendor</Text><Text style={styles.partDetailValue}>{selectedPart.vendor || "Not identified"}</Text>
+                <Text style={styles.partDetailLabel}>Manufacturer</Text><Text style={styles.partDetailValue}>{selectedPart.manufacturer || "Not identified"}</Text>
+                <Text style={styles.partDetailLabel}>Size / Specification</Text><Text style={styles.partDetailValue}>{selectedPart.size_specification || "Not provided"}</Text>
+                <Text style={styles.partDetailLabel}>Package Quantity</Text><Text style={styles.partDetailValue}>{selectedPart.package_quantity || "Not provided"}</Text>
+                <Text style={styles.partDetailLabel}>Locations</Text><Text style={styles.partDetailValue}>{(selectedPart.locations || []).join(", ") || selectedPart.location || "Unassigned"}</Text>
+                <Text style={styles.partDetailLabel}>History</Text><Text style={styles.partDetailValue}>{selectedPart.walkthrough_count || 0} walkthroughs · {selectedPart.appearance_count || 0} appearances</Text>
+                <Text style={styles.partDetailLabel}>Last Seen</Text><Text style={styles.partDetailValue}>{formatDate(selectedPart.last_seen_at)}</Text>
+              </View>
+              <Pressable disabled={!selectedPart.photo_url} onPress={() => openPartPhoto(selectedPart)} style={({ pressed }) => [styles.viewPhotoButton, !selectedPart.photo_url && styles.disabledButton, pressed && selectedPart.photo_url && styles.buttonPressed]}>
+                <Ionicons name="image-outline" size={22} color="#FFFFFF" />
+                <Text style={styles.viewPhotoButtonText}>View Latest Source Photo</Text>
+              </Pressable>
+            </ScrollView>
+          ) : null}
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={photoViewer !== null} animationType="fade" presentationStyle="pageSheet" allowSwipeDismissal onDismiss={closePhotoViewer} onRequestClose={closePhotoViewer}>
+        <View style={styles.viewerSafeArea}>
+          <View style={[styles.viewerHeader, { minHeight: 68 + safeAreaInsets.top, paddingTop: safeAreaInsets.top }]}>
+            <Pressable onPress={closePhotoViewer} style={styles.viewerCloseButton}><Text style={styles.viewerCloseText}>Close</Text></Pressable>
+            <View style={styles.viewerTitleArea}><Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text><Text style={styles.viewerHint}>Pinch or double-tap to zoom</Text></View>
+            <View style={styles.viewerSpacer} />
+          </View>
+          {photoViewer ? (
+            <ScrollView ref={photoViewerScrollRef} style={styles.viewerScroll} contentContainerStyle={styles.viewerContent} centerContent minimumZoomScale={1} maximumZoomScale={5} onScroll={(event) => { const zoomScale = event.nativeEvent.zoomScale; if (typeof zoomScale === "number") photoViewerIsZoomed.current = zoomScale > 1.1; }} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
+              <Pressable onPress={handlePhotoViewerTap} style={{ width: windowWidth, height: viewerHeight }}><Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} /></Pressable>
+            </ScrollView>
+          ) : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -781,5 +1018,49 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
   emptyText: { color: "#8FA2BA", fontSize: 12, marginTop: 7, textAlign: "center" },
+  inventoryFilterRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  inventoryFilterButton: { minHeight: 40, flex: 1, borderRadius: 12, borderWidth: 1, borderColor: "#2B405B", backgroundColor: "#101B2C", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  inventoryFilterButtonText: { color: "#BFDBFE", fontSize: 12, fontWeight: "800" },
+  clearFiltersButton: { minHeight: 40, paddingHorizontal: 15, borderRadius: 12, backgroundColor: "#17263A", alignItems: "center", justifyContent: "center", marginLeft: 8 },
+  clearFiltersText: { color: "#93C5FD", fontSize: 12, fontWeight: "800" },
+  uniquePartCard: { borderRadius: 16, borderWidth: 1, borderColor: "#283C57", backgroundColor: "#111D2F", marginBottom: 9, overflow: "hidden" },
+  uniquePartMain: { flexDirection: "row", alignItems: "center", padding: 14 },
+  uniquePartText: { flex: 1, paddingRight: 10 },
+  uniquePartTitle: { color: "#FFFFFF", fontSize: 15, lineHeight: 20, fontWeight: "900" },
+  uniquePartNumber: { color: "#93C5FD", fontSize: 12, fontWeight: "700", marginTop: 4 },
+  uniquePartMeta: { color: "#C1D1E5", fontSize: 11, marginTop: 8 },
+  uniquePartSubtext: { color: "#71849D", fontSize: 10, marginTop: 5 },
+  uniquePartPhotoButton: { minHeight: 43, borderTopWidth: 1, borderTopColor: "#283C57", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: "#0F1A2A" },
+  uniquePartPhotoText: { color: "#BFDBFE", fontSize: 12, fontWeight: "800" },
+  uniquePartPhotoTextDisabled: { color: "#52657D" },
+  modalSafeArea: { flex: 1, backgroundColor: "#0B1220" },
+  modalHeader: { minHeight: 62, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#1C2D43", paddingHorizontal: 16 },
+  modalCloseButton: { width: 72, minHeight: 40, justifyContent: "center" },
+  modalCloseText: { color: "#93C5FD", fontSize: 14, fontWeight: "700" },
+  modalTitle: { flex: 1, color: "#FFFFFF", fontSize: 17, fontWeight: "800", textAlign: "center" },
+  modalHeaderSpacer: { width: 72 },
+  filterModalContent: { padding: 20, paddingBottom: 40 },
+  filterSectionTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "800", marginTop: 8, marginBottom: 10 },
+  filterOption: { minHeight: 52, borderBottomWidth: 1, borderBottomColor: "#26364F", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  filterOptionText: { color: "#D8E2F0", fontSize: 15 },
+  partDetailContent: { padding: 20, paddingBottom: 40 },
+  partDetailTitle: { color: "#FFFFFF", fontSize: 22, lineHeight: 29, fontWeight: "800" },
+  partDetailNumber: { color: "#93C5FD", fontSize: 16, fontWeight: "700", marginTop: 7 },
+  partDetailCard: { borderRadius: 18, borderWidth: 1, borderColor: "#26364F", backgroundColor: "#121C2D", padding: 16, marginTop: 18 },
+  partDetailLabel: { color: "#718096", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 12 },
+  partDetailValue: { color: "#D8E2F0", fontSize: 14, lineHeight: 20, marginTop: 4 },
+  viewPhotoButton: { minHeight: 54, borderRadius: 16, backgroundColor: "#2563EB", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 },
+  viewPhotoButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  viewerSafeArea: { flex: 1, backgroundColor: "#02070D" },
+  viewerHeader: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#1C2D43", paddingHorizontal: 14 },
+  viewerCloseButton: { width: 70, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#17283C" },
+  viewerCloseText: { color: "#BFD5EA", fontSize: 13, fontWeight: "900" },
+  viewerTitleArea: { flex: 1, alignItems: "center", paddingHorizontal: 10 },
+  viewerTitle: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+  viewerHint: { color: "#71849D", fontSize: 10, marginTop: 2 },
+  viewerSpacer: { width: 70 },
+  viewerScroll: { flex: 1 },
+  viewerContent: { flexGrow: 1, alignItems: "center", justifyContent: "center" },
+  viewerImage: { width: "100%", height: "100%" },
   buttonPressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
 });
