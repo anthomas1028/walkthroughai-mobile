@@ -36,6 +36,12 @@ type AccountDeletionResponse = {
   message?: string;
 };
 
+type FeedbackAdminAccessResponse = {
+  success: boolean;
+  is_feedback_admin?: boolean;
+  error?: string;
+};
+
 export default function AccountScreen() {
   const { session, workspace, refreshWorkspace, signOut } = useAuth();
 
@@ -60,6 +66,7 @@ export default function AccountScreen() {
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isFeedbackAdmin, setIsFeedbackAdmin] = useState(false);
 
   useEffect(() => {
     setWorkspaceName(workspace?.name || "");
@@ -67,6 +74,46 @@ export default function AccountScreen() {
 
   useEffect(() => {
     setEmailAddress(session?.user.email || "");
+  }, [session?.user.email]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFeedbackAdminAccess() {
+      try {
+        const response = await apiFetch(
+          `${API_BASE_URL}/api/admin/feedback/access`
+        );
+        const responseText = await response.text();
+        let data: FeedbackAdminAccessResponse;
+
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = { success: false };
+        }
+
+        if (isMounted) {
+          setIsFeedbackAdmin(
+            Boolean(
+              response.ok &&
+                data.success &&
+                data.is_feedback_admin
+            )
+          );
+        }
+      } catch {
+        if (isMounted) {
+          setIsFeedbackAdmin(false);
+        }
+      }
+    }
+
+    loadFeedbackAdminAccess();
+
+    return () => {
+      isMounted = false;
+    };
   }, [session?.user.email]);
 
   async function saveWorkspaceName() {
@@ -597,6 +644,26 @@ export default function AccountScreen() {
                 />
                 <Text style={styles.feedbackButtonText}>Open Help & Feedback</Text>
               </Pressable>
+
+              {isFeedbackAdmin ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/feedback-inbox")}
+                  style={({ pressed }) => [
+                    styles.inboxButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Ionicons
+                    color="#BFDBFE"
+                    name="mail-unread-outline"
+                    size={20}
+                  />
+                  <Text style={styles.inboxButtonText}>
+                    Open Feedback Inbox
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
 
             <View style={[styles.card, styles.dangerCard]}>
@@ -913,6 +980,25 @@ const styles = StyleSheet.create({
 
   feedbackButtonText: {
     color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  inboxButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: "#172B4D",
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+
+  inboxButtonText: {
+    color: "#BFDBFE",
     fontSize: 15,
     fontWeight: "800",
   },
