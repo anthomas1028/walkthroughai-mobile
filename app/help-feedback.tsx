@@ -91,6 +91,8 @@ export default function HelpFeedbackScreen() {
         success: boolean;
         message?: string;
         error?: string;
+        feedback_id?: number;
+        delivery_status?: "emailed" | "email_failed";
       };
 
       try {
@@ -109,9 +111,13 @@ export default function HelpFeedbackScreen() {
 
       setMessage("");
 
+      const wasEmailed = data.delivery_status === "emailed";
+
       Alert.alert(
-        "Feedback sent",
-        "Thank you. Your message was sent directly to WalkthroughAI support.",
+        wasEmailed ? "Feedback sent" : "Feedback saved",
+        wasEmailed
+          ? "Thank you. Your message was saved and sent to WalkthroughAI support."
+          : "Thank you. Your message was safely saved. Email delivery is delayed, but your feedback was not lost.",
         [
           {
             text: "Done",
@@ -253,7 +259,7 @@ export default function HelpFeedbackScreen() {
               </Pressable>
 
               <Text style={styles.emailNote}>
-                Your message will be sent directly to WalkthroughAI support.
+                Your message is saved first, then emailed to WalkthroughAI support.
               </Text>
             </View>
 
