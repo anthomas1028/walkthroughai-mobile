@@ -28,6 +28,9 @@ type SelectedPhoto = {
   fileName: string;
   mimeType: string;
   location: string;
+  width: number;
+  height: number;
+  fileSize: number;
 };
 
 type LocationGroup = {
@@ -50,18 +53,52 @@ type AreaModalState = {
 };
 
 const MAX_WALKTHROUGH_PHOTOS = 100;
-const MEASURED_SECONDS_PER_PHOTO = 2.8;
+const SIMPLE_PHOTO_SECONDS = 18;
+const STANDARD_PHOTO_SECONDS = 35;
+const DENSE_PHOTO_SECONDS = 70;
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function formatEstimatedProcessingTime(photoCount: number): string {
-  if (photoCount <= 0) return "Add photos to see an estimate";
+function estimatePhotoSeconds(photo: SelectedPhoto): number {
+  const width = Math.max(0, photo.width || 0);
+  const height = Math.max(0, photo.height || 0);
+  const megapixels = (width * height) / 1_000_000;
+  const fileSizeMb = Math.max(0, photo.fileSize || 0) / 1_000_000;
+  const longEdge = Math.max(width, height);
+  const shortEdge = Math.max(1, Math.min(width, height));
+  const aspectRatio = longEdge / shortEdge;
+
+  // This is a preflight estimate. Large, detailed images are more likely to
+  // contain many labels and trigger dense-rack processing. Smaller images are
+  // more likely to follow the faster single-item path.
+  const looksDense =
+    megapixels >= 3.5 ||
+    fileSizeMb >= 2.5 ||
+    (megapixels >= 2.5 && aspectRatio <= 1.6);
+
+  if (looksDense) return DENSE_PHOTO_SECONDS;
+
+  const looksStandard =
+    megapixels >= 1.5 ||
+    fileSizeMb >= 1.0 ||
+    longEdge >= 1800;
+
+  return looksStandard ? STANDARD_PHOTO_SECONDS : SIMPLE_PHOTO_SECONDS;
+}
+
+function formatEstimatedProcessingTime(photos: SelectedPhoto[]): string {
+  if (photos.length <= 0) return "Add photos to see an estimate";
 
   const estimatedSeconds = Math.max(
-    15,
-    Math.round(photoCount * MEASURED_SECONDS_PER_PHOTO)
+    SIMPLE_PHOTO_SECONDS,
+    Math.round(
+      photos.reduce(
+        (total, photo) => total + estimatePhotoSeconds(photo),
+        0
+      )
+    )
   );
 
   if (estimatedSeconds < 60) return `About ${estimatedSeconds} seconds`;
@@ -112,7 +149,7 @@ export default function WalkthroughPhotoScreen() {
     [groups]
   );
 
-  const estimatedProcessingTime = formatEstimatedProcessingTime(photos.length);
+  const estimatedProcessingTime = formatEstimatedProcessingTime(photos);
 
   function openCreateAreaModal() {
     setAreaNameDraft("");
@@ -274,6 +311,9 @@ export default function WalkthroughPhotoScreen() {
           `inventory-photo-${Date.now()}-${index + 1}.jpg`,
         mimeType: asset.mimeType ?? "image/jpeg",
         location: targetGroup.name,
+        width: asset.width ?? 0,
+        height: asset.height ?? 0,
+        fileSize: asset.fileSize ?? 0,
       }));
 
       return currentGroups.map((group) =>
