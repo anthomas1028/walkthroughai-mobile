@@ -1463,19 +1463,7 @@ export default function UploadScreen() {
             {
               text: "Done",
               onPress: () => {
-                if (customerId) {
-                  router.replace({
-                    pathname: "/history",
-                    params: {
-                      customerId,
-                      customerName:
-                        completedCustomer ||
-                        walkthroughName.trim(),
-                    },
-                  });
-                } else {
-                  router.replace("/");
-                }
+                router.replace("/");
               },
             },
             {

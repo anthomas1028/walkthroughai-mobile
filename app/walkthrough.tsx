@@ -53,62 +53,9 @@ type AreaModalState = {
 };
 
 const MAX_WALKTHROUGH_PHOTOS = 100;
-const SIMPLE_PHOTO_SECONDS = 18;
-const STANDARD_PHOTO_SECONDS = 35;
-const DENSE_PHOTO_SECONDS = 70;
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function estimatePhotoSeconds(photo: SelectedPhoto): number {
-  const width = Math.max(0, photo.width || 0);
-  const height = Math.max(0, photo.height || 0);
-  const megapixels = (width * height) / 1_000_000;
-  const fileSizeMb = Math.max(0, photo.fileSize || 0) / 1_000_000;
-  const longEdge = Math.max(width, height);
-  const shortEdge = Math.max(1, Math.min(width, height));
-  const aspectRatio = longEdge / shortEdge;
-
-  // This is a preflight estimate. Large, detailed images are more likely to
-  // contain many labels and trigger dense-rack processing. Smaller images are
-  // more likely to follow the faster single-item path.
-  const looksDense =
-    megapixels >= 3.5 ||
-    fileSizeMb >= 2.5 ||
-    (megapixels >= 2.5 && aspectRatio <= 1.6);
-
-  if (looksDense) return DENSE_PHOTO_SECONDS;
-
-  const looksStandard =
-    megapixels >= 1.5 ||
-    fileSizeMb >= 1.0 ||
-    longEdge >= 1800;
-
-  return looksStandard ? STANDARD_PHOTO_SECONDS : SIMPLE_PHOTO_SECONDS;
-}
-
-function formatEstimatedProcessingTime(photos: SelectedPhoto[]): string {
-  if (photos.length <= 0) return "Add photos to see an estimate";
-
-  const estimatedSeconds = Math.max(
-    SIMPLE_PHOTO_SECONDS,
-    Math.round(
-      photos.reduce(
-        (total, photo) => total + estimatePhotoSeconds(photo),
-        0
-      )
-    )
-  );
-
-  if (estimatedSeconds < 60) return `About ${estimatedSeconds} seconds`;
-
-  const minutes = Math.floor(estimatedSeconds / 60);
-  const seconds = estimatedSeconds % 60;
-
-  return seconds === 0
-    ? `About ${minutes} ${minutes === 1 ? "minute" : "minutes"}`
-    : `About ${minutes} min ${seconds} sec`;
 }
 
 export default function WalkthroughPhotoScreen() {
@@ -149,12 +96,31 @@ export default function WalkthroughPhotoScreen() {
     [groups]
   );
 
-  const estimatedProcessingTime = formatEstimatedProcessingTime(photos);
-
   function openCreateAreaModal() {
     setAreaNameDraft("");
     setAreaModal({ visible: true, mode: "create", groupId: null });
     setTimeout(() => areaInputRef.current?.focus(), 300);
+  }
+
+  function useUnassignedArea() {
+    setGroups((current) => {
+      const existingUnassigned = current.find(
+        (group) => group.name.trim().toLowerCase() === "unassigned"
+      );
+
+      if (existingUnassigned) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          id: createId("area"),
+          name: "Unassigned",
+          photos: [],
+        },
+      ];
+    });
   }
 
   function openRenameAreaModal(group: LocationGroup) {
@@ -548,6 +514,21 @@ export default function WalkthroughPhotoScreen() {
                 <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
                 <Text style={styles.addFirstAreaButtonText}>Add First Area</Text>
               </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Continue without assigning an area"
+                onPress={useUnassignedArea}
+                style={({ pressed }) => [
+                  styles.unassignedAreaButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Ionicons name="remove-circle-outline" size={20} color="#BFDBFE" />
+                <Text style={styles.unassignedAreaButtonText}>
+                  Continue Without Area
+                </Text>
+              </Pressable>
             </View>
           ) : (
             <View style={styles.areaList}>
@@ -677,7 +658,6 @@ export default function WalkthroughPhotoScreen() {
               <Text style={styles.summaryMain}>
                 {photos.length} {photos.length === 1 ? "photo" : "photos"} across {groups.length} {groups.length === 1 ? "area" : "areas"}
               </Text>
-              <Text style={styles.summarySub}>{estimatedProcessingTime}</Text>
             </View>
           </View>
         </ScrollView>
@@ -991,6 +971,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
   },
+  unassignedAreaButton: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+    backgroundColor: "#14263D",
+    borderWidth: 1,
+    borderColor: "#2B4A6A",
+    paddingHorizontal: 20,
+    marginTop: 12,
+    gap: 8,
+  },
+  unassignedAreaButtonText: {
+    color: "#BFDBFE",
+    fontSize: 15,
+    fontWeight: "800",
+  },
   areaList: {
     gap: 14,
   },
@@ -1134,11 +1132,6 @@ const styles = StyleSheet.create({
     color: "#DDF9EE",
     fontSize: 14,
     fontWeight: "800",
-  },
-  summarySub: {
-    color: "#7CE3B8",
-    fontSize: 12,
-    marginTop: 4,
   },
   footer: {
     paddingHorizontal: 20,
