@@ -712,6 +712,9 @@ export default function UploadScreen() {
   const [sourcePhotoViewer, setSourcePhotoViewer] =
     useState<SourcePhotoViewer | null>(null);
 
+  const [footerHeight, setFooterHeight] =
+    useState(0);
+
   const scrollViewRef = useRef<ScrollView>(null);
   const photoViewerScrollRef =
     useRef<ScrollView>(null);
@@ -1353,7 +1356,7 @@ export default function UploadScreen() {
 
   async function finalizeWalkthrough(
     sendEmail: boolean
-  ) {
+  ): Promise<string | null> {
     const cleanedRecipient =
       recipientEmail.trim();
 
@@ -1364,7 +1367,7 @@ export default function UploadScreen() {
           remainingCount === 1 ? "item" : "items"
         } before finalizing.`
       );
-      return;
+      return null;
     }
 
     if (sendEmail && !cleanedRecipient) {
@@ -1372,7 +1375,7 @@ export default function UploadScreen() {
         "Recipient email required",
         "Enter the email address that should receive the finalized workbook."
       );
-      return;
+      return null;
     }
 
     if (
@@ -1383,7 +1386,7 @@ export default function UploadScreen() {
         "Invalid email address",
         "Enter a complete email address, such as name@example.com."
       );
-      return;
+      return null;
     }
 
     try {
@@ -1506,6 +1509,8 @@ export default function UploadScreen() {
         setEmailSent(false);
         setEmailedRecipient("");
       }
+
+      return data.download_url ?? null;
     } catch (error) {
       console.error(
         "Finalize walkthrough error:",
@@ -1525,6 +1530,8 @@ export default function UploadScreen() {
         "Finalization failed",
         message
       );
+
+      return null;
     } finally {
       setIsFinalizing(false);
     }
@@ -1652,6 +1659,20 @@ export default function UploadScreen() {
     }
   }
 
+  async function viewReportImmediately() {
+    if (correctedWorkbookUrl) {
+      await openDownloadAddress(correctedWorkbookUrl);
+      return;
+    }
+
+    const downloadUrl =
+      await finalizeWalkthrough(false);
+
+    if (downloadUrl) {
+      await openDownloadAddress(downloadUrl);
+    }
+  }
+
   async function openCorrectedWorkbook() {
     if (!correctedWorkbookUrl) {
       Alert.alert(
@@ -1738,9 +1759,15 @@ export default function UploadScreen() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          contentContainerStyle={
-            styles.scrollContent
-          }
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom:
+                footerHeight > 0
+                  ? footerHeight + 24
+                  : 280,
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -2046,181 +2073,107 @@ export default function UploadScreen() {
             !isProcessing &&
             !isFinalizing && (
               <View style={styles.resultsSection}>
-                <View
-                  style={styles.completedCard}
-                >
-                  <View
-                    style={styles.completedIcon}
-                  >
-                    <Text
-                      style={
-                        styles.completedIconText
-                      }
-                    >
-                      ✓
-                    </Text>
-                  </View>
+                {!allResultsConfirmed ? (
+                  <>
+                    <View style={styles.completedCard}>
+                      <View style={styles.completedIcon}>
+                        <Text style={styles.completedIconText}>✓</Text>
+                      </View>
 
-                  <Text
-                    style={
-                      styles.completedTitle
-                    }
-                  >
-                    Recognition Complete
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.completedText
-                    }
-                  >
-                    {results.length} inventory{" "}
-                    {results.length === 1
-                      ? "result was"
-                      : "results were"}{" "}
-                    identified for{" "}
-                    {completedCustomer ||
-                      "Mobile Walkthrough"}.
-                  </Text>
-                </View>
-
-                <View style={styles.aiDisclaimerCard}>
-                  <Text style={styles.aiDisclaimerIcon}>
-                    i
-                  </Text>
-
-                  <Text style={styles.aiDisclaimerText}>
-                    Review each item before confirming or finalizing.
-                  </Text>
-                </View>
-
-                {emailSent && (
-                  <View
-                    style={styles.emailSuccessCard}
-                  >
-                    <Text
-                      style={
-                        styles.emailSuccessIcon
-                      }
-                    >
-                      ✉
-                    </Text>
-
-                    <View
-                      style={
-                        styles.emailSuccessText
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.emailSuccessTitle
-                        }
-                      >
-                        Workbook emailed
+                      <Text style={styles.completedTitle}>
+                        Recognition Complete
                       </Text>
 
-                      <Text
-                        style={
-                          styles.emailSuccessDescription
-                        }
-                      >
-                        The corrected workbook was
-                        sent to {emailedRecipient}.
+                      <Text style={styles.completedText}>
+                        {results.length} inventory{" "}
+                        {results.length === 1
+                          ? "result was"
+                          : "results were"}{" "}
+                        identified for{" "}
+                        {completedCustomer || "Mobile Walkthrough"}.
+                      </Text>
+                    </View>
+
+                    <View style={styles.aiDisclaimerCard}>
+                      <Text style={styles.aiDisclaimerIcon}>i</Text>
+
+                      <Text style={styles.aiDisclaimerText}>
+                        Review each item before confirming or finalizing.
+                      </Text>
+                    </View>
+
+                    <View style={styles.reviewProgressCard}>
+                      <View style={styles.reviewProgressHeader}>
+                        <View>
+                          <Text style={styles.reviewProgressTitle}>
+                            Review progress
+                          </Text>
+
+                          <Text style={styles.reviewProgressText}>
+                            {confirmedCount} of {results.length} items confirmed
+                          </Text>
+                        </View>
+
+                        <View style={styles.progressBadge}>
+                          <Text style={styles.progressBadgeText}>
+                            {confirmedCount}/{results.length}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.progressTrack}>
+                        <View
+                          style={[
+                            styles.progressFill,
+                            { width: `${progressPercent}%` },
+                          ]}
+                        />
+                      </View>
+
+                      <View style={styles.reviewQuickActions}>
+                        <Pressable
+                          onPress={jumpToFirstUnconfirmed}
+                          style={({ pressed }) => [
+                            styles.jumpButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          <Text style={styles.jumpButtonText}>
+                            Jump to First Unconfirmed
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={confirmAllResults}
+                          style={({ pressed }) => [
+                            styles.confirmAllButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          <Text style={styles.confirmAllButtonText}>
+                            Confirm All
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.readySummaryCard}>
+                    <View style={styles.readySummaryCheck}>
+                      <Text style={styles.readySummaryCheckText}>✓</Text>
+                    </View>
+
+                    <View style={styles.readySummaryTextArea}>
+                      <Text style={styles.readySummaryTitle}>
+                        {results.length} {results.length === 1 ? "item" : "items"} ready
+                      </Text>
+
+                      <Text style={styles.readySummarySubtitle}>
+                        {completedCustomer || "Mobile Walkthrough"}
                       </Text>
                     </View>
                   </View>
                 )}
-
-                <View
-                  style={styles.reviewProgressCard}
-                >
-                  <View
-                    style={
-                      styles.reviewProgressHeader
-                    }
-                  >
-                    <View>
-                      <Text
-                        style={
-                          styles.reviewProgressTitle
-                        }
-                      >
-                        Review progress
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.reviewProgressText
-                        }
-                      >
-                        {confirmedCount} of{" "}
-                        {results.length} items
-                        confirmed
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.progressBadge,
-                        allResultsConfirmed &&
-                          styles.progressBadgeComplete,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.progressBadgeText,
-                          allResultsConfirmed &&
-                            styles.progressBadgeTextComplete,
-                        ]}
-                      >
-                        {allResultsConfirmed
-                          ? "Complete"
-                          : `${confirmedCount}/${results.length}`}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View
-                    style={styles.progressTrack}
-                  >
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${progressPercent}%`,
-                        },
-                      ]}
-                    />
-                  </View>
-
-                  {!allResultsConfirmed && (
-                    <View style={styles.reviewQuickActions}>
-                      <Pressable
-                        onPress={jumpToFirstUnconfirmed}
-                        style={({ pressed }) => [
-                          styles.jumpButton,
-                          pressed && styles.buttonPressed,
-                        ]}
-                      >
-                        <Text style={styles.jumpButtonText}>
-                          Jump to First Unconfirmed
-                        </Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={confirmAllResults}
-                        style={({ pressed }) => [
-                          styles.confirmAllButton,
-                          pressed && styles.buttonPressed,
-                        ]}
-                      >
-                        <Text style={styles.confirmAllButtonText}>
-                          Confirm All
-                        </Text>
-                      </Pressable>
-                    </View>
-                  )}
-                </View>
 
                 <View
                   onLayout={(event) => {
@@ -3008,7 +2961,22 @@ export default function UploadScreen() {
             )}
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View
+          onLayout={(event) => {
+            setFooterHeight(
+              Math.ceil(event.nativeEvent.layout.height)
+            );
+          }}
+          style={[
+            styles.footer,
+            {
+              paddingBottom: Math.max(
+                safeAreaInsets.bottom,
+                10
+              ),
+            },
+          ]}
+        >
           {!hasResults ? (
             <Pressable
               disabled={
@@ -3067,7 +3035,7 @@ export default function UploadScreen() {
             </Pressable>
           ) : (
             <>
-              {!correctedWorkbookUrl && (
+              {!correctedWorkbookUrl && !allResultsConfirmed && (
                 <View style={styles.compactReviewStatus}>
                   <View style={styles.compactReviewHeader}>
                     <Text style={styles.compactReviewTitle}>
@@ -3098,23 +3066,17 @@ export default function UploadScreen() {
                   <View style={styles.finalizeHeaderRow}>
                     <View style={styles.finalizeTitleArea}>
                       <Text style={styles.finalizeTitle}>
-                        Finalize walkthrough
-                      </Text>
-                      <Text style={styles.finalizeSubtitle}>
-                        View the report or email a copy
+                        Review complete
                       </Text>
                     </View>
 
-                    <View style={styles.readyBadge}>
-                      <Text style={styles.readyBadgeText}>Ready</Text>
-                    </View>
                   </View>
 
                   <Pressable
                     disabled={isFinalizing}
-                    onPress={() =>
-                      finalizeWalkthrough(false)
-                    }
+                    onPress={() => {
+                      void viewReportImmediately();
+                    }}
                     style={({ pressed }) => [
                       styles.viewReportButton,
                       isFinalizing &&
@@ -3140,13 +3102,6 @@ export default function UploadScreen() {
                     )}
                   </Pressable>
 
-                  <View style={styles.reportChoiceDivider}>
-                    <View style={styles.reportChoiceLine} />
-                    <Text style={styles.reportChoiceText}>
-                      OR EMAIL A COPY
-                    </Text>
-                    <View style={styles.reportChoiceLine} />
-                  </View>
 
                   <View style={styles.compactEmailRow}>
                     <TextInput
@@ -3228,71 +3183,95 @@ export default function UploadScreen() {
                     />
                   ) : (
                     <Text style={styles.discardButtonText}>
-                      Cancel — Don’t Publish Results
+                      Cancel walkthrough
                     </Text>
                   )}
                 </Pressable>
               )}
 
               {correctedWorkbookUrl && (
-                <Pressable
-                  onPress={
-                    openCorrectedWorkbook
-                  }
-                  style={({ pressed }) => [
-                    styles.correctedButton,
-                    pressed &&
-                      styles.buttonPressed,
-                  ]}
-                >
-                  <Text
-                    style={
-                      styles.correctedButtonText
-                    }
-                  >
-                    Open Corrected Workbook
-                  </Text>
-                </Pressable>
-              )}
+                <View style={styles.completionActionsCard}>
+                  <View style={styles.completionActionsHeader}>
+                    <View style={styles.completionCheck}>
+                      <Text style={styles.completionCheckText}>✓</Text>
+                    </View>
 
-              {emailSent && originalWorkbookUrl && (
-                <Pressable
-                  onPress={
-                    openOriginalWorkbook
-                  }
-                  style={({ pressed }) => [
-                    styles.secondaryButton,
-                    pressed &&
-                      styles.buttonPressed,
-                  ]}
-                >
-                  <Text
-                    style={
-                      styles.secondaryButtonText
-                    }
-                  >
-                    Open Original AI Workbook
-                  </Text>
-                </Pressable>
-              )}
+                    <View style={styles.completionActionsTitleArea}>
+                      <Text style={styles.completionActionsTitle}>
+                        Walkthrough Complete
+                      </Text>
 
-              {correctedWorkbookUrl && (
-                <Pressable
-                onPress={startOver}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed &&
-                    styles.buttonPressed,
-                ]}
-              >
-                <Text
-                  style={
-                    styles.secondaryButtonText
-                  }
-                >
-                  Start New Walkthrough
-                </Text>
-              </Pressable>
+                      <Text style={styles.completionActionsSubtitle}>
+                        Your finalized report is ready.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    onPress={openCorrectedWorkbook}
+                    style={({ pressed }) => [
+                      styles.completionViewButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Text style={styles.completionViewButtonText}>
+                      View Report
+                    </Text>
+                  </Pressable>
+
+                  <View style={styles.completionEmailRow}>
+                    <TextInput
+                      value={recipientEmail}
+                      onChangeText={(value) => {
+                        setRecipientEmail(value);
+                        setEmailSent(false);
+                        setEmailedRecipient("");
+                      }}
+                      editable={!isFinalizing}
+                      placeholder="customer@example.com"
+                      placeholderTextColor="#657891"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      style={styles.completionEmailInput}
+                    />
+
+                    <Pressable
+                      disabled={isFinalizing}
+                      onPress={() => finalizeWalkthrough(true)}
+                      style={({ pressed }) => [
+                        styles.completionEmailButton,
+                        isFinalizing && styles.primaryButtonDisabled,
+                        pressed &&
+                          !isFinalizing &&
+                          styles.buttonPressed,
+                      ]}
+                    >
+                      {isFinalizing ? (
+                        <ActivityIndicator
+                          size="small"
+                          color="#FFFFFF"
+                        />
+                      ) : (
+                        <Text style={styles.completionEmailButtonText}>
+                          Email Report
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+
+                  <Pressable
+                    onPress={startOver}
+                    style={({ pressed }) => [
+                      styles.completionDoneButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Text style={styles.completionDoneButtonText}>
+                      Done
+                    </Text>
+                  </Pressable>
+                </View>
               )}
             </>
           )}
@@ -4009,6 +3988,49 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
   },
 
+  readySummaryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#2A6B57",
+    backgroundColor: "#102A24",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+
+  readySummaryCheck: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#39D495",
+    marginRight: 12,
+  },
+
+  readySummaryCheckText: {
+    color: "#082018",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+
+  readySummaryTextArea: {
+    flex: 1,
+  },
+
+  readySummaryTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  readySummarySubtitle: {
+    color: "#9FC6B9",
+    fontSize: 13,
+    marginTop: 3,
+  },
+
   completedCard: {
     alignItems: "center",
     borderRadius: 20,
@@ -4635,9 +4657,14 @@ const styles = StyleSheet.create({
   },
 
   footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 20,
+    elevation: 20,
     paddingHorizontal: 20,
-    paddingTop: 9,
-    paddingBottom: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#1C2D43",
     backgroundColor: "#071421",
@@ -4696,6 +4723,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     backgroundColor: "#176347",
+    marginBottom: 14,
   },
 
   viewReportButtonText: {
@@ -4757,6 +4785,118 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  completionActionsCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#285D4B",
+    backgroundColor: "#102A24",
+    padding: 16,
+  },
+
+  completionActionsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+
+  completionCheck: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1B6B4E",
+    marginRight: 12,
+  },
+
+  completionCheckText: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "900",
+  },
+
+  completionActionsTitleArea: {
+    flex: 1,
+  },
+
+  completionActionsTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  completionActionsSubtitle: {
+    color: "#9CCBB9",
+    fontSize: 12,
+    marginTop: 3,
+  },
+
+  completionViewButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: "#176347",
+  },
+
+  completionViewButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  completionEmailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+
+  completionEmailInput: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#365B52",
+    backgroundColor: "#0E201D",
+    color: "#FFFFFF",
+    fontSize: 14,
+    paddingHorizontal: 12,
+    marginRight: 9,
+  },
+
+  completionEmailButton: {
+    minWidth: 112,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "#2D6DEB",
+    paddingHorizontal: 14,
+  },
+
+  completionEmailButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  completionDoneButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#466D63",
+    backgroundColor: "#17342D",
+    marginTop: 10,
+  },
+
+  completionDoneButtonText: {
+    color: "#DDF9EE",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
   primaryButton: {
     minHeight: 52,
     alignItems: "center",
@@ -4776,22 +4916,20 @@ const styles = StyleSheet.create({
   },
 
   discardButton: {
-    minHeight: 46,
+    alignSelf: "center",
+    minHeight: 40,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#7C3E49",
-    backgroundColor: "#2A1720",
-    marginTop: 10,
-    paddingHorizontal: 14,
+    marginTop: 6,
+    paddingHorizontal: 18,
   },
 
   discardButtonText: {
-    color: "#FFB6B6",
-    fontSize: 14,
+    color: "#EF98A3",
+    fontSize: 13,
     fontWeight: "800",
     textAlign: "center",
+    textDecorationLine: "underline",
   },
 
   correctedButton: {
