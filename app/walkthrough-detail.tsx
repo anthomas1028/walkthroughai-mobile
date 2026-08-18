@@ -145,6 +145,7 @@ export default function WalkthroughDetailScreen() {
   const photoViewerScrollRef = useRef<ScrollView>(null);
   const lastPhotoViewerTapTime = useRef(0);
   const photoViewerIsZoomed = useRef(false);
+  const pendingPhotoViewer = useRef<PhotoViewer | null>(null);
 
   const loadWalkthrough = useCallback(async (showLoading = true) => {
     if (!walkthroughId) {
@@ -241,12 +242,36 @@ export default function WalkthroughDetailScreen() {
       Alert.alert("Source photo unavailable", "A saved source-photo link was not returned for this item.");
       return;
     }
-    setPhotoViewer({
+
+    const nextPhotoViewer: PhotoViewer = {
       uri: item.photo_url,
       label: `${item.location?.trim() || "Unassigned"} · ${item.photo || "Source Photo"}`,
-    });
+    };
+
     lastPhotoViewerTapTime.current = 0;
     photoViewerIsZoomed.current = false;
+
+    if (selectedItem !== null) {
+      pendingPhotoViewer.current = nextPhotoViewer;
+      setSelectedItem(null);
+      return;
+    }
+
+    setPhotoViewer(nextPhotoViewer);
+  }
+
+  function handlePartDetailsDismiss() {
+    const queuedPhotoViewer = pendingPhotoViewer.current;
+
+    if (!queuedPhotoViewer) {
+      return;
+    }
+
+    pendingPhotoViewer.current = null;
+
+    requestAnimationFrame(() => {
+      setPhotoViewer(queuedPhotoViewer);
+    });
   }
 
   function closePhotoViewer() {
@@ -473,6 +498,7 @@ export default function WalkthroughDetailScreen() {
         visible={selectedItem !== null}
         animationType="slide"
         presentationStyle="pageSheet"
+        onDismiss={handlePartDetailsDismiss}
         onRequestClose={() => setSelectedItem(null)}
       >
         <SafeAreaView style={styles.modalSafeArea}>
