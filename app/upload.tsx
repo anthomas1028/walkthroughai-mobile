@@ -22,7 +22,11 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { API_BASE_URL, apiFetch } from "../lib/api";
+import {
+  API_BASE_URL,
+  apiFetch,
+  getCurrentUserEmail,
+} from "../lib/api";
 
 
 const UPLOAD_API_URL = `${API_BASE_URL}/api/upload`;
@@ -603,7 +607,39 @@ export default function UploadScreen() {
     );
 
   const [recipientEmail, setRecipientEmail] =
-    useState(selectedCustomerEmail);
+    useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRecipientEmail() {
+      try {
+        const accountEmail =
+          await getCurrentUserEmail();
+
+        if (isMounted) {
+          setRecipientEmail(
+            accountEmail || selectedCustomerEmail
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "Could not load signed-in user email:",
+          error
+        );
+
+        if (isMounted) {
+          setRecipientEmail(selectedCustomerEmail);
+        }
+      }
+    }
+
+    void loadRecipientEmail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCustomerEmail]);
 
   const [isProcessing, setIsProcessing] =
     useState(false);
@@ -1360,16 +1396,6 @@ export default function UploadScreen() {
     const cleanedRecipient =
       recipientEmail.trim();
 
-    if (!allResultsConfirmed) {
-      Alert.alert(
-        "Review not finished",
-        `Confirm the remaining ${remainingCount} ${
-          remainingCount === 1 ? "item" : "items"
-        } before finalizing.`
-      );
-      return null;
-    }
-
     if (sendEmail && !cleanedRecipient) {
       Alert.alert(
         "Recipient email required",
@@ -1437,13 +1463,7 @@ export default function UploadScreen() {
         ? data.results.map(normalizeResult)
         : results;
 
-      setResults(
-        finalizedResults.map((result) => ({
-          ...result,
-          is_confirmed: true,
-          review_needed: false,
-        }))
-      );
+      setResults(finalizedResults);
 
       setCorrectedWorkbookUrl(
         data.download_url ?? null
@@ -1535,6 +1555,35 @@ export default function UploadScreen() {
     } finally {
       setIsFinalizing(false);
     }
+  }
+
+  function finishWithReviewItems() {
+    if (remainingCount <= 0 || isFinalizing || isDiscarding) {
+      return;
+    }
+
+    Alert.alert(
+      "Finish with review items?",
+      `${remainingCount} ${
+        remainingCount === 1 ? "item is" : "items are"
+      } still unconfirmed. ${
+        remainingCount === 1 ? "It" : "They"
+      } will be saved to Review Items so you can resolve ${
+        remainingCount === 1 ? "it" : "them"
+      } later.`,
+      [
+        {
+          text: "Keep Reviewing",
+          style: "cancel",
+        },
+        {
+          text: "Finish Walkthrough",
+          onPress: () => {
+            void finalizeWalkthrough(false);
+          },
+        },
+      ]
+    );
   }
 
   async function discardWalkthrough() {
@@ -2098,7 +2147,7 @@ export default function UploadScreen() {
                       <Text style={styles.aiDisclaimerIcon}>i</Text>
 
                       <Text style={styles.aiDisclaimerText}>
-                        Review each item before confirming or finalizing.
+                        Confirm items you trust, or finish with unresolved items saved for later review.
                       </Text>
                     </View>
 
@@ -3143,21 +3192,47 @@ export default function UploadScreen() {
                   </View>
                 )
               ) : (
-                <Pressable
-                  disabled={isFinalizing}
-                  onPress={confirmNextItem}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    isFinalizing && styles.primaryButtonDisabled,
-                    pressed && !isFinalizing && styles.buttonPressed,
-                  ]}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {`Confirm Item ${
-                      firstUnconfirmedIndex + 1
-                    } of ${results.length}`}
-                  </Text>
-                </Pressable>
+                <View style={styles.unconfirmedFooterActions}>
+                  <Pressable
+                    disabled={isFinalizing}
+                    onPress={confirmNextItem}
+                    style={({ pressed }) => [
+                      styles.primaryButton,
+                      isFinalizing && styles.primaryButtonDisabled,
+                      pressed && !isFinalizing && styles.buttonPressed,
+                    ]}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {`Confirm Item ${
+                        firstUnconfirmedIndex + 1
+                      } of ${results.length}`}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Finish walkthrough with ${remainingCount} review ${
+                      remainingCount === 1 ? "item" : "items"
+                    }`}
+                    disabled={isFinalizing || isDiscarding}
+                    onPress={finishWithReviewItems}
+                    style={({ pressed }) => [
+                      styles.finishWithReviewButton,
+                      (isFinalizing || isDiscarding) &&
+                        styles.disabledButton,
+                      pressed &&
+                        !isFinalizing &&
+                        !isDiscarding &&
+                        styles.buttonPressed,
+                    ]}
+                  >
+                    <Text style={styles.finishWithReviewButtonText}>
+                      {`Finish with ${remainingCount} Review ${
+                        remainingCount === 1 ? "Item" : "Items"
+                      }`}
+                    </Text>
+                  </Pressable>
+                </View>
               )}
 
               {!correctedWorkbookUrl && (
@@ -4969,6 +5044,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  unconfirmedFooterActions: {
+    gap: 10,
+  },
+  finishWithReviewButton: {
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#31547D",
+    backgroundColor: "#14243A",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  finishWithReviewButtonText: {
+    color: "#93C5FD",
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+  },
   footerNote: {
     color: "#71849D",
     fontSize: 12,

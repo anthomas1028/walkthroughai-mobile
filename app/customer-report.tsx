@@ -50,6 +50,8 @@ type ReportRecord = {
   description?: string | null;
   size_specification?: string | null;
   package_quantity?: string | null;
+  label_text?: string | null;
+  notes?: string | null;
   confidence?: number;
   review_needed?: boolean;
   is_confirmed?: boolean;
@@ -85,6 +87,17 @@ type ExportResponse = {
   success: boolean;
   workbook_file?: string;
   download_url?: string;
+  error?: string;
+  details?: string;
+};
+
+type ReviewItemMutationResponse = {
+  success: boolean;
+  item?: ReportRecord;
+  deleted_item_id?: number;
+  walkthrough_id?: number;
+  download_url?: string;
+  message?: string;
   error?: string;
   details?: string;
 };
@@ -187,6 +200,7 @@ export default function CustomerReportScreen() {
     singleParam(params.reportType) || "walkthroughs";
   const selectedVendor = singleParam(params.vendor);
   const isUniquePartsReport = reportType === "inventory";
+  const isReviewReport = reportType === "review";
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
   const viewerHeight = Math.max(windowHeight - 120, 320);
@@ -211,6 +225,10 @@ export default function CustomerReportScreen() {
   const [availableInventoryAreas, setAvailableInventoryAreas] = useState<string[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedPart, setSelectedPart] = useState<ReportRecord | null>(null);
+  const [selectedReviewItem, setSelectedReviewItem] = useState<ReportRecord | null>(null);
+  const [reviewDraft, setReviewDraft] = useState<ReportRecord | null>(null);
+  const [isSavingReviewItem, setIsSavingReviewItem] = useState(false);
+  const [isRemovingReviewItem, setIsRemovingReviewItem] = useState(false);
   const [photoViewer, setPhotoViewer] = useState<{ uri: string; label: string } | null>(null);
   const photoViewerScrollRef = useRef<ScrollView>(null);
   const lastPhotoViewerTapTime = useRef(0);
@@ -440,6 +458,211 @@ export default function CustomerReportScreen() {
     photoViewerIsZoomed.current = false;
   }
 
+  function openReviewItem(item: ReportRecord) {
+    setSelectedReviewItem(item);
+    setReviewDraft({ ...item });
+  }
+
+  function closeReviewItem() {
+    if (isSavingReviewItem || isRemovingReviewItem) {
+      return;
+    }
+
+    setSelectedReviewItem(null);
+    setReviewDraft(null);
+  }
+
+  function updateReviewDraft(field: keyof ReportRecord, value: string) {
+    setReviewDraft((current) =>
+      current
+        ? {
+            ...current,
+            [field]: value,
+          }
+        : current
+    );
+  }
+
+  async function mutateReviewItem(
+    item: ReportRecord,
+    body: Record<string, unknown>
+  ) {
+    if (!item.id) {
+      throw new Error("This review item does not have a saved inventory ID.");
+    }
+
+    const response = await apiFetch(
+      `${API_BASE_URL}/api/walkthrough-items/${item.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    const text = await response.text();
+    let data: ReviewItemMutationResponse;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("The server returned an unreadable review response.");
+    }
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.error || data.details || "The inventory item could not be updated."
+      );
+    }
+
+    return data;
+  }
+
+  async function confirmReviewItem() {
+    if (!selectedReviewItem) {
+      return;
+    }
+
+    try {
+      setIsSavingReviewItem(true);
+
+      await mutateReviewItem(selectedReviewItem, {
+        is_confirmed: true,
+        review_needed: false,
+        was_edited: selectedReviewItem.was_edited || false,
+      });
+
+      setSelectedReviewItem(null);
+      setReviewDraft(null);
+      await loadReport(false);
+    } catch (error) {
+      Alert.alert(
+        "Unable to confirm item",
+        error instanceof Error
+          ? error.message
+          : "The inventory item could not be confirmed."
+      );
+    } finally {
+      setIsSavingReviewItem(false);
+    }
+  }
+
+  async function saveEditedReviewItem() {
+    if (!selectedReviewItem || !reviewDraft) {
+      return;
+    }
+
+    try {
+      setIsSavingReviewItem(true);
+
+      await mutateReviewItem(selectedReviewItem, {
+        location: reviewDraft.location || "Unassigned",
+        vendor: reviewDraft.vendor || "",
+        manufacturer: reviewDraft.manufacturer || "",
+        manufacturer_part_number:
+          reviewDraft.manufacturer_part_number || "",
+        vendor_part_number: reviewDraft.vendor_part_number || "",
+        part_number: reviewDraft.part_number || "",
+        description: reviewDraft.description || "",
+        size_specification: reviewDraft.size_specification || "",
+        package_quantity: reviewDraft.package_quantity || "",
+        label_text: reviewDraft.label_text || "",
+        notes: reviewDraft.notes || "",
+        is_confirmed: true,
+        review_needed: false,
+        was_edited: true,
+      });
+
+      setSelectedReviewItem(null);
+      setReviewDraft(null);
+      await loadReport(false);
+    } catch (error) {
+      Alert.alert(
+        "Unable to save item",
+        error instanceof Error
+          ? error.message
+          : "The inventory item could not be saved."
+      );
+    } finally {
+      setIsSavingReviewItem(false);
+    }
+  }
+
+  function confirmRemoveReviewItem() {
+    if (!selectedReviewItem?.id) {
+      return;
+    }
+
+    Alert.alert(
+      "Remove inventory item?",
+      "This permanently removes this saved item from the walkthrough and regenerates its report.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            void removeReviewItem();
+          },
+        },
+      ]
+    );
+  }
+
+  async function removeReviewItem() {
+    if (!selectedReviewItem?.id) {
+      return;
+    }
+
+    try {
+      setIsRemovingReviewItem(true);
+
+      const response = await apiFetch(
+        `${API_BASE_URL}/api/walkthrough-items/${selectedReviewItem.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const text = await response.text();
+      let data: ReviewItemMutationResponse;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("The server returned an unreadable removal response.");
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || data.details || "The inventory item could not be removed."
+        );
+      }
+
+      setSelectedReviewItem(null);
+      setReviewDraft(null);
+      await loadReport(false);
+    } catch (error) {
+      Alert.alert(
+        "Unable to remove item",
+        error instanceof Error
+          ? error.message
+          : "The inventory item could not be removed."
+      );
+    } finally {
+      setIsRemovingReviewItem(false);
+    }
+  }
+
   function closePhotoViewer() {
     setPhotoViewer(null);
     lastPhotoViewerTapTime.current = 0;
@@ -653,6 +876,91 @@ export default function CustomerReportScreen() {
       );
     }
 
+    if (reportType === "review") {
+      const partNumber = displayPartNumber(item) || "No part number";
+
+      return (
+        <View style={styles.reviewCard}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => openReviewItem(item)}
+            style={({ pressed }) => [
+              styles.reviewCardMain,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <View style={styles.reviewCardText}>
+              <View style={styles.reviewCardTitleRow}>
+                <Text numberOfLines={2} style={styles.reviewCardTitle}>
+                  {item.description || "Inventory item"}
+                </Text>
+                <View style={styles.reviewConfidenceBadge}>
+                  <Text style={styles.reviewConfidenceText}>
+                    {confidenceText(item.confidence)}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.reviewCardPartNumber}>{partNumber}</Text>
+              <Text numberOfLines={1} style={styles.reviewCardMeta}>
+                {item.vendor || "Vendor not identified"}
+                {" · "}
+                {item.location || "Unassigned"}
+              </Text>
+              <Text style={styles.reviewCardSubtext}>
+                Walkthrough #{item.walkthrough_id || "—"} · {formatDate(recordDate(item))}
+              </Text>
+
+              <View style={styles.reviewStatusRow}>
+                <Ionicons name="alert-circle-outline" size={16} color="#F8D477" />
+                <Text style={styles.reviewStatusText}>Needs review</Text>
+              </View>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color="#93C5FD" />
+          </Pressable>
+
+          <View style={styles.reviewQuickActions}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!item.photo_url}
+              onPress={() => openPartPhoto(item)}
+              style={({ pressed }) => [
+                styles.reviewPhotoButton,
+                !item.photo_url && styles.disabledButton,
+                pressed && item.photo_url && styles.buttonPressed,
+              ]}
+            >
+              <Ionicons
+                name="image-outline"
+                size={18}
+                color={item.photo_url ? "#BFDBFE" : "#52657D"}
+              />
+              <Text
+                style={[
+                  styles.reviewPhotoButtonText,
+                  !item.photo_url && styles.reviewPhotoButtonTextDisabled,
+                ]}
+              >
+                Source Photo
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openReviewItem(item)}
+              style={({ pressed }) => [
+                styles.reviewActionButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.reviewActionButtonText}>Review</Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
+
     const fallbackPartNumber =
       item.manufacturer_part_number ||
       item.vendor_part_number ||
@@ -713,7 +1021,11 @@ export default function CustomerReportScreen() {
           </Pressable>
           <View style={styles.headerText}>
             <Text numberOfLines={1} style={styles.title}>
-              {isUniquePartsReport ? "Inventory Items" : (report?.report_title || "Customer Report")}
+              {isUniquePartsReport
+                ? "Inventory Items"
+                : isReviewReport
+                  ? "Review Items"
+                  : (report?.report_title || "Customer Report")}
             </Text>
             <Text numberOfLines={1} style={styles.subtitle}>
               {customerName}
@@ -760,7 +1072,13 @@ export default function CustomerReportScreen() {
             value={searchDraft}
             onChangeText={setSearchDraft}
             onSubmitEditing={() => setAppliedSearch(searchDraft.trim())}
-            placeholder={isUniquePartsReport ? "Search part #, description, vendor…" : "Search this report"}
+            placeholder={
+              isUniquePartsReport
+                ? "Search part #, description, vendor…"
+                : isReviewReport
+                  ? "Search review items…"
+                  : "Search this report"
+            }
             placeholderTextColor="#70839D"
             returnKeyType="search"
             style={styles.searchInput}
@@ -855,7 +1173,16 @@ export default function CustomerReportScreen() {
 
         <View style={styles.reportToolbar}>
           <Text style={styles.recordCount}>
-            {report?.record_count || 0} {isUniquePartsReport ? ((report?.record_count || 0) === 1 ? "distinct part identified" : "distinct parts identified") : "records"}
+            {report?.record_count || 0}{" "}
+            {isUniquePartsReport
+              ? (report?.record_count || 0) === 1
+                ? "distinct part identified"
+                : "distinct parts identified"
+              : isReviewReport
+                ? (report?.record_count || 0) === 1
+                  ? "item needs review"
+                  : "items need review"
+                : "records"}
           </Text>
           <Pressable
             disabled={isExporting}
@@ -903,17 +1230,29 @@ export default function CustomerReportScreen() {
             ListEmptyComponent={
               <View style={styles.emptyCard}>
                 <Ionicons
-                  name={isUniquePartsReport ? "cube-outline" : "search-outline"}
+                  name={
+                    isUniquePartsReport
+                      ? "cube-outline"
+                      : isReviewReport
+                        ? "checkmark-done-outline"
+                        : "search-outline"
+                  }
                   size={30}
                   color="#52657D"
                 />
                 <Text style={styles.emptyTitle}>
-                  {isUniquePartsReport ? "No matching inventory" : "No matching records"}
+                  {isUniquePartsReport
+                    ? "No matching inventory"
+                    : isReviewReport
+                      ? "Review queue is clear"
+                      : "No matching records"}
                 </Text>
                 <Text style={styles.emptyText}>
                   {isUniquePartsReport
                     ? "Try clearing a filter or searching for another part, vendor, or area."
-                    : "Try a different search, date range, or report."}
+                    : isReviewReport
+                      ? "There are no unresolved inventory items matching these filters."
+                      : "Try a different search, date range, or report."}
                 </Text>
               </View>
             }
@@ -1014,6 +1353,191 @@ export default function CustomerReportScreen() {
                 <Ionicons name="image-outline" size={22} color="#FFFFFF" />
                 <Text style={styles.viewPhotoButtonText}>View Latest Source Photo</Text>
               </Pressable>
+            </ScrollView>
+          ) : null}
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={selectedReviewItem !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeReviewItem}
+      >
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalHeader}>
+            <Pressable
+              disabled={isSavingReviewItem || isRemovingReviewItem}
+              onPress={closeReviewItem}
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>Review Item</Text>
+            <View style={styles.modalHeaderSpacer} />
+          </View>
+
+          {selectedReviewItem && reviewDraft ? (
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.reviewDetailContent}
+            >
+              <View style={styles.reviewDetailHero}>
+                <View style={styles.reviewDetailHeroText}>
+                  <Text style={styles.reviewDetailEyebrow}>NEEDS REVIEW</Text>
+                  <Text style={styles.reviewDetailTitle}>
+                    {reviewDraft.description ||
+                      displayPartNumber(reviewDraft) ||
+                      "Inventory item"}
+                  </Text>
+                  <Text style={styles.reviewDetailSubtitle}>
+                    Walkthrough #{reviewDraft.walkthrough_id || "—"} ·{" "}
+                    {reviewDraft.location || "Unassigned"}
+                  </Text>
+                </View>
+                <View style={styles.reviewDetailConfidence}>
+                  <Text style={styles.reviewDetailConfidenceValue}>
+                    {confidenceText(reviewDraft.confidence)}
+                  </Text>
+                  <Text style={styles.reviewDetailConfidenceLabel}>
+                    Confidence
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                disabled={!selectedReviewItem.photo_url}
+                onPress={() => openPartPhoto(selectedReviewItem)}
+                style={({ pressed }) => [
+                  styles.reviewSourcePhotoButton,
+                  !selectedReviewItem.photo_url && styles.disabledButton,
+                  pressed &&
+                    selectedReviewItem.photo_url &&
+                    styles.buttonPressed,
+                ]}
+              >
+                <Ionicons name="image-outline" size={21} color="#FFFFFF" />
+                <Text style={styles.reviewSourcePhotoButtonText}>
+                  View Source Photo
+                </Text>
+              </Pressable>
+
+              <View style={styles.reviewEditCard}>
+                <Text style={styles.reviewEditHeading}>Inventory details</Text>
+                <Text style={styles.reviewEditHelp}>
+                  Correct anything the AI misread, then save. Saving also marks
+                  this item reviewed.
+                </Text>
+
+                {[
+                  ["Manufacturer Part #", "manufacturer_part_number"],
+                  ["Vendor Part #", "vendor_part_number"],
+                  ["Part #", "part_number"],
+                  ["Description", "description"],
+                  ["Vendor", "vendor"],
+                  ["Manufacturer", "manufacturer"],
+                  ["Size / Specification", "size_specification"],
+                  ["Package Quantity", "package_quantity"],
+                  ["Location", "location"],
+                  ["Label Text", "label_text"],
+                  ["Notes", "notes"],
+                ].map(([label, field]) => (
+                  <View key={field} style={styles.reviewFieldGroup}>
+                    <Text style={styles.reviewFieldLabel}>{label}</Text>
+                    <TextInput
+                      value={String(reviewDraft[field as keyof ReportRecord] || "")}
+                      onChangeText={(value) =>
+                        updateReviewDraft(field as keyof ReportRecord, value)
+                      }
+                      editable={!isSavingReviewItem && !isRemovingReviewItem}
+                      multiline={field === "description" || field === "label_text" || field === "notes"}
+                      placeholder={`Enter ${label.toLowerCase()}`}
+                      placeholderTextColor="#5F728B"
+                      style={[
+                        styles.reviewFieldInput,
+                        (field === "description" ||
+                          field === "label_text" ||
+                          field === "notes") &&
+                          styles.reviewFieldInputMultiline,
+                      ]}
+                    />
+                  </View>
+                ))}
+              </View>
+
+              <Pressable
+                disabled={isSavingReviewItem || isRemovingReviewItem}
+                onPress={saveEditedReviewItem}
+                style={({ pressed }) => [
+                  styles.reviewSaveButton,
+                  (isSavingReviewItem || isRemovingReviewItem) &&
+                    styles.disabledButton,
+                  pressed &&
+                    !isSavingReviewItem &&
+                    !isRemovingReviewItem &&
+                    styles.buttonPressed,
+                ]}
+              >
+                {isSavingReviewItem ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.reviewSaveButtonText}>
+                      Save Changes & Confirm
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                disabled={isSavingReviewItem || isRemovingReviewItem}
+                onPress={confirmReviewItem}
+                style={({ pressed }) => [
+                  styles.reviewConfirmButton,
+                  (isSavingReviewItem || isRemovingReviewItem) &&
+                    styles.disabledButton,
+                  pressed &&
+                    !isSavingReviewItem &&
+                    !isRemovingReviewItem &&
+                    styles.buttonPressed,
+                ]}
+              >
+                <Ionicons name="checkmark-circle-outline" size={21} color="#9FE7C7" />
+                <Text style={styles.reviewConfirmButtonText}>
+                  Looks Correct — Confirm
+                </Text>
+              </Pressable>
+
+              <Pressable
+                disabled={isSavingReviewItem || isRemovingReviewItem}
+                onPress={confirmRemoveReviewItem}
+                style={({ pressed }) => [
+                  styles.reviewRemoveButton,
+                  (isSavingReviewItem || isRemovingReviewItem) &&
+                    styles.disabledButton,
+                  pressed &&
+                    !isSavingReviewItem &&
+                    !isRemovingReviewItem &&
+                    styles.buttonPressed,
+                ]}
+              >
+                {isRemovingReviewItem ? (
+                  <ActivityIndicator size="small" color="#FCA5A5" />
+                ) : (
+                  <>
+                    <Ionicons name="trash-outline" size={19} color="#FCA5A5" />
+                    <Text style={styles.reviewRemoveButtonText}>
+                      Remove Inventory Item
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Text style={styles.reviewRemoveHelp}>
+                Remove is permanent and should only be used when the AI created
+                an item that does not belong in the walkthrough.
+              </Text>
             </ScrollView>
           ) : null}
         </SafeAreaView>
@@ -1270,6 +1794,268 @@ const styles = StyleSheet.create({
   partDetailValue: { color: "#D8E2F0", fontSize: 14, lineHeight: 20, marginTop: 4 },
   viewPhotoButton: { minHeight: 54, borderRadius: 16, backgroundColor: "#2563EB", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 },
   viewPhotoButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  reviewCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#3B4659",
+    backgroundColor: "#111D2F",
+    marginBottom: 9,
+    overflow: "hidden",
+  },
+  reviewCardMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+  },
+  reviewCardText: { flex: 1, paddingRight: 10 },
+  reviewCardTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  reviewCardTitle: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  reviewConfidenceBadge: {
+    minWidth: 48,
+    borderRadius: 9,
+    backgroundColor: "#2E2B1E",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  reviewConfidenceText: {
+    color: "#F8D477",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  reviewCardPartNumber: {
+    color: "#93C5FD",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  reviewCardMeta: {
+    color: "#C1D1E5",
+    fontSize: 11,
+    marginTop: 8,
+  },
+  reviewCardSubtext: {
+    color: "#71849D",
+    fontSize: 10,
+    marginTop: 5,
+  },
+  reviewStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 9,
+  },
+  reviewStatusText: {
+    color: "#F8D477",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  reviewQuickActions: {
+    minHeight: 44,
+    borderTopWidth: 1,
+    borderTopColor: "#283C57",
+    flexDirection: "row",
+    backgroundColor: "#0F1A2A",
+  },
+  reviewPhotoButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRightWidth: 1,
+    borderRightColor: "#283C57",
+  },
+  reviewPhotoButtonText: {
+    color: "#BFDBFE",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  reviewPhotoButtonTextDisabled: { color: "#52657D" },
+  reviewActionButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewActionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  reviewDetailContent: { padding: 20, paddingBottom: 48 },
+  reviewDetailHero: {
+    flexDirection: "row",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#384A64",
+    backgroundColor: "#121F32",
+    padding: 16,
+  },
+  reviewDetailHeroText: { flex: 1, paddingRight: 12 },
+  reviewDetailEyebrow: {
+    color: "#F8D477",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  reviewDetailTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  reviewDetailSubtitle: {
+    color: "#8FA2BA",
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  reviewDetailConfidence: {
+    minWidth: 76,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: "#2E2B1E",
+    paddingHorizontal: 10,
+  },
+  reviewDetailConfidenceValue: {
+    color: "#F8D477",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  reviewDetailConfidenceLabel: {
+    color: "#B7A76D",
+    fontSize: 9,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  reviewSourcePhotoButton: {
+    minHeight: 52,
+    borderRadius: 15,
+    backgroundColor: "#2457D6",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 14,
+  },
+  reviewSourcePhotoButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  reviewEditCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#26364F",
+    backgroundColor: "#121C2D",
+    padding: 16,
+    marginTop: 14,
+  },
+  reviewEditHeading: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  reviewEditHelp: {
+    color: "#8FA2BA",
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 5,
+    marginBottom: 4,
+  },
+  reviewFieldGroup: { marginTop: 13 },
+  reviewFieldLabel: {
+    color: "#91A4BC",
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.45,
+    marginBottom: 6,
+  },
+  reviewFieldInput: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2E4562",
+    backgroundColor: "#0E1827",
+    color: "#FFFFFF",
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  reviewFieldInputMultiline: {
+    minHeight: 78,
+    textAlignVertical: "top",
+  },
+  reviewSaveButton: {
+    minHeight: 54,
+    borderRadius: 16,
+    backgroundColor: "#2563EB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+  reviewSaveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  reviewConfirmButton: {
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#2E745D",
+    backgroundColor: "#123428",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+  reviewConfirmButtonText: {
+    color: "#B9F3D9",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  reviewRemoveButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#60343D",
+    backgroundColor: "#2B171D",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    marginTop: 18,
+  },
+  reviewRemoveButtonText: {
+    color: "#FCA5A5",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  reviewRemoveHelp: {
+    color: "#7E8B9E",
+    fontSize: 10,
+    lineHeight: 15,
+    textAlign: "center",
+    marginTop: 8,
+    paddingHorizontal: 8,
+  },
   viewerSafeArea: { flex: 1, backgroundColor: "#02070D" },
   viewerHeader: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#1C2D43", paddingHorizontal: 14 },
   viewerCloseButton: { width: 70, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#17283C" },
