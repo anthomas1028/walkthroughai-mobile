@@ -76,6 +76,19 @@ type PhotoViewer = {
   label: string;
 };
 
+type MetricView = "photos" | "areas" | "vendors" | null;
+
+type PhotoGroup = {
+  name: string;
+  item: WalkthroughItem;
+  itemCount: number;
+};
+
+type VendorGroup = {
+  name: string;
+  items: WalkthroughItem[];
+};
+
 function parseBackendDate(value: string): Date {
   const cleanedValue = value.trim();
   const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(cleanedValue);
@@ -139,6 +152,8 @@ export default function WalkthroughDetailScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+  const [selectedMetricView, setSelectedMetricView] = useState<MetricView>(null);
+  const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<WalkthroughItem | null>(null);
   const [photoViewer, setPhotoViewer] = useState<PhotoViewer | null>(null);
 
@@ -205,6 +220,49 @@ export default function WalkthroughDetailScreen() {
       (item) => (item.location?.trim() || "Unassigned") === selectedLocation
     );
   }, [selectedLocation, walkthrough]);
+
+  const photoGroups = useMemo<PhotoGroup[]>(() => {
+    const map = new Map<string, PhotoGroup>();
+
+    for (const item of walkthrough?.items || []) {
+      const photoName = item.photo?.trim();
+      if (!photoName) continue;
+
+      const existing = map.get(photoName);
+      if (existing) {
+        existing.itemCount += 1;
+      } else {
+        map.set(photoName, {
+          name: photoName,
+          item,
+          itemCount: 1,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [walkthrough]);
+
+  const vendorGroups = useMemo<VendorGroup[]>(() => {
+    const map = new Map<string, WalkthroughItem[]>();
+
+    for (const item of walkthrough?.items || []) {
+      const vendorName = item.vendor?.trim();
+      if (!vendorName) continue;
+      map.set(vendorName, [...(map.get(vendorName) || []), item]);
+    }
+
+    return Array.from(map.entries())
+      .map(([name, items]) => ({ name, items }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [walkthrough]);
+
+  const vendorCount = vendorGroups.length;
+
+  const selectedVendorItems = useMemo(() => {
+    if (!selectedVendor) return [];
+    return vendorGroups.find((group) => group.name === selectedVendor)?.items || [];
+  }, [selectedVendor, vendorGroups]);
 
   async function downloadAndShareWorkbook() {
     if (!walkthrough?.download_url || !walkthrough.workbook_file) {
@@ -302,11 +360,47 @@ export default function WalkthroughDetailScreen() {
 
   const customerName = walkthrough?.customer_name || fallbackCustomer;
   const showingParts = selectedLocation !== null;
+  const showingVendorItems = selectedMetricView === "vendors" && selectedVendor !== null;
+  const showingMetricView = selectedMetricView !== null;
+
   const screenTitle = showingParts
     ? selectedLocation === "__ALL__"
-      ? "All Parts"
+      ? "All Inventory"
       : selectedLocation
-    : "Walkthrough Details";
+    : showingVendorItems
+      ? selectedVendor || "Vendor"
+      : selectedMetricView === "photos"
+        ? "Photos"
+        : selectedMetricView === "areas"
+          ? "Areas"
+          : selectedMetricView === "vendors"
+            ? "Vendors"
+            : "Walkthrough Report";
+
+  const headerSubtitle = showingParts || showingMetricView
+    ? customerName
+    : walkthrough
+      ? `Walkthrough #${walkthrough.id}`
+      : fallbackCustomer;
+
+  function handleBackPress() {
+    if (showingParts) {
+      setSelectedLocation(null);
+      return;
+    }
+
+    if (selectedVendor) {
+      setSelectedVendor(null);
+      return;
+    }
+
+    if (showingMetricView) {
+      setSelectedMetricView(null);
+      return;
+    }
+
+    router.back();
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -314,14 +408,14 @@ export default function WalkthroughDetailScreen() {
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => showingParts ? setSelectedLocation(null) : router.back()}
+            onPress={handleBackPress}
             style={({ pressed }) => [styles.backButton, pressed && styles.buttonPressed]}
           >
             <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
           </Pressable>
           <View style={styles.headerText}>
             <Text numberOfLines={1} style={styles.title}>{screenTitle}</Text>
-            <Text numberOfLines={1} style={styles.subtitle}>{customerName}</Text>
+            <Text numberOfLines={1} style={styles.subtitle}>{headerSubtitle}</Text>
           </View>
         </View>
 
@@ -345,75 +439,82 @@ export default function WalkthroughDetailScreen() {
               />
             }
           >
-            {!showingParts ? (
+            {!showingParts && !showingMetricView ? (
               <>
-                <View style={styles.summaryCard}>
-                  <View style={styles.summaryTopRow}>
-                    <View style={styles.summaryTitleWrap}>
-                      <Text style={styles.summaryTitle}>Walkthrough #{walkthrough.id}</Text>
-                      <Text style={styles.summaryDate}>{formatDate(walkthrough.completed_at)}</Text>
+                <View style={styles.reportHero}>
+                  <View style={styles.reportHeroTop}>
+                    <View style={styles.reportHeroText}>
+                      <Text style={styles.reportEyebrow}>INVENTORY WALKTHROUGH</Text>
+                      <Text style={styles.reportCustomer}>{customerName}</Text>
+                      <Text style={styles.reportMeta}>
+                        Walkthrough #{walkthrough.id} · {formatDate(walkthrough.completed_at)}
+                      </Text>
                     </View>
                     <View style={styles.completedBadge}>
                       <Text style={styles.completedBadgeText}>Completed</Text>
                     </View>
                   </View>
+                </View>
 
-                  <Text style={styles.summaryStats}>
-                    {plural(locationGroups.length, "area")} · {plural(walkthrough.photo_count, "photo")} · {plural(walkthrough.item_count, "part")}
-                  </Text>
-                  <View style={styles.emailStatusRow}>
-                    <Ionicons
-                      name={walkthrough.email_sent ? "mail-outline" : "mail-unread-outline"}
-                      size={16}
-                      color={walkthrough.email_sent ? "#86EFAC" : "#94A3B8"}
-                    />
-                    <Text style={styles.emailStatus}>
-                      {walkthrough.email_sent
-                        ? `Emailed${walkthrough.recipient_email ? ` to ${walkthrough.recipient_email}` : ""}`
-                        : "Not emailed"}
-                    </Text>
-                  </View>
+                <View style={styles.statGrid}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View all inventory parts"
+                    onPress={() => setSelectedLocation("__ALL__")}
+                    style={({ pressed }) => [styles.statCard, pressed && styles.statCardPressed]}
+                  >
+                    <View style={styles.statCardTop}>
+                      <Ionicons name="cube-outline" size={21} color="#93C5FD" />
+                      <Ionicons name="chevron-forward" size={17} color="#58708D" />
+                    </View>
+                    <Text style={styles.statValue}>{walkthrough.item_count}</Text>
+                    <Text style={styles.statLabel}>Parts</Text>
+                  </Pressable>
 
                   <Pressable
                     accessibilityRole="button"
-                    disabled={isSharing || !walkthrough.download_url}
-                    onPress={downloadAndShareWorkbook}
-                    style={({ pressed }) => [
-                      styles.shareButton,
-                      pressed && styles.buttonPressed,
-                      (isSharing || !walkthrough.download_url) && styles.disabled,
-                    ]}
+                    accessibilityLabel="View walkthrough photos"
+                    onPress={() => setSelectedMetricView("photos")}
+                    style={({ pressed }) => [styles.statCard, pressed && styles.statCardPressed]}
                   >
-                    {isSharing ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Ionicons name="share-outline" size={20} color="#FFFFFF" />
-                        <Text style={styles.shareButtonText}>Open / Share Workbook</Text>
-                      </>
-                    )}
+                    <View style={styles.statCardTop}>
+                      <Ionicons name="images-outline" size={21} color="#93C5FD" />
+                      <Ionicons name="chevron-forward" size={17} color="#58708D" />
+                    </View>
+                    <Text style={styles.statValue}>{walkthrough.photo_count}</Text>
+                    <Text style={styles.statLabel}>Photos</Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View inventory areas"
+                    onPress={() => setSelectedMetricView("areas")}
+                    style={({ pressed }) => [styles.statCard, pressed && styles.statCardPressed]}
+                  >
+                    <View style={styles.statCardTop}>
+                      <Ionicons name="location-outline" size={21} color="#93C5FD" />
+                      <Ionicons name="chevron-forward" size={17} color="#58708D" />
+                    </View>
+                    <Text style={styles.statValue}>{locationGroups.length}</Text>
+                    <Text style={styles.statLabel}>Areas</Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View vendors"
+                    onPress={() => setSelectedMetricView("vendors")}
+                    style={({ pressed }) => [styles.statCard, pressed && styles.statCardPressed]}
+                  >
+                    <View style={styles.statCardTop}>
+                      <Ionicons name="business-outline" size={21} color="#93C5FD" />
+                      <Ionicons name="chevron-forward" size={17} color="#58708D" />
+                    </View>
+                    <Text style={styles.statValue}>{vendorCount}</Text>
+                    <Text style={styles.statLabel}>Vendors</Text>
                   </Pressable>
                 </View>
 
-                <Text style={styles.sectionTitle}>Walkthrough Contents</Text>
-
-                <Pressable
-                  onPress={() => setSelectedLocation("__ALL__")}
-                  style={({ pressed }) => [styles.navigationCard, pressed && styles.buttonPressed]}
-                >
-                  <View style={styles.navigationIconPrimary}>
-                    <Ionicons name="list" size={22} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.navigationText}>
-                    <Text style={styles.navigationTitle}>All Parts</Text>
-                    <Text style={styles.navigationMeta}>
-                      {plural(walkthrough.item_count, "part")} across {plural(locationGroups.length, "area")}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
-                </Pressable>
-
-                <Text style={styles.sectionTitle}>Locations</Text>
+                <Text style={styles.sectionTitle}>Inventory by Area</Text>
                 <View style={styles.locationList}>
                   {locationGroups.map((group) => (
                     <Pressable
@@ -434,20 +535,201 @@ export default function WalkthroughDetailScreen() {
                     </Pressable>
                   ))}
                 </View>
+
+                <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>All Inventory</Text>
+                <Pressable
+                  onPress={() => setSelectedLocation("__ALL__")}
+                  style={({ pressed }) => [styles.navigationCard, pressed && styles.buttonPressed]}
+                >
+                  <View style={styles.navigationIconPrimary}>
+                    <Ionicons name="list" size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.navigationText}>
+                    <Text style={styles.navigationTitle}>Complete Parts List</Text>
+                    <Text style={styles.navigationMeta}>
+                      {plural(walkthrough.item_count, "part")} across {plural(locationGroups.length, "area")}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
+                </Pressable>
+
+                <Text style={styles.sectionTitle}>Export</Text>
+                <View style={styles.exportCard}>
+                  <View style={styles.exportStatusRow}>
+                    <Ionicons
+                      name={walkthrough.email_sent ? "mail-outline" : "mail-unread-outline"}
+                      size={17}
+                      color={walkthrough.email_sent ? "#86EFAC" : "#94A3B8"}
+                    />
+                    <Text style={styles.exportStatusText}>
+                      {walkthrough.email_sent
+                        ? `Emailed${walkthrough.recipient_email ? ` to ${walkthrough.recipient_email}` : ""}`
+                        : "Not emailed"}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isSharing || !walkthrough.download_url}
+                    onPress={downloadAndShareWorkbook}
+                    style={({ pressed }) => [
+                      styles.shareButton,
+                      pressed && styles.buttonPressed,
+                      (isSharing || !walkthrough.download_url) && styles.disabled,
+                    ]}
+                  >
+                    {isSharing ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
+                        <Text style={styles.shareButtonText}>Open / Share Excel Report</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </>
+            ) : selectedMetricView === "photos" ? (
+              <>
+                <View style={styles.metricSummary}>
+                  <Text style={styles.metricSummaryValue}>{walkthrough.photo_count}</Text>
+                  <View style={styles.metricSummaryText}>
+                    <Text style={styles.metricSummaryTitle}>Source Photos</Text>
+                    <Text style={styles.metricSummaryMeta}>
+                      Tap a photo to open the original walkthrough image.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.metricList}>
+                  {photoGroups.map((group) => (
+                    <Pressable
+                      key={group.name}
+                      disabled={!group.item.photo_url}
+                      onPress={() => openSourcePhoto(group.item)}
+                      style={({ pressed }) => [
+                        styles.metricRow,
+                        !group.item.photo_url && styles.disabled,
+                        pressed && group.item.photo_url && styles.buttonPressed,
+                      ]}
+                    >
+                      <View style={styles.metricIcon}>
+                        <Ionicons name="image-outline" size={21} color="#93C5FD" />
+                      </View>
+                      <View style={styles.navigationText}>
+                        <Text numberOfLines={1} style={styles.navigationTitle}>{group.name}</Text>
+                        <Text style={styles.navigationMeta}>
+                          {plural(group.itemCount, "part")} · {group.item.location?.trim() || "Unassigned"}
+                        </Text>
+                      </View>
+                      <Ionicons name="expand-outline" size={20} color="#93C5FD" />
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : selectedMetricView === "areas" ? (
+              <>
+                <View style={styles.metricSummary}>
+                  <Text style={styles.metricSummaryValue}>{locationGroups.length}</Text>
+                  <View style={styles.metricSummaryText}>
+                    <Text style={styles.metricSummaryTitle}>Inventory Areas</Text>
+                    <Text style={styles.metricSummaryMeta}>
+                      Choose an area to view its inventory.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.locationList}>
+                  {locationGroups.map((group) => (
+                    <Pressable
+                      key={group.name}
+                      onPress={() => {
+                        setSelectedMetricView(null);
+                        setSelectedLocation(group.name);
+                      }}
+                      style={({ pressed }) => [styles.locationRow, pressed && styles.buttonPressed]}
+                    >
+                      <View style={styles.locationIcon}>
+                        <Ionicons name="location-outline" size={21} color="#93C5FD" />
+                      </View>
+                      <View style={styles.navigationText}>
+                        <Text style={styles.navigationTitle}>{group.name}</Text>
+                        <Text style={styles.navigationMeta}>
+                          {plural(group.items.length, "part")} · {plural(group.photoCount, "photo")}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : selectedMetricView === "vendors" && !selectedVendor ? (
+              <>
+                <View style={styles.metricSummary}>
+                  <Text style={styles.metricSummaryValue}>{vendorCount}</Text>
+                  <View style={styles.metricSummaryText}>
+                    <Text style={styles.metricSummaryTitle}>Vendors</Text>
+                    <Text style={styles.metricSummaryMeta}>
+                      Choose a vendor to view the parts found in this walkthrough.
+                    </Text>
+                  </View>
+                </View>
+
+                {vendorGroups.length ? (
+                  <View style={styles.metricList}>
+                    {vendorGroups.map((group) => (
+                      <Pressable
+                        key={group.name}
+                        onPress={() => setSelectedVendor(group.name)}
+                        style={({ pressed }) => [styles.metricRow, pressed && styles.buttonPressed]}
+                      >
+                        <View style={styles.metricIcon}>
+                          <Ionicons name="business-outline" size={21} color="#93C5FD" />
+                        </View>
+                        <View style={styles.navigationText}>
+                          <Text style={styles.navigationTitle}>{group.name}</Text>
+                          <Text style={styles.navigationMeta}>{plural(group.items.length, "part")}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyMetricCard}>
+                    <Ionicons name="business-outline" size={28} color="#52657D" />
+                    <Text style={styles.emptyMetricTitle}>No vendor names identified</Text>
+                    <Text style={styles.emptyMetricText}>
+                      Parts without a vendor are still available in All Inventory.
+                    </Text>
+                  </View>
+                )}
               </>
             ) : (
               <>
                 <View style={styles.partsSummary}>
                   <Text style={styles.partsSummaryTitle}>
-                    {selectedLocation === "__ALL__" ? "Complete Parts List" : selectedLocation}
+                    {selectedVendor
+                      ? selectedVendor
+                      : selectedLocation === "__ALL__"
+                        ? "All Inventory"
+                        : selectedLocation}
                   </Text>
                   <Text style={styles.partsSummaryMeta}>
-                    {plural(visibleItems.length, "part")} · {plural(new Set(visibleItems.map((item) => item.photo).filter(Boolean)).size, "photo")}
+                    {plural(
+                      selectedVendor ? selectedVendorItems.length : visibleItems.length,
+                      "part"
+                    )} · {plural(
+                      new Set(
+                        (selectedVendor ? selectedVendorItems : visibleItems)
+                          .map((item) => item.photo)
+                          .filter(Boolean)
+                      ).size,
+                      "photo"
+                    )}
                   </Text>
                 </View>
 
                 <View style={styles.partsList}>
-                  {visibleItems.map((item) => (
+                  {(selectedVendor ? selectedVendorItems : visibleItems).map((item) => (
                     <View key={item.id} style={styles.partRow}>
                       <Pressable
                         accessibilityRole="button"
@@ -591,13 +873,13 @@ export default function WalkthroughDetailScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#0B1220" },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 14 },
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 18 },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 10 },
+  header: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
   backButton: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#17243A", borderWidth: 1, borderColor: "#31547D", alignItems: "center", justifyContent: "center", marginRight: 13 },
   headerText: { flex: 1 },
   title: { color: "#FFFFFF", fontSize: 24, fontWeight: "800" },
   subtitle: { color: "#94A3B8", fontSize: 14, marginTop: 3 },
-  content: { paddingBottom: 34 },
+  content: { paddingBottom: 72 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   loadingText: { color: "#94A3B8", marginTop: 12 },
   emptyText: { color: "#94A3B8" },
@@ -611,10 +893,10 @@ const styles = StyleSheet.create({
   summaryStats: { color: "#BFDBFE", fontSize: 14, fontWeight: "700", marginTop: 17 },
   emailStatusRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 8 },
   emailStatus: { color: "#94A3B8", fontSize: 12 },
-  shareButton: { minHeight: 52, borderRadius: 15, backgroundColor: "#2563EB", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 17 },
+  shareButton: { minHeight: 50, borderRadius: 15, backgroundColor: "#2563EB", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 14 },
   shareButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
-  sectionTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "800", marginBottom: 11 },
-  navigationCard: { minHeight: 78, flexDirection: "row", alignItems: "center", borderRadius: 18, backgroundColor: "#121C2D", borderWidth: 1, borderColor: "#26364F", paddingHorizontal: 14, marginBottom: 22 },
+  sectionTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "800", marginBottom: 10 },
+  navigationCard: { minHeight: 76, flexDirection: "row", alignItems: "center", borderRadius: 18, backgroundColor: "#121C2D", borderWidth: 1, borderColor: "#26364F", paddingHorizontal: 14, marginBottom: 18 },
   navigationIconPrimary: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#2563EB", alignItems: "center", justifyContent: "center", marginRight: 12 },
   navigationText: { flex: 1 },
   navigationTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
@@ -660,6 +942,34 @@ const styles = StyleSheet.create({
   detailValue: { color: "#D8E2F0", fontSize: 15, lineHeight: 21 },
   viewPhotoButton: { minHeight: 54, borderRadius: 16, backgroundColor: "#2563EB", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 15 },
   viewPhotoButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  reportHero: { backgroundColor: "#14243A", borderRadius: 20, borderWidth: 1, borderColor: "#31547D", padding: 16, marginBottom: 12 },
+  reportHeroTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  reportHeroText: { flex: 1, paddingRight: 12 },
+  reportEyebrow: { color: "#7DA9D8", fontSize: 10, fontWeight: "900", letterSpacing: 1.1, marginBottom: 6 },
+  reportCustomer: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
+  reportMeta: { color: "#94A3B8", fontSize: 12, marginTop: 6, lineHeight: 17 },
+  statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20 },
+  statCard: { width: "48.5%", minHeight: 96, borderRadius: 17, backgroundColor: "#121C2D", borderWidth: 1, borderColor: "#26364F", padding: 14, justifyContent: "space-between" },
+  statCardPressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
+  statCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  statValue: { color: "#FFFFFF", fontSize: 24, fontWeight: "900", marginTop: 6 },
+  statLabel: { color: "#94A3B8", fontSize: 12, fontWeight: "700", marginTop: 2 },
+  sectionTitleSpaced: { marginTop: 20 },
+  metricSummary: { flexDirection: "row", alignItems: "center", borderRadius: 18, backgroundColor: "#14243A", borderWidth: 1, borderColor: "#31547D", padding: 16, marginBottom: 14 },
+  metricSummaryValue: { minWidth: 54, color: "#FFFFFF", fontSize: 30, fontWeight: "900", marginRight: 14 },
+  metricSummaryText: { flex: 1 },
+  metricSummaryTitle: { color: "#FFFFFF", fontSize: 17, fontWeight: "900" },
+  metricSummaryMeta: { color: "#94A3B8", fontSize: 12, lineHeight: 17, marginTop: 4 },
+  metricList: { gap: 10 },
+  metricRow: { minHeight: 72, flexDirection: "row", alignItems: "center", borderRadius: 17, backgroundColor: "#121C2D", borderWidth: 1, borderColor: "#26364F", paddingHorizontal: 14 },
+  metricIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: "#16283D", alignItems: "center", justifyContent: "center", marginRight: 12 },
+  emptyMetricCard: { alignItems: "center", borderRadius: 18, backgroundColor: "#121C2D", borderWidth: 1, borderColor: "#26364F", padding: 24 },
+  emptyMetricTitle: { color: "#D8E2F0", fontSize: 15, fontWeight: "800", marginTop: 10 },
+  emptyMetricText: { color: "#8294AA", fontSize: 12, textAlign: "center", lineHeight: 18, marginTop: 5 },
+
+  exportCard: { borderRadius: 18, backgroundColor: "#121C2D", borderWidth: 1, borderColor: "#26364F", padding: 15, marginBottom: 4 },
+  exportStatusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
+  exportStatusText: { color: "#94A3B8", fontSize: 12, flex: 1 },
   viewerSafeArea: { flex: 1, backgroundColor: "#02070D" },
   viewerHeader: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#1C2D43", paddingHorizontal: 14 },
   viewerCloseButton: { width: 70, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#17283C" },
