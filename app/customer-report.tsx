@@ -434,7 +434,7 @@ export default function CustomerReportScreen() {
 
     setPhotoViewer({
       uri: item.photo_url,
-      label: `${item.description || displayPartNumber(item) || "Unique Part"} · ${item.photo || "Source Photo"}`,
+      label: `${item.description || displayPartNumber(item) || "Inventory Item"} · ${item.photo || "Source Photo"}`,
     });
     lastPhotoViewerTapTime.current = 0;
     photoViewerIsZoomed.current = false;
@@ -539,7 +539,7 @@ export default function CustomerReportScreen() {
                 {locations.length ? ` · ${locations.join(", ")}` : ""}
               </Text>
               <Text style={styles.uniquePartSubtext}>
-                Last seen {formatDate(item.last_seen_at)} · {item.walkthrough_count || 0} {item.walkthrough_count === 1 ? "walkthrough" : "walkthroughs"}
+                Last seen {formatDate(item.last_seen_at)} · Seen in {item.walkthrough_count || 0} {item.walkthrough_count === 1 ? "walkthrough" : "walkthroughs"}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#93C5FD" />
@@ -713,7 +713,7 @@ export default function CustomerReportScreen() {
           </Pressable>
           <View style={styles.headerText}>
             <Text numberOfLines={1} style={styles.title}>
-              {report?.report_title || "Customer Report"}
+              {isUniquePartsReport ? "Inventory Items" : (report?.report_title || "Customer Report")}
             </Text>
             <Text numberOfLines={1} style={styles.subtitle}>
               {customerName}
@@ -721,12 +721,46 @@ export default function CustomerReportScreen() {
           </View>
         </View>
 
+        {isUniquePartsReport && report ? (
+          <View style={styles.inventoryHero}>
+            <View style={styles.inventoryHeroHeader}>
+              <View style={styles.inventoryHeroText}>
+                <Text style={styles.inventoryEyebrow}>CUSTOMER INVENTORY</Text>
+                <Text style={styles.inventoryHeroTitle}>{customerName}</Text>
+                <Text style={styles.inventoryHeroSubtitle}>
+                  Distinct parts identified across completed walkthroughs
+                </Text>
+              </View>
+              <View style={styles.inventoryHeroBadge}>
+                <Ionicons name="cube-outline" size={22} color="#93C5FD" />
+              </View>
+            </View>
+
+            <View style={styles.inventoryStatsRow}>
+              <View style={styles.inventoryStat}>
+                <Text style={styles.inventoryStatValue}>{report.record_count}</Text>
+                <Text style={styles.inventoryStatLabel}>Distinct Parts</Text>
+              </View>
+              <View style={styles.inventoryStatDivider} />
+              <View style={styles.inventoryStat}>
+                <Text style={styles.inventoryStatValue}>{availableInventoryVendors.length}</Text>
+                <Text style={styles.inventoryStatLabel}>Vendors</Text>
+              </View>
+              <View style={styles.inventoryStatDivider} />
+              <View style={styles.inventoryStat}>
+                <Text style={styles.inventoryStatValue}>{availableInventoryAreas.length}</Text>
+                <Text style={styles.inventoryStatLabel}>Areas</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.searchRow}>
           <TextInput
             value={searchDraft}
             onChangeText={setSearchDraft}
             onSubmitEditing={() => setAppliedSearch(searchDraft.trim())}
-            placeholder="Search this report"
+            placeholder={isUniquePartsReport ? "Search part #, description, vendor…" : "Search this report"}
             placeholderTextColor="#70839D"
             returnKeyType="search"
             style={styles.searchInput}
@@ -821,7 +855,7 @@ export default function CustomerReportScreen() {
 
         <View style={styles.reportToolbar}>
           <Text style={styles.recordCount}>
-            {report?.record_count || 0} {isUniquePartsReport ? ((report?.record_count || 0) === 1 ? "unique part" : "unique parts") : "records"}
+            {report?.record_count || 0} {isUniquePartsReport ? ((report?.record_count || 0) === 1 ? "distinct part identified" : "distinct parts identified") : "records"}
           </Text>
           <Pressable
             disabled={isExporting}
@@ -835,7 +869,9 @@ export default function CustomerReportScreen() {
             {isExporting ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.exportButtonText}>Export Excel</Text>
+              <Text style={styles.exportButtonText}>
+                {isUniquePartsReport ? "Export Inventory" : "Export Excel"}
+              </Text>
             )}
           </Pressable>
         </View>
@@ -866,9 +902,18 @@ export default function CustomerReportScreen() {
             }
             ListEmptyComponent={
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>No matching records</Text>
+                <Ionicons
+                  name={isUniquePartsReport ? "cube-outline" : "search-outline"}
+                  size={30}
+                  color="#52657D"
+                />
+                <Text style={styles.emptyTitle}>
+                  {isUniquePartsReport ? "No matching inventory" : "No matching records"}
+                </Text>
                 <Text style={styles.emptyText}>
-                  Try a different search, date range, or report.
+                  {isUniquePartsReport
+                    ? "Try clearing a filter or searching for another part, vendor, or area."
+                    : "Try a different search, date range, or report."}
                 </Text>
               </View>
             }
@@ -887,7 +932,7 @@ export default function CustomerReportScreen() {
             <Pressable onPress={() => setFilterModalVisible(false)} style={styles.modalCloseButton}>
               <Text style={styles.modalCloseText}>Cancel</Text>
             </Pressable>
-            <Text style={styles.modalTitle}>Filter Unique Parts</Text>
+            <Text style={styles.modalTitle}>Filter Inventory Items</Text>
             <Pressable onPress={applyInventoryFilters} style={styles.modalApplyButton}>
               <Text style={styles.modalApplyText}>Apply</Text>
             </Pressable>
@@ -949,7 +994,7 @@ export default function CustomerReportScreen() {
             <Pressable onPress={() => setSelectedPart(null)} style={styles.modalCloseButton}>
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
-            <Text style={styles.modalTitle}>Part Details</Text>
+            <Text style={styles.modalTitle}>Inventory Part</Text>
             <View style={styles.modalHeaderSpacer} />
           </View>
           {selectedPart ? (
@@ -1011,6 +1056,74 @@ const styles = StyleSheet.create({
   headerText: { flex: 1 },
   title: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
   subtitle: { color: "#94A3B8", fontSize: 13, marginTop: 3 },
+  inventoryHero: {
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: "#31547D",
+    backgroundColor: "#14243A",
+    padding: 16,
+    marginBottom: 12,
+  },
+  inventoryHeroHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  inventoryHeroText: { flex: 1, paddingRight: 12 },
+  inventoryEyebrow: {
+    color: "#7DA9D8",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginBottom: 5,
+  },
+  inventoryHeroTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  inventoryHeroSubtitle: {
+    color: "#94A3B8",
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 5,
+  },
+  inventoryHeroBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#16283D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inventoryStatsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    marginTop: 15,
+    paddingTop: 13,
+    borderTopWidth: 1,
+    borderTopColor: "#29415E",
+  },
+  inventoryStat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  inventoryStatValue: {
+    color: "#FFFFFF",
+    fontSize: 21,
+    fontWeight: "900",
+  },
+  inventoryStatLabel: {
+    color: "#8FA2BA",
+    fontSize: 9,
+    fontWeight: "800",
+    marginTop: 3,
+    textAlign: "center",
+  },
+  inventoryStatDivider: {
+    width: 1,
+    backgroundColor: "#29415E",
+    marginVertical: 2,
+  },
   searchRow: { flexDirection: "row", marginBottom: 10 },
   searchInput: {
     flex: 1,
@@ -1074,7 +1187,7 @@ const styles = StyleSheet.create({
   disabledButton: { opacity: 0.55 },
   loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
   loadingText: { color: "#94A3B8", fontSize: 13, marginTop: 10 },
-  listContent: { paddingTop: 4, paddingBottom: 28 },
+  listContent: { paddingTop: 4, paddingBottom: 56 },
   recordCard: {
     borderRadius: 16,
     borderWidth: 1,
