@@ -588,10 +588,6 @@ export default function UploadScreen() {
     params.customerName
   );
 
-  const selectedCustomerEmail = getSingleParameter(
-    params.customerEmail
-  );
-
   const selectedContactName = getSingleParameter(
     params.contactName
   );
@@ -618,9 +614,7 @@ export default function UploadScreen() {
           await getCurrentUserEmail();
 
         if (isMounted) {
-          setRecipientEmail(
-            accountEmail || selectedCustomerEmail
-          );
+          setRecipientEmail(accountEmail || "");
         }
       } catch (error) {
         console.warn(
@@ -629,7 +623,7 @@ export default function UploadScreen() {
         );
 
         if (isMounted) {
-          setRecipientEmail(selectedCustomerEmail);
+          setRecipientEmail("");
         }
       }
     }
@@ -639,7 +633,7 @@ export default function UploadScreen() {
     return () => {
       isMounted = false;
     };
-  }, [selectedCustomerEmail]);
+  }, []);
 
   const [isProcessing, setIsProcessing] =
     useState(false);
@@ -1398,8 +1392,8 @@ export default function UploadScreen() {
 
     if (sendEmail && !cleanedRecipient) {
       Alert.alert(
-        "Recipient email required",
-        "Enter the email address that should receive the finalized workbook."
+        "Account email unavailable",
+        "WalkthroughAI could not load your signed-in account email. Return to Account and confirm your sign-in email before emailing the report."
       );
       return null;
     }
@@ -3153,21 +3147,17 @@ export default function UploadScreen() {
 
 
                   <View style={styles.compactEmailRow}>
-                    <TextInput
-                      value={recipientEmail}
-                      onChangeText={(value) => {
-                        setRecipientEmail(value);
-                        setEmailSent(false);
-                        setEmailedRecipient("");
-                      }}
-                      editable={!isFinalizing}
-                      placeholder="customer@example.com"
-                      placeholderTextColor="#657891"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      style={styles.compactEmailInput}
-                    />
+                    <View style={styles.compactEmailInput}>
+                      <Text style={styles.reportRecipientLabel}>
+                        REPORT WILL BE EMAILED TO
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={styles.reportRecipientEmail}
+                      >
+                        {recipientEmail || "Account email unavailable"}
+                      </Text>
+                    </View>
 
                     <Pressable
                       disabled={isFinalizing}
@@ -3295,21 +3285,17 @@ export default function UploadScreen() {
                   </Pressable>
 
                   <View style={styles.completionEmailRow}>
-                    <TextInput
-                      value={recipientEmail}
-                      onChangeText={(value) => {
-                        setRecipientEmail(value);
-                        setEmailSent(false);
-                        setEmailedRecipient("");
-                      }}
-                      editable={!isFinalizing}
-                      placeholder="customer@example.com"
-                      placeholderTextColor="#657891"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      style={styles.completionEmailInput}
-                    />
+                    <View style={styles.completionEmailInput}>
+                      <Text style={styles.reportRecipientLabel}>
+                        REPORT WILL BE EMAILED TO
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={styles.reportRecipientEmail}
+                      >
+                        {recipientEmail || "Account email unavailable"}
+                      </Text>
+                    </View>
 
                     <Pressable
                       disabled={isFinalizing}
@@ -4834,14 +4820,28 @@ const styles = StyleSheet.create({
   compactEmailInput: {
     flex: 1,
     minHeight: 44,
+    justifyContent: "center",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#36506E",
     backgroundColor: "#112036",
-    color: "#FFFFFF",
-    fontSize: 14,
     paddingHorizontal: 12,
+    paddingVertical: 6,
     marginRight: 9,
+  },
+
+  reportRecipientLabel: {
+    color: "#6F86A2",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+
+  reportRecipientEmail: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2,
   },
 
   compactFinalizeButton: {
@@ -4929,13 +4929,13 @@ const styles = StyleSheet.create({
   completionEmailInput: {
     flex: 1,
     minHeight: 46,
+    justifyContent: "center",
     borderRadius: 13,
     borderWidth: 1,
     borderColor: "#365B52",
     backgroundColor: "#0E201D",
-    color: "#FFFFFF",
-    fontSize: 14,
     paddingHorizontal: 12,
+    paddingVertical: 6,
     marginRight: 9,
   },
 

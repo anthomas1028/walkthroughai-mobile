@@ -120,13 +120,13 @@ export default function AccountScreen() {
     const cleanedName = workspaceName.trim();
 
     if (!cleanedName) {
-      Alert.alert("Workspace name required", "Enter a workspace name.");
+      Alert.alert("Name required", "Enter your name.");
       return;
     }
 
     if (cleanedName.length > 120) {
       Alert.alert(
-        "Workspace name too long",
+        "Name too long",
         "Use 120 characters or fewer."
       );
       return;
@@ -164,12 +164,12 @@ export default function AccountScreen() {
       setWorkspaceName(data.workspace.name);
 
       Alert.alert(
-        "Workspace updated",
-        `${data.workspace.name} is now displayed on your account.`
+        "Profile updated",
+        `${data.workspace.name} is now displayed in your Fastenal profile.`
       );
     } catch (error) {
       Alert.alert(
-        "Unable to update workspace",
+        "Unable to update profile",
         error instanceof Error ? error.message : "Please try again."
       );
     } finally {
@@ -466,18 +466,18 @@ export default function AccountScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>WORKSPACE</Text>
-              <Text style={styles.cardTitle}>Business name</Text>
+              <Text style={styles.cardLabel}>FASTENAL PROFILE</Text>
+              <Text style={styles.cardTitle}>Name</Text>
               <Text style={styles.cardDescription}>
-                This name appears at the top of WalkthroughAI for everyone in
-                this workspace.
+                This name appears throughout WalkthroughAI and on walkthrough
+                reports.
               </Text>
 
               <TextInput
                 autoCapitalize="words"
                 maxLength={120}
                 onChangeText={setWorkspaceName}
-                placeholder="Workspace name"
+                placeholder="Your name"
                 placeholderTextColor="#64748B"
                 style={styles.input}
                 value={workspaceName}
@@ -497,7 +497,7 @@ export default function AccountScreen() {
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.primaryButtonText}>
-                    Save Workspace Name
+                    Save Name
                   </Text>
                 )}
               </Pressable>

@@ -2,6 +2,14 @@ import { supabase } from "./supabase";
 
 export const API_BASE_URL = "https://walkthroughai-api.onrender.com";
 
+export async function getCurrentUserEmail(): Promise<string> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  return session?.user?.email?.trim() || "";
+}
+
 export async function apiFetch(
   input: string,
   init: RequestInit = {}

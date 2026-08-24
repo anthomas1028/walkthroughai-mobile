@@ -1059,30 +1059,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 14,
   },
 
   logoContainer: {
-    width: 54,
-    height: 54,
-    borderRadius: 17,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#2563EB",
-    marginRight: 14,
+    marginRight: 12,
   },
 
   logoImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 17,
+    borderRadius: 15,
   },
 
   headerText: {
@@ -1115,7 +1115,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginLeft: 8,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
 
   accountButtonText: {
@@ -1212,7 +1212,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 13,
+    marginBottom: 8,
   },
 
   sectionTitle: {
@@ -1241,13 +1241,13 @@ const styles = StyleSheet.create({
 
   searchRow: {
     flexDirection: "row",
-    marginBottom: 13,
+    marginBottom: 8,
   },
 
   customerViewTabs: {
     flexDirection: "row",
     padding: 4,
-    marginBottom: 11,
+    marginBottom: 8,
     borderRadius: 13,
     backgroundColor: "#101A2A",
     borderWidth: 1,
@@ -1256,7 +1256,7 @@ const styles = StyleSheet.create({
 
   customerViewTab: {
     flex: 1,
-    minHeight: 36,
+    minHeight: 32,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 9,
@@ -1283,8 +1283,8 @@ const styles = StyleSheet.create({
 
   searchInput: {
     flex: 1,
-    height: 48,
-    borderRadius: 14,
+    height: 42,
+    borderRadius: 13,
     backgroundColor: "#121C2D",
     borderWidth: 1,
     borderColor: "#26364F",
@@ -1295,8 +1295,8 @@ const styles = StyleSheet.create({
   },
 
   searchButton: {
-    height: 48,
-    borderRadius: 14,
+    height: 42,
+    borderRadius: 13,
     backgroundColor: "#1D4ED8",
     alignItems: "center",
     justifyContent: "center",
@@ -1504,10 +1504,10 @@ const styles = StyleSheet.create({
   },
 
   bottomArea: {
-    marginTop: 8,
+    marginTop: 4,
     borderTopWidth: 1,
     borderTopColor: "#22314A",
-    paddingTop: 10,
+    paddingTop: 6,
   },
 
   selectedCustomerRow: {
@@ -1619,7 +1619,7 @@ const styles = StyleSheet.create({
   },
 
   noSelectionCard: {
-    minHeight: 62,
+    minHeight: 44,
     justifyContent: "center",
     borderRadius: 14,
     borderWidth: 1,
@@ -1641,15 +1641,15 @@ const styles = StyleSheet.create({
   },
 
   feedbackButton: {
-    minHeight: 40,
-    borderRadius: 12,
+    minHeight: 34,
+    borderRadius: 11,
     borderWidth: 1,
     borderColor: "#31547D",
     backgroundColor: "#101A2A",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 10,
+    marginTop: 6,
   },
 
   feedbackButtonIcon: {
@@ -1665,9 +1665,9 @@ const styles = StyleSheet.create({
 
   versionText: {
     color: "#52647A",
-    fontSize: 11,
+    fontSize: 10,
     textAlign: "center",
-    marginTop: 10,
+    marginTop: 5,
   },
 
   buttonPressed: {
