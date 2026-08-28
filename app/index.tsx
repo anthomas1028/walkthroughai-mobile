@@ -33,6 +33,8 @@ type Customer = {
   state: string | null;
   postal_code: string | null;
   notes: string | null;
+  logo_path?: string | null;
+  logo_url?: string | null;
   is_archived: boolean;
   archived_at: string | null;
   created_at: string;
@@ -501,15 +503,31 @@ export default function HomeScreen() {
         ]}
       >
         <View style={styles.customerSelectionRow}>
-          <View
-            style={[
-              styles.radioOuter,
-              isSelected && styles.radioOuterSelected,
-            ]}
-          >
-            {isSelected ? (
-              <View style={styles.radioInner} />
-            ) : null}
+          <View style={styles.customerLogoWrap}>
+            {item.logo_url ? (
+              <Image
+                resizeMode="contain"
+                source={{ uri: item.logo_url }}
+                style={styles.customerLogoImage}
+              />
+            ) : (
+              <View style={styles.customerLogoPlaceholder}>
+                <Text style={styles.customerLogoPlaceholderText}>
+                  {item.company_name.trim().slice(0, 2).toUpperCase() || "CO"}
+                </Text>
+              </View>
+            )}
+
+            <View
+              style={[
+                styles.customerSelectionBadge,
+                isSelected && styles.customerSelectionBadgeSelected,
+              ]}
+            >
+              {isSelected ? (
+                <View style={styles.customerSelectionBadgeInner} />
+              ) : null}
+            </View>
           </View>
 
           <View style={styles.customerInformation}>
@@ -1336,25 +1354,63 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  radioOuter: {
-    width: 23,
-    height: 23,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#64748B",
+  customerLogoWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    marginRight: 13,
+    position: "relative",
+  },
+
+  customerLogoImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+
+  customerLogoPlaceholder: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 13,
+    backgroundColor: "#17243A",
+    borderWidth: 1,
+    borderColor: "#334155",
   },
 
-  radioOuterSelected: {
+  customerLogoPlaceholderText: {
+    color: "#BFDBFE",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  customerSelectionBadge: {
+    position: "absolute",
+    right: -4,
+    bottom: -4,
+    width: 19,
+    height: 19,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#64748B",
+    backgroundColor: "#121C2D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  customerSelectionBadgeSelected: {
     borderColor: "#3B82F6",
+    backgroundColor: "#14243A",
   },
 
-  radioInner: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
+  customerSelectionBadgeInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: "#3B82F6",
   },
 

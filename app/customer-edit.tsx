@@ -1,8 +1,10 @@
+import * as ImagePicker from "expo-image-picker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -28,6 +30,8 @@ type Customer = {
   state: string | null;
   postal_code: string | null;
   notes: string | null;
+  logo_path?: string | null;
+  logo_url?: string | null;
   is_archived: boolean;
   archived_at: string | null;
   created_at: string;
@@ -51,6 +55,7 @@ export default function CustomerEditScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isManaging, setIsManaging] = useState(false);
+  const [isLogoManaging, setIsLogoManaging] = useState(false);
   const [isArchived, setIsArchived] = useState(false);
   const [savedCompanyName, setSavedCompanyName] = useState("");
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -66,6 +71,8 @@ export default function CustomerEditScreen() {
   const [state, setState] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [notes, setNotes] = useState("");
+  const [logoPath, setLogoPath] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
 
   const loadCustomer = useCallback(async () => {
     if (!customerId) {
@@ -118,6 +125,8 @@ export default function CustomerEditScreen() {
       setState(customer.state || "");
       setPostalCode(customer.postal_code || "");
       setNotes(customer.notes || "");
+      setLogoPath(customer.logo_path || "");
+      setLogoUrl(customer.logo_url || "");
     } catch (error) {
       const message =
         error instanceof Error
@@ -138,6 +147,157 @@ export default function CustomerEditScreen() {
       loadCustomer();
     }, [loadCustomer])
   );
+
+  async function chooseCustomerLogo() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Photo access required",
+        "Allow photo access to choose a customer or company logo."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    });
+
+    if (result.canceled || !result.assets?.length) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    const fallbackExtension =
+      asset.mimeType === "image/png"
+        ? "png"
+        : asset.mimeType === "image/webp"
+          ? "webp"
+          : "jpg";
+    const fileName =
+      asset.fileName?.trim() || `customer-logo.${fallbackExtension}`;
+    const mimeType = asset.mimeType || `image/${fallbackExtension}`;
+
+    const formData = new FormData();
+    formData.append(
+      "logo",
+      {
+        uri: asset.uri,
+        name: fileName,
+        type: mimeType,
+      } as any
+    );
+
+    setIsLogoManaging(true);
+
+    try {
+      const response = await apiFetch(
+        `${API_BASE_URL}/api/customers/${customerId}/logo`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const responseText = await response.text();
+
+      let data: CustomerResponse;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          "Walkthrough AI received an unexpected response. Please try again."
+        );
+      }
+
+      if (!response.ok || !data.success || !data.customer) {
+        throw new Error(
+          data.error || "Walkthrough AI couldn’t upload this customer logo."
+        );
+      }
+
+      setLogoPath(data.customer.logo_path || "");
+      setLogoUrl(data.customer.logo_url || "");
+
+      Alert.alert(
+        "Logo updated",
+        `${data.customer.company_name} now has a saved company logo.`
+      );
+    } catch (error) {
+      Alert.alert(
+        "Unable to update logo",
+        error instanceof Error
+          ? error.message
+          : "Walkthrough AI couldn’t upload this customer logo."
+      );
+    } finally {
+      setIsLogoManaging(false);
+    }
+  }
+
+  function confirmRemoveCustomerLogo() {
+    Alert.alert(
+      "Remove company logo?",
+      `Remove the saved logo for ${savedCompanyName}?`,
+      [
+        { text: "Keep Logo", style: "cancel" },
+        {
+          text: "Remove Logo",
+          style: "destructive",
+          onPress: () => {
+            removeCustomerLogo().catch(() => undefined);
+          },
+        },
+      ]
+    );
+  }
+
+  async function removeCustomerLogo() {
+    setIsLogoManaging(true);
+
+    try {
+      const response = await apiFetch(
+        `${API_BASE_URL}/api/customers/${customerId}/logo`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const responseText = await response.text();
+
+      let data: CustomerResponse;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          "Walkthrough AI received an unexpected response. Please try again."
+        );
+      }
+
+      if (!response.ok || !data.success || !data.customer) {
+        throw new Error(
+          data.error || "Walkthrough AI couldn’t remove this customer logo."
+        );
+      }
+
+      setLogoPath("");
+      setLogoUrl("");
+    } catch (error) {
+      Alert.alert(
+        "Unable to remove logo",
+        error instanceof Error
+          ? error.message
+          : "Walkthrough AI couldn’t remove this customer logo."
+      );
+    } finally {
+      setIsLogoManaging(false);
+    }
+  }
 
   async function saveCustomer() {
     const cleanedCompanyName = companyName.trim();
@@ -410,6 +570,69 @@ export default function CustomerEditScreen() {
                   <Text style={styles.sectionTitle}>
                     Company
                   </Text>
+
+                  <View style={styles.logoCard}>
+                    <View style={styles.logoPreview}>
+                      {logoUrl ? (
+                        <Image
+                          resizeMode="contain"
+                          source={{ uri: logoUrl }}
+                          style={styles.logoImage}
+                        />
+                      ) : (
+                        <View style={styles.logoPlaceholder}>
+                          <Text style={styles.logoPlaceholderText}>
+                            {companyName.trim().slice(0, 2).toUpperCase() || "CO"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.logoActions}>
+                      <Text style={styles.logoTitle}>Company Logo</Text>
+                      <Text style={styles.logoDescription}>
+                        Add a customer or company logo for profiles and reports.
+                      </Text>
+
+                      <View style={styles.logoButtonRow}>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={isLogoManaging}
+                          onPress={chooseCustomerLogo}
+                          style={({ pressed }) => [
+                            styles.logoButton,
+                            pressed && styles.buttonPressed,
+                            isLogoManaging && styles.buttonDisabled,
+                          ]}
+                        >
+                          {isLogoManaging ? (
+                            <ActivityIndicator color="#BFDBFE" size="small" />
+                          ) : (
+                            <Text style={styles.logoButtonText}>
+                              {logoPath ? "Replace Logo" : "Add Logo"}
+                            </Text>
+                          )}
+                        </Pressable>
+
+                        {logoPath ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            disabled={isLogoManaging}
+                            onPress={confirmRemoveCustomerLogo}
+                            style={({ pressed }) => [
+                              styles.removeLogoButton,
+                              pressed && styles.buttonPressed,
+                              isLogoManaging && styles.buttonDisabled,
+                            ]}
+                          >
+                            <Text style={styles.removeLogoButtonText}>
+                              Remove
+                            </Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
 
                   <TextInput
                     autoCapitalize="words"
@@ -921,6 +1144,104 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginTop: 4,
     marginBottom: 9,
+  },
+
+  logoCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#26364F",
+    backgroundColor: "#0C1524",
+    padding: 12,
+    marginBottom: 14,
+  },
+
+  logoPreview: {
+    width: 76,
+    height: 76,
+    borderRadius: 15,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#334155",
+    marginRight: 13,
+  },
+
+  logoImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  logoPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#17243A",
+  },
+
+  logoPlaceholderText: {
+    color: "#BFDBFE",
+    fontSize: 22,
+    fontWeight: "900",
+  },
+
+  logoActions: {
+    flex: 1,
+  },
+
+  logoTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  logoDescription: {
+    color: "#94A3B8",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+    marginBottom: 9,
+  },
+
+  logoButtonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  logoButton: {
+    minHeight: 38,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#31547D",
+    backgroundColor: "#172B4D",
+    paddingHorizontal: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  logoButtonText: {
+    color: "#BFDBFE",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  removeLogoButton: {
+    minHeight: 38,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#7F1D1D",
+    backgroundColor: "#2B151A",
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+
+  removeLogoButtonText: {
+    color: "#FCA5A5",
+    fontSize: 13,
+    fontWeight: "800",
   },
 
   input: {
