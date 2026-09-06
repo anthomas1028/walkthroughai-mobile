@@ -25,6 +25,7 @@ import { API_BASE_URL, apiFetch } from "../lib/api";
 type Customer = {
   id: number;
   company_name: string;
+  logo_url?: string | null;
 };
 
 type ReportRecord = {
@@ -206,6 +207,7 @@ export default function CustomerReportScreen() {
   const viewerHeight = Math.max(windowHeight - 120, 320);
 
   const [report, setReport] = useState<CustomerReport | null>(null);
+  const [customerLogoUrl, setCustomerLogoUrl] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [sort, setSort] = useState("newest");
@@ -278,6 +280,22 @@ export default function CustomerReportScreen() {
         }
 
         setReport(data.report);
+
+        try {
+          const customerResponse = await apiFetch(
+            `${API_BASE_URL}/api/customers/${customerId}`
+          );
+
+          if (customerResponse.ok) {
+            const customerData = await customerResponse.json();
+
+            if (customerData?.success && customerData?.customer) {
+              setCustomerLogoUrl(customerData.customer.logo_url || "");
+            }
+          }
+        } catch {
+          setCustomerLogoUrl("");
+        }
 
         if (isUniquePartsReport) {
           setAvailableInventoryVendors((current) =>
@@ -1019,6 +1037,17 @@ export default function CustomerReportScreen() {
           >
             <Text style={styles.backText}>‹</Text>
           </Pressable>
+
+          {customerLogoUrl ? (
+            <View style={styles.headerLogoFrame}>
+              <Image
+                source={{ uri: customerLogoUrl }}
+                resizeMode="contain"
+                style={styles.customerLogoImage}
+              />
+            </View>
+          ) : null}
+
           <View style={styles.headerText}>
             <Text numberOfLines={1} style={styles.title}>
               {isUniquePartsReport
@@ -1043,9 +1072,19 @@ export default function CustomerReportScreen() {
                   Distinct parts identified across completed walkthroughs
                 </Text>
               </View>
-              <View style={styles.inventoryHeroBadge}>
-                <Ionicons name="cube-outline" size={22} color="#93C5FD" />
-              </View>
+              {customerLogoUrl ? (
+                <View style={styles.inventoryHeroLogoFrame}>
+                  <Image
+                    source={{ uri: customerLogoUrl }}
+                    resizeMode="contain"
+                    style={styles.customerLogoImage}
+                  />
+                </View>
+              ) : (
+                <View style={styles.inventoryHeroBadge}>
+                  <Ionicons name="cube-outline" size={22} color="#93C5FD" />
+                </View>
+              )}
             </View>
 
             <View style={styles.inventoryStatsRow}>
@@ -1577,6 +1616,21 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   backText: { color: "#FFFFFF", fontSize: 34, lineHeight: 36, marginTop: -3 },
+  headerLogoFrame: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D9E2EC",
+    backgroundColor: "#FFFFFF",
+    padding: 5,
+    marginRight: 12,
+    overflow: "hidden",
+  },
+  customerLogoImage: {
+    width: "100%",
+    height: "100%",
+  },
   headerText: { flex: 1 },
   title: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
   subtitle: { color: "#94A3B8", fontSize: 13, marginTop: 3 },
@@ -1618,6 +1672,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#16283D",
     alignItems: "center",
     justifyContent: "center",
+  },
+  inventoryHeroLogoFrame: {
+    width: 48,
+    height: 48,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#D9E2EC",
+    backgroundColor: "#FFFFFF",
+    padding: 5,
+    overflow: "hidden",
   },
   inventoryStatsRow: {
     flexDirection: "row",
