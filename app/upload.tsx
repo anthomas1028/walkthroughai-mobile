@@ -29,7 +29,7 @@ import {
 } from "../lib/api";
 
 
-const UPLOAD_API_URL = `${API_BASE_URL}/api/upload`;
+const UPLOAD_API_URL = `${API_BASE_URL}/api/upload-sessions`;
 
 const FINALIZE_API_URL = `${API_BASE_URL}/api/finalize`;
 
@@ -564,6 +564,12 @@ function EditableField({
 }
 
 export default function UploadScreen() {
+  const pendingUpload = useRef<{
+    key: string;
+    prepared: SelectedPhoto[];
+    uploadId: string;
+    uploaded: Set<number>;
+  } | null>(null);
   const { width: windowWidth, height: windowHeight } =
     useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
@@ -836,66 +842,71 @@ export default function UploadScreen() {
 
     let preparedPhotos: SelectedPhoto[] = [];
 
-    function buildUploadFormData(): FormData {
-      const formData = new FormData();
-
-      formData.append("customer", customer);
-
-      if (customerId) {
-        formData.append("customer_id", customerId);
+    async function uploadRequest(url: string, init: RequestInit): Promise<{
+      response: Response;
+      data: UploadApiResponse & { upload_id?: string };
+    }> {
+      for (let attempt = 0; ; attempt += 1) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 180000);
+        try {
+          const response = await apiFetch(url, { ...init, signal: controller.signal });
+          const data = await readJsonResponse<UploadApiResponse & { upload_id?: string }>(response);
+          if (!response.ok) {
+            if (response.status >= 500 && attempt < 2) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+              continue;
+            }
+            throw new Error(data.error || data.details || `Upload returned HTTP ${response.status}.`);
+          }
+          return { response, data };
+        } catch (error) {
+          // Only transient transport failures are automatically retried.
+          if (attempt >= 2 || !(error instanceof TypeError ||
+              (error instanceof Error && error.name === "AbortError"))) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        } finally {
+          clearTimeout(timer);
+        }
       }
-
-      preparedPhotos.forEach((photo, index) => {
-        const uploadFile = {
-          uri: photo.uri,
-          name: getFileName(photo, index),
-          type: getMimeType(photo),
-        };
-
-        formData.append(
-          "photos",
-          uploadFile as unknown as Blob
-        );
-      });
-
-      formData.append(
-        "photo_locations",
-        JSON.stringify(
-          preparedPhotos.map((photo) => cleanText(photo.location))
-        )
-      );
-
-      return formData;
     }
 
     async function submitBackgroundJob(): Promise<{
       response: Response;
       data: UploadApiResponse;
     }> {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => {
-        controller.abort();
-      }, 180000);
-
-      try {
-        const response = await apiFetch(UPLOAD_API_URL, {
+      const pending = pendingUpload.current!;
+      if (!pending.uploadId) {
+        const { data } = await uploadRequest(UPLOAD_API_URL, {
           method: "POST",
-          body: buildUploadFormData(),
-          signal: controller.signal,
-          headers: {
-            Accept: "application/json",
-          },
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ photo_count: preparedPhotos.length }),
         });
-
-        const data =
-          await readJsonResponse<UploadApiResponse>(
-            response
-          );
-
-        return { response, data };
-      } finally {
-        clearTimeout(timeout);
+        if (!data.upload_id) throw new Error("The server did not create an upload session.");
+        pending.uploadId = data.upload_id;
       }
+      const base = `${UPLOAD_API_URL}/${pending.uploadId}`;
+      for (let index = 0; index < preparedPhotos.length; index += 1) {
+        if (pending.uploaded.has(index)) continue;
+        setJobStatusMessage(`Uploading photo ${index + 1} of ${preparedPhotos.length}. Keep the app open.`);
+        const photo = preparedPhotos[index];
+        const body = new FormData();
+        body.append("photo", {
+          uri: photo.uri, name: getFileName(photo, index), type: getMimeType(photo),
+        } as unknown as Blob);
+        await uploadRequest(`${base}/photos/${index}`, {
+          method: "POST", headers: { Accept: "application/json" }, body,
+        });
+        pending.uploaded.add(index);
+      }
+      setJobStatusMessage("All photos uploaded. Starting analysis.");
+      const body = new FormData();
+      body.append("customer", customer);
+      if (customerId) body.append("customer_id", customerId);
+      body.append("photo_locations", JSON.stringify(preparedPhotos.map(photo => cleanText(photo.location))));
+      return uploadRequest(`${base}/submit`, {
+        method: "POST", headers: { Accept: "application/json" }, body,
+      });
     }
 
     async function waitForJobCompletion(
@@ -976,7 +987,13 @@ export default function UploadScreen() {
       setEmailSent(false);
       setEmailedRecipient("");
 
-      preparedPhotos = await preparePhotosForUpload(photos);
+      const uploadKey = JSON.stringify([customer, customerId, photos]);
+      if (!pendingUpload.current || pendingUpload.current.key !== uploadKey) {
+        preparedPhotos = await preparePhotosForUpload(photos);
+        pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: "", uploaded: new Set() };
+      } else {
+        preparedPhotos = pendingUpload.current.prepared;
+      }
 
       setJobStatusMessage(
         "Uploading photos to Walkthrough AI."
@@ -1051,7 +1068,7 @@ export default function UploadScreen() {
         error.name === "AbortError";
 
       const message = isAbortError
-        ? "The photo upload took too long. Please press Analyze again."
+        ? "A photo upload timed out. Your completed uploads are saved on this screen. Press Analyze to resume; keep the app open."
         : error instanceof Error
         ? error.message
         : "Walkthrough AI could not analyze the photos.";
@@ -1967,7 +1984,7 @@ export default function UploadScreen() {
               <Text
                 style={styles.processingTitle}
               >
-                Analyzing inventory
+                {currentJobId ? "Analyzing inventory" : "Uploading photos"}
               </Text>
 
               <Text
@@ -1995,7 +2012,7 @@ export default function UploadScreen() {
               <Text
                 style={styles.processingNote}
               >
-                {jobProgress}% complete
+                {currentJobId ? `${jobProgress}% analyzed` : jobStatusMessage}
               </Text>
 
               <View
