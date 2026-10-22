@@ -1,7 +1,8 @@
 const base = require("./app.json").expo;
 
 module.exports = () => {
-  const testing = process.env.APP_VARIANT === "test";
+  const testflight = process.env.APP_VARIANT === "testflight";
+  const testing = process.env.APP_VARIANT === "test" || testflight;
   if (!testing) return {
     ...base, version: process.env.APP_STORE_VERSION || base.version,
     ...(process.env.ENABLE_COMPLETION_NOTIFICATIONS === "1" ? {
@@ -11,10 +12,11 @@ module.exports = () => {
   };
   return {
     ...base,
-    name: "WalkthroughAI Test",
-    scheme: "walkthroughai-test",
-    ios: { ...base.ios, bundleIdentifier: `${base.ios.bundleIdentifier}.test` },
-    android: { ...base.android, package: `${base.android.package}.test` },
+    name: testflight ? base.name : "WalkthroughAI Test",
+    version: testflight ? process.env.APP_STORE_VERSION || base.version : base.version,
+    scheme: testflight ? base.scheme : "walkthroughai-test",
+    ios: testflight ? base.ios : { ...base.ios, bundleIdentifier: `${base.ios.bundleIdentifier}.test` },
+    android: testflight ? base.android : { ...base.android, package: `${base.android.package}.test` },
     plugins: [...base.plugins, "expo-notifications"],
     runtimeVersion: { policy: "fingerprint" },
     updates: {

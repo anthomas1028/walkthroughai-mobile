@@ -32,10 +32,11 @@
       "extends": "production",
       "distribution": "store",
       "env": {
-        "APP_VARIANT": "production",
+        "APP_VARIANT": "testflight",
         "APP_STORE_VERSION": "2.0.1",
         "ENABLE_COMPLETION_NOTIFICATIONS": "1"
-      }
+      },
+      "channel": "testing"
     }
   },
   "submit": {
