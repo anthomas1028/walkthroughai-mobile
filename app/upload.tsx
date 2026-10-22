@@ -3773,7 +3773,7 @@ export default function UploadScreen() {
                       const references = (current.retake_references || []).filter(ref => ref.job_id !== reference.job_id);
                       return { ...fillRetakeBlanks(current, candidate), retake_references: [...references, reference] };
                     })} />}
-                  {SOURCING_ENABLED && !correctedWorkbookUrl && <SourcingPanel key={`sourcing-${editingIndex}`}
+                  {SOURCING_ENABLED && !correctedWorkbookUrl && <SourcingPanel initialManufacturer={editDraft.manufacturer} initialManufacturerPartNumber={editDraft.manufacturer_part_number} key={`sourcing-${editingIndex}`}
                     saved={editDraft.sourcing_state} jobId={currentJobId} photo={editDraft.photo}
                     existingFastenal={editDraft.fastenal_part_number} blocked={reviewTask === "retake"}
                     onBusy={value => setReviewTask(value ? "sourcing" : null)}

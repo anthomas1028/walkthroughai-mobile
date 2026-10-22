@@ -4,13 +4,15 @@ import { apiFetch, API_BASE_URL } from '../lib/api';
 import { SourcingProposal, SourcingState } from '../lib/sourcing';
 
 const action = { padding: 13, minHeight: 46, backgroundColor: '#244C68', borderRadius: 10, marginTop: 8 };
-export function SourcingPanel({ saved, jobId, photo, existingFastenal, blocked, onState, onSelected, onBusy, onClear }: {
-  saved?: SourcingState; jobId: string; photo: string; existingFastenal: string; blocked: boolean;
+export function SourcingPanel({ saved, jobId, photo, existingFastenal, initialManufacturer, initialManufacturerPartNumber, blocked, onState, onSelected, onBusy, onClear }: {
+  initialManufacturer?: string; initialManufacturerPartNumber?: string; saved?: SourcingState; jobId: string; photo: string; existingFastenal: string; blocked: boolean;
   onState: (value: SourcingState) => Promise<void>; onSelected: (value: SourcingState, proposal: SourcingProposal) => Promise<void>; onClear: () => Promise<void>; onBusy: (busy: boolean) => void;
 }) {
-  const [number, setNumber] = useState(saved?.sourceNumber || '');
+  const [number, setNumber] = useState(saved?.sourceNumber || initialManufacturerPartNumber || '');
   const [allowed,setAllowed] = useState(false),[busy,setBusy] = useState(false),[error,setError] = useState('');
   const [ack,setAck] = useState<number | null>(null),[replace,setReplace] = useState<number | null>(null);
+  const [kind,setKind] = useState<'manufacturer'|'grainger'>(saved ? saved.sourceKind || 'grainger' : 'manufacturer');
+  const [manufacturer,setManufacturer] = useState(saved?.sourceManufacturer || initialManufacturer || '');
   const active=useRef(true),running=useRef(false);
   useEffect(() => {
     active.current=true;
@@ -23,14 +25,17 @@ export function SourcingPanel({ saved, jobId, photo, existingFastenal, blocked, 
   }
   async function lookup(resume=false) {
     if(running.current || blocked || !allowed)return;
-    const code=(resume && saved ? saved.sourceNumber : number).trim().toUpperCase();
-    if(!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(code)){setError('Enter the Grainger item number shown on its label.');return;}
+    const lookupKind=resume && saved ? saved.sourceKind || 'grainger' : kind;
+    const brand=(resume && saved ? saved.sourceManufacturer || '' : manufacturer).trim();
+    const raw=(resume && saved ? saved.sourceNumber : number).trim();
+    const code=lookupKind==='grainger' ? raw.toUpperCase() : raw;
+    if(lookupKind==='grainger' ? !/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(code) : !brand || !code || /[\x00-\x1f\x7f]/.test(brand+code)){setError('Enter the manufacturer and its part number, or a valid Grainger item number.');return;}
     running.current=true;setBusy(true);onBusy(true);setError('');setAck(null);setReplace(null);
-    let state:SourcingState=resume && saved ? {...saved} : {sourceNumber:code,targetToken:`item-${Date.now()}-${Math.random().toString(36).slice(2)}`};
+    let state:SourcingState=resume && saved ? {...saved} : {sourceNumber:code,sourceKind:lookupKind,sourceManufacturer:brand,targetToken:`item-${Date.now()}-${Math.random().toString(36).slice(2)}`};
     try {
       await onState(state); // Retain the idempotency token before any request.
       if(!state.proposalId){
-        const created=await read(await apiFetch(`${API_BASE_URL}/api/test/sourcing`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_id:jobId,photo,source_number:state.sourceNumber,target_token:state.targetToken})}));
+        const created=await read(await apiFetch(`${API_BASE_URL}/api/test/sourcing`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_id:jobId,photo,source_number:state.sourceNumber,source_kind:state.sourceKind || 'grainger',source_manufacturer:state.sourceManufacturer || '',target_token:state.targetToken})}));
         state={...state,proposalId:created.id,proposal:created};await onState(state);
       }
       const started=Date.now();
@@ -61,18 +66,20 @@ export function SourcingPanel({ saved, jobId, photo, existingFastenal, blocked, 
   const disabled=busy || blocked || !allowed;
   return <View style={{borderWidth:1,borderColor:'#315474',borderRadius:12,padding:14,marginVertical:12}}>
     <Text style={{color:'#E2E8F0',fontSize:18,fontWeight:'700'}}>Find Fastenal alternatives · Test</Text>
-    <Text style={{color:'#CBD5E1',marginTop:6}}>Search public Grainger and Fastenal listings. A suggestion is not an approved supplier cross-reference.</Text>
+    <Text style={{color:'#CBD5E1',marginTop:6}}>Search any manufacturer and part number against public Fastenal listings, or start from a Grainger item. Coverage depends on published evidence. Every selection needs employee review.</Text>
     {!allowed && <Text style={{color:'#FBBF24',marginTop:8}}>Sourcing must be enabled for this test account before searching.</Text>}
-    <Text style={{color:'#CBD5E1',marginTop:12}}>Grainger item number</Text>
-    <TextInput accessibilityLabel="Grainger item number" editable={!busy && !blocked} value={number} autoCapitalize="characters" autoCorrect={false} maxLength={40} onChangeText={setNumber} placeholder="For example, 29JV88" placeholderTextColor="#94A3B8" style={{color:'white',padding:12,borderColor:'#55718C',borderWidth:1,borderRadius:8,marginTop:6}}/>
+    <View style={{flexDirection:'row',gap:8}}>{(['manufacturer','grainger'] as const).map(mode=><Pressable key={mode} accessibilityRole="radio" accessibilityState={{selected:kind===mode}} disabled={busy || blocked} style={action} onPress={()=>{setKind(mode);setNumber('');}}><Text style={{color:'white'}}>{mode==='manufacturer'?'Manufacturer part':'Grainger item'}</Text></Pressable>)}</View>
+    {kind==='manufacturer' && <><Text style={{color:'#CBD5E1',marginTop:12}}>Manufacturer / brand as printed</Text><TextInput accessibilityLabel="Manufacturer" editable={!busy && !blocked} value={manufacturer} autoCorrect={false} maxLength={120} onChangeText={setManufacturer} placeholder="Any manufacturer name" placeholderTextColor="#94A3B8" style={{color:'white',padding:12,borderWidth:1,borderColor:'#55718C'}}/></>}
+    <Text style={{color:'#CBD5E1',marginTop:12}}>{kind==='manufacturer'?'Manufacturer part number (preserve punctuation)':'Grainger item number'}</Text>
+    <TextInput accessibilityLabel={kind==='manufacturer'?'Manufacturer part number':'Grainger item number'} editable={!busy && !blocked} value={number} autoCapitalize="none" autoCorrect={false} maxLength={kind==='manufacturer'?100:40} onChangeText={setNumber} placeholder="Part number from label" placeholderTextColor="#94A3B8" style={{color:'white',padding:12,borderColor:'#55718C',borderWidth:1,borderRadius:8,marginTop:6}}/>
     <Pressable accessibilityRole="button" disabled={disabled} style={[action,disabled && {opacity:.4}]} onPress={()=>void lookup(false)}><Text style={{color:'white'}}>Find alternatives</Text></Pressable>
     {saved && proposal?.status!=='complete' && <Pressable accessibilityRole="button" disabled={disabled} style={action} onPress={()=>{setNumber(saved.sourceNumber);void lookup(true);}}><Text style={{color:'white'}}>Resume saved lookup</Text></Pressable>}
     {busy && <View><ActivityIndicator/><Text accessibilityLiveRegion="polite" style={{color:'#CBD5E1'}}>Researching this item only. Your inventory is unchanged.</Text></View>}
     {!!error && <Text accessibilityLiveRegion="polite" style={{color:'#FCA5A5',marginTop:8}}>{error}</Text>}
     {saved && <Pressable accessibilityRole="button" disabled={busy || blocked} style={action} onPress={()=>{ void onClear().catch(()=>setError('Could not clear this selection.')); }}><Text style={{color:'#FBBF24'}}>{proposal?.selection ? 'Undo sourcing selection' : 'Clear sourcing lookup'}</Text></Pressable>}
     {proposal?.status==='complete' && <>
-      <Text style={{color:'#94A3B8',marginTop:12}}>Grainger {proposal.source_number} · Checked {proposal.checked_at ? new Date(proposal.checked_at).toLocaleString() : 'unknown'}</Text>
-      {proposal.source ? <><Text selectable style={{color:'white',marginTop:8}}>{proposal.source.brand} · {proposal.source.description}</Text><Pressable accessibilityRole="link" style={action} onPress={()=>link(proposal.source!.url)}><Text style={{color:'#BFDBFE'}}>View original Grainger listing</Text></Pressable></> : <Text style={{color:'#FBBF24'}}>No verified source item found. Nothing will be assigned.</Text>}
+      <Text style={{color:'#94A3B8',marginTop:12}}>{proposal.source_kind==='manufacturer' ? proposal.source_manufacturer : 'Grainger'} {proposal.source_number} · Checked {proposal.checked_at ? new Date(proposal.checked_at).toLocaleString() : 'unknown'}</Text>
+      {proposal.source ? <><Text selectable style={{color:'white',marginTop:8}}>{proposal.source.brand} · {proposal.source.description}</Text><Pressable accessibilityRole="link" style={action} onPress={()=>link(proposal.source!.url)}><Text style={{color:'#BFDBFE'}}>View verified source listing</Text></Pressable></> : <Text style={{color:'#FBBF24'}}>No verified source item found. Nothing will be assigned.</Text>}
       {proposal.source && !proposal.candidates.length && <Text style={{color:'#FBBF24',marginTop:8}}>No supported Fastenal candidate found. Keep the original item for sourcing follow-up.</Text>}
       {proposal.candidates.map((candidate,index)=>{
         const conflict=Boolean(existingFastenal && existingFastenal!==candidate.sku);
@@ -83,7 +90,7 @@ export function SourcingPanel({ saved, jobId, photo, existingFastenal, blocked, 
           <Text style={{color:'#FBBF24',marginVertical:6}}>{candidate.match_type==='same_manufacturer_product'?'Same manufacturer/product candidate · review required':'Suggested substitute · review required'}</Text>
           <Text selectable style={{color:'#CBD5E1'}}>{candidate.description}</Text>
           <Text style={{color:'#94A3B8',marginTop:6}}>Manufacturer number: {candidate.manufacturer_part_number || 'Not established'}</Text>
-          {candidate.comparisons.map(row=><View key={row.attribute} style={{paddingVertical:7,borderBottomWidth:1,borderBottomColor:'#23364B'}}><Text style={{color:row.status==='matches'?'#A7F3D0':'#FBBF24'}}>{row.attribute.replace(/_/g,' ')} · {row.status}{row.required?' · key specification':''}</Text><Text selectable style={{color:'#CBD5E1'}}>Grainger: {row.source || 'Unknown'}{'\n'}Fastenal: {row.candidate || 'Unknown'}</Text></View>)}
+          {candidate.comparisons.map(row=><View key={row.attribute} style={{paddingVertical:7,borderBottomWidth:1,borderBottomColor:'#23364B'}}><Text style={{color:row.status==='matches'?'#A7F3D0':'#FBBF24'}}>{row.attribute.replace(/_/g,' ')} · {row.status}{row.required?' · key specification':''}</Text><Text selectable style={{color:'#CBD5E1'}}>Source: {row.source || 'Unknown'}{'\n'}Fastenal: {row.candidate || 'Unknown'}</Text></View>)}
           <Pressable accessibilityRole="link" style={action} onPress={()=>link(candidate.url)}><Text style={{color:'#BFDBFE'}}>View Fastenal listing</Text></Pressable>
           {candidate.requires_acknowledgement && <Pressable accessibilityRole="checkbox" accessibilityState={{checked:ack===index}} disabled={disabled} style={action} onPress={()=>setAck(ack===index?null:index)}><Text style={{color:'white'}}>{ack===index?'☑':'☐'} I reviewed the differences and missing specifications.</Text></Pressable>}
           {conflict && <Pressable accessibilityRole="checkbox" accessibilityState={{checked:replace===index}} disabled={disabled} style={action} onPress={()=>setReplace(replace===index?null:index)}><Text style={{color:'#FBBF24'}}>{replace===index?'☑':'☐'} Replace existing Fastenal number {existingFastenal} with {candidate.sku}.</Text></Pressable>}

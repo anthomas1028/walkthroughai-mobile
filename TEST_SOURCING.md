@@ -80,3 +80,6 @@ lookup resume, saved-history display and the resulting Excel columns. Do not
 claim measured matching accuracy until those sources and selections are checked.
 
 Final automated check: 181 backend tests pass, mobile sourcing/retake/recovery checks pass, TypeScript passes, and the test iOS Metro bundle exports. A lookup with no verified option retains its supplier number as unselected follow-up without assigning a Fastenal SKU. Live provider and real-iPhone checks remain pending the combined test release.
+
+## Manufacturer lookup extension
+The test UI defaults to manufacturer + literal manufacturer part number, prefilled from OCR when available. Any manufacturer name is accepted; there is no fixed brand roster. Grainger mode remains available. Manufacturer mode searches public Fastenal pages only and requires the retrieved source listing to contain the same brand and literal MPN. No alias/OEM inference or punctuation stripping. Unknown or unpublished items remain unassigned. This is public search coverage, not an authorized complete catalog feed. Generic-category candidates never claim full specification equivalence. Employee review remains mandatory. Cache and request identities separate manufacturer, mode and literal MPN; history/export retain those fields. No deployment or live provider validation performed for this extension.
