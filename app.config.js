@@ -15,6 +15,6 @@ module.exports = () => {
       checkAutomatically: "ON_LOAD",
       fallbackToCacheTimeout: 0,
     },
-    extra: { ...base.extra, appVariant: "test", labelRetakes: true },
+    extra: { ...base.extra, appVariant: "test", labelRetakes: true, sourcing: true },
   };
 };

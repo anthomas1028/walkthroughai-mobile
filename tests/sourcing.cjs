@@ -1,0 +1,12 @@
+const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),assert=require('node:assert/strict');
+const out={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/sourcing.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:out,Error});
+const original={part_number:'29JV88',manufacturer_part_number:'29JV88',customer_part_number:'C-1',fastenal_part_number:'OLD'};
+const state={sourceNumber:'29JV88',proposalId:'proposal',targetToken:'target'};
+const proposal={id:'proposal',source_number:'29JV88',candidates:[{sku:'1024819'}],selection:{candidate_index:0,reviewed_by:'employee',reviewed_at:'today'}};
+const applied=out.applySourcingSelection(original,state,proposal);
+assert.equal(applied.part_number,'29JV88');assert.equal(applied.manufacturer_part_number,'29JV88');assert.equal(applied.customer_part_number,'C-1');
+assert.equal(applied.fastenal_part_number,'1024819');assert.equal(applied.sourcing_previous_fastenal,'OLD');assert.equal(applied.is_confirmed,false);assert.equal(applied.review_needed,true);
+assert.equal(original.fastenal_part_number,'OLD');assert.throws(()=>out.applySourcingSelection(original,state,{...proposal,selection:null}));
+assert.throws(()=>out.applySourcingSelection(original,state,{...proposal,source_number:'OTHER'}));assert.throws(()=>out.applySourcingSelection(original,state,{...proposal,id:'OTHER'}));
+const configure=require('../app.config.js');process.env.APP_VARIANT='production';assert.notEqual(configure().extra?.sourcing,true);process.env.APP_VARIANT='test';assert.equal(configure().extra.sourcing,true);
+console.log('PASS: explicit approved selection only, original identifiers preserved, undo value retained, review reset, test-only config.');

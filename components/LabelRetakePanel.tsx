@@ -7,8 +7,8 @@ import { retainPhotos } from '../lib/recovery';
 import { RetakeAttempt, RetakeCandidate, retakeChanges } from '../lib/label-retake';
 
 const button = { minHeight: 46, padding: 12, backgroundColor: '#23476A', borderRadius: 10, marginTop: 8 };
-export function LabelRetakePanel({ original, attempt, customer, customerId, location, onAttempt, onApply, onBusy }: {
-  original: RetakeCandidate; attempt?: RetakeAttempt; customer: string; customerId?: string; location: string;
+export function LabelRetakePanel({ original, attempt, customer, customerId, location, onAttempt, onApply, onBusy, blocked = false }: {
+  blocked?: boolean; original: RetakeCandidate; attempt?: RetakeAttempt; customer: string; customerId?: string; location: string;
   onAttempt: (value: RetakeAttempt) => Promise<void>; onApply: (candidate: RetakeCandidate, index: number) => void; onBusy: (busy: boolean) => void;
 }) {
   const [allowed, setAllowed] = useState(false);
@@ -27,7 +27,7 @@ export function LabelRetakePanel({ original, attempt, customer, customerId, loca
     return data;
   }
   async function process(value: RetakeAttempt) {
-    if (running.current || !allowed) return;
+    if (running.current || blocked || !allowed) return;
     running.current = true; setBusy(true); onBusy(true);
     let current: RetakeAttempt = { ...value, error: undefined };
     const checkpoint = async () => { if (active.current) await onAttempt({ ...current }); };
@@ -82,7 +82,7 @@ export function LabelRetakePanel({ original, attempt, customer, customerId, loca
     } finally { running.current = false; if (active.current) { setBusy(false); onBusy(false); } }
   }
   async function pick(camera: boolean) {
-    if (running.current || picking.current || !allowed) return;
+    if (running.current || picking.current || blocked || !allowed) return;
     picking.current = true; setBusy(true); onBusy(true); setMessage('Preparing close-up…');
     try {
       if (camera && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
@@ -118,9 +118,9 @@ export function LabelRetakePanel({ original, attempt, customer, customerId, loca
     {attempt?.uri && <Image source={{ uri: attempt.uri }} resizeMode="contain" style={{ width: '100%', height: 180, marginTop: 10 }} />}
     {attempt?.qualityWarnings?.map((warning, index) => <Text key={index} style={{ color: '#FBBF24', marginTop: 6 }}>{warning}</Text>)}
     {busy ? <View><ActivityIndicator /><Text accessibilityLiveRegion="polite" style={{ color: '#CBD5E1' }}>{message}</Text></View> : <>
-      <Pressable disabled={!allowed} accessibilityRole="button" style={[button, !allowed && { opacity: .45 }]} onPress={() => void pick(true)}><Text style={{ color: 'white' }}>Take label close-up</Text></Pressable>
-      <Pressable disabled={!allowed} accessibilityRole="button" style={[button, !allowed && { opacity: .45 }]} onPress={() => void pick(false)}><Text style={{ color: 'white' }}>Choose close-up from Photos</Text></Pressable>
-      {attempt && !attempt.candidates && <Pressable disabled={!allowed} accessibilityRole="button" style={[button, !allowed && { opacity: .45 }]} onPress={() => void process(attempt)}><Text style={{ color: 'white' }}>{attempt.jobId || attempt.uploadId ? 'Resume this close-up' : 'Read this close-up'}</Text></Pressable>}
+      <Pressable disabled={!allowed || blocked} accessibilityRole="button" style={[button, (!allowed || blocked) && { opacity: .45 }]} onPress={() => void pick(true)}><Text style={{ color: 'white' }}>Take label close-up</Text></Pressable>
+      <Pressable disabled={!allowed || blocked} accessibilityRole="button" style={[button, (!allowed || blocked) && { opacity: .45 }]} onPress={() => void pick(false)}><Text style={{ color: 'white' }}>Choose close-up from Photos</Text></Pressable>
+      {attempt && !attempt.candidates && <Pressable disabled={!allowed || blocked} accessibilityRole="button" style={[button, (!allowed || blocked) && { opacity: .45 }]} onPress={() => void process(attempt)}><Text style={{ color: 'white' }}>{attempt.jobId || attempt.uploadId ? 'Resume this close-up' : 'Read this close-up'}</Text></Pressable>}
       <Text accessibilityLiveRegion="polite" style={{ color: attempt?.error ? '#FCA5A5' : '#CBD5E1', marginTop: 8 }}>{attempt?.error || message}</Text>
       {attempt?.candidates?.map((candidate, index) => {
         const changes = retakeChanges(original, candidate), blanks = changes.filter(change => !change.before);
@@ -128,7 +128,7 @@ export function LabelRetakePanel({ original, attempt, customer, customerId, loca
           <Text style={{ color: '#FBBF24', fontWeight: '700' }}>Reading {index + 1} · verify this is the same physical label</Text>
           <Text selectable style={{ color: '#CBD5E1', marginVertical: 8 }}>{candidate.label_text || 'No readable source text'}</Text>
           {changes.map(change => <Text selectable key={change.field} style={{ color: change.conflict ? '#FBBF24' : '#CBD5E1', marginBottom: 5 }}>{change.field.replace(/_/g, ' ')}: {change.before || '(blank)'} → {change.after}{change.conflict ? ' · conflict; existing value kept' : ''}</Text>)}
-          <Pressable disabled={!attempt.jobId || !changes.length} accessibilityRole="button" style={[button, !changes.length && { opacity: .5 }]} onPress={() => onApply(candidate, index)}><Text style={{ color: 'white' }}>Use this reading · fill {blanks.length} blank fields</Text></Pressable>
+          <Pressable disabled={blocked || !attempt.jobId || !changes.length} accessibilityRole="button" style={[button, !changes.length && { opacity: .5 }]} onPress={() => onApply(candidate, index)}><Text style={{ color: 'white' }}>Use this reading · fill {blanks.length} blank fields</Text></Pressable>
           <Text style={{ color: '#94A3B8', marginTop: 6 }}>Existing values stay unchanged. Edit conflicting fields manually after comparing both photos.</Text>
         </View>;
       })}

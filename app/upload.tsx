@@ -1,3 +1,5 @@
+import { SourcingPanel } from "../components/SourcingPanel";
+import { SourcingState, applySourcingSelection } from "../lib/sourcing";
 import { LabelSourcePhoto } from "../components/LabelSourcePhoto";
 import { LabelRetakePanel } from "../components/LabelRetakePanel";
 import { RetakeAttempt, RetakeReference, fillRetakeBlanks } from "../lib/label-retake";
@@ -39,6 +41,7 @@ import {
 } from "../lib/api";
 
 
+const SOURCING_ENABLED = Constants.expoConfig?.extra?.appVariant === "test" && Constants.expoConfig?.extra?.sourcing === true;
 const LABEL_RETAKES_ENABLED = Constants.expoConfig?.extra?.appVariant === "test" && Constants.expoConfig?.extra?.labelRetakes === true;
 
 const UPLOAD_API_URL = `${API_BASE_URL}/api/upload-sessions`;
@@ -81,6 +84,12 @@ type RecognitionResult = {
   notes: string;
   source_bbox?: number[];
   source_identifier_bbox?: number[];
+  sourcing_state?: SourcingState;
+  sourcing_previous_fastenal?: string;
+  sourcing_selection_id?: string;
+  sourcing_lookup_id?: string;
+  sourcing_lookup_token?: string;
+  sourcing_target_token?: string;
   retake_attempt?: RetakeAttempt;
   retake_references?: RetakeReference[];
   was_edited?: boolean;
@@ -701,6 +710,9 @@ export default function UploadScreen() {
 
   const [editDraft, setEditDraft] =
     useState<RecognitionResult | null>(null);
+  const editDraftLatest = useRef<RecognitionResult | null>(null);
+  editDraftLatest.current = editDraft;
+  const [reviewTask, setReviewTask] = useState<string | null>(null);
 
   const [emailSent, setEmailSent] =
     useState(false);
@@ -1177,6 +1189,15 @@ export default function UploadScreen() {
 
   const retakeBusy = useRef(false);
 
+  async function persistReviewPatch(patch: Partial<RecognitionResult>) {
+    const current = editDraftLatest.current;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    editDraftLatest.current = next;
+    setEditDraft(next);
+    await checkpoint({ editDraft: next, editingIndex, results, removedPhotos });
+  }
+
   function beginEditing(index: number) {
     setEditingIndex(index);
     setEditDraft({
@@ -1196,7 +1217,7 @@ export default function UploadScreen() {
   }
 
   function cancelEditing() {
-    if (retakeBusy.current) { Alert.alert("Close-up processing", "Wait for this close-up before closing the review."); return; }
+    if (retakeBusy.current || reviewTask) { Alert.alert("Review in progress", "Wait for the current review task before closing this item."); return; }
     setEditingIndex(null);
     setEditDraft(null);
   }
@@ -1345,7 +1366,7 @@ export default function UploadScreen() {
       return;
     }
 
-    if (retakeBusy.current) { Alert.alert("Close-up processing", "Wait for the reading before saving this item."); return; }
+    if (retakeBusy.current || reviewTask) { Alert.alert("Review in progress", "Wait for the current review task before saving this item."); return; }
 
     const finalPartNumber =
       cleanText(editDraft.part_number);
@@ -3743,18 +3764,25 @@ export default function UploadScreen() {
                   {LABEL_RETAKES_ENABLED && !correctedWorkbookUrl && <LabelRetakePanel key={editingIndex}
                     original={editDraft} attempt={editDraft.retake_attempt} customer={completedCustomer || selectedCustomerName}
                     customerId={customerId} location={editDraft.location}
-                    onBusy={value => { retakeBusy.current = value; }}
-                    onAttempt={async value => {
-                      const next = { ...editDraft, retake_attempt: value };
-                      setEditDraft(next);
-                      await checkpoint({ editDraft: next, editingIndex, results, removedPhotos });
-                    }}
+                    blocked={reviewTask === "sourcing"}
+                    onBusy={value => { retakeBusy.current = value; setReviewTask(value ? "retake" : null); }}
+                    onAttempt={value => persistReviewPatch({ retake_attempt: value })}
                     onApply={(candidate, index) => setEditDraft(current => {
                       if (!current?.retake_attempt?.jobId) return current;
                       const reference = { job_id: current.retake_attempt.jobId, candidate_index: index };
                       const references = (current.retake_references || []).filter(ref => ref.job_id !== reference.job_id);
                       return { ...fillRetakeBlanks(current, candidate), retake_references: [...references, reference] };
                     })} />}
+                  {SOURCING_ENABLED && !correctedWorkbookUrl && <SourcingPanel key={`sourcing-${editingIndex}`}
+                    saved={editDraft.sourcing_state} jobId={currentJobId} photo={editDraft.photo}
+                    existingFastenal={editDraft.fastenal_part_number} blocked={reviewTask === "retake"}
+                    onBusy={value => setReviewTask(value ? "sourcing" : null)}
+                    onState={value => persistReviewPatch({ sourcing_state: value, sourcing_lookup_id: value.proposalId, sourcing_lookup_token: value.targetToken })}
+                    onClear={() => persistReviewPatch({ fastenal_part_number: editDraftLatest.current?.sourcing_selection_id ? (editDraftLatest.current?.sourcing_previous_fastenal || "") : (editDraftLatest.current?.fastenal_part_number || ""), sourcing_lookup_id: undefined, sourcing_lookup_token: undefined, sourcing_selection_id: undefined, sourcing_target_token: undefined, sourcing_previous_fastenal: undefined, sourcing_state: undefined, is_confirmed: false, review_needed: true })}
+                    onSelected={async (state, proposal) => {
+                      const current = editDraftLatest.current;
+                      if (current) await persistReviewPatch(applySourcingSelection(current, state, proposal));
+                    }} />}
                   <Text style={{ color: "#CBD5E1", marginBottom: 12 }}>Source text: {editDraft.label_text || "No readable label text"}</Text>
                   <EditableField label="Observed part number (unclassified)" value={editDraft.part_number} onChangeText={value => updateDraft("part_number", value)} />
                   <EditableField label="Customer part number" value={editDraft.customer_part_number} onChangeText={value => updateDraft("customer_part_number", value)} />
