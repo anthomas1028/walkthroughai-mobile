@@ -279,21 +279,28 @@ export default function WalkthroughDetailScreen() {
   }, [selectedVendor, vendorGroups]);
 
   async function downloadAndShareWorkbook() {
-    if (!walkthrough?.download_url || !walkthrough.workbook_file) {
-      Alert.alert("Workbook unavailable", "This walkthrough does not have a saved workbook link.");
-      return;
-    }
+    if (!walkthrough || isSharing) return;
     setIsSharing(true);
     try {
-      if (await downloadInBrowser(walkthrough.download_url, walkthrough.workbook_file)) return;
+      // Editing/re-exporting can replace the old workbook and invalidate cached links.
+      const refresh = await apiFetch(`${API_BASE_URL}/api/walkthroughs/${walkthrough.id}`);
+      const refreshed: WalkthroughResponse = await refresh.json();
+      if (!refresh.ok || !refreshed.success || !refreshed.walkthrough) {
+        throw new Error(refreshed.error || `Could not refresh report (${refresh.status}). Please try again.`);
+      }
+      const latest = refreshed.walkthrough;
+      setWalkthrough(latest);
+      if (!latest.download_url || !latest.workbook_file) throw new Error("This report does not have a saved workbook yet.");
+      if (await downloadInBrowser(latest.download_url, latest.workbook_file)) return;
       if (!(await Sharing.isAvailableAsync())) {
         throw new Error("Sharing is not available on this device.");
       }
-      const safeName = walkthrough.workbook_file.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const safeName = latest.workbook_file.replace(/[^a-zA-Z0-9._-]/g, "_");
       const localFileUri = `${FileSystem.cacheDirectory}${safeName}`;
-      const result = await FileSystem.downloadAsync(walkthrough.download_url, localFileUri);
+      const result = await FileSystem.downloadAsync(latest.download_url, localFileUri);
       if (result.status < 200 || result.status >= 300) {
-        throw new Error("The workbook could not be downloaded.");
+        await FileSystem.deleteAsync(localFileUri, { idempotent: true }).catch(() => {});
+        throw new Error(result.status === 404 ? "The saved workbook is missing from the server. Your report items are still saved. (HTTP 404)" : result.status === 403 ? "The report download link was rejected. Please reopen the report and try again. (HTTP 403)" : `The workbook server returned HTTP ${result.status}. Please try again.`);
       }
       await Sharing.shareAsync(result.uri, {
         dialogTitle: "Share Walkthrough Workbook",
