@@ -38,7 +38,8 @@ export async function clearRecovery() {
     await AsyncStorage.removeItem(storageKey);
     if (Platform.OS !== 'web' && raw) {
       const draft: RecoveryDraft = JSON.parse(raw);
-      for (const photo of [...draft.photos, ...draft.prepared]) {
+      const retakes = [...draft.results, draft.editDraft].flatMap((row: any) => row?.retake_attempt?.uri ? [{ uri: row.retake_attempt.uri }] : []);
+      for (const photo of [...draft.photos, ...draft.prepared, ...retakes]) {
         if (photo.uri.startsWith(new Directory(Paths.document, 'walkthrough-recovery').uri)) {
           const file = new File(photo.uri);
           try { if (file.exists) file.delete(); } catch { /* Metadata is cleared; failed local cleanup must not invalidate a saved report. */ }

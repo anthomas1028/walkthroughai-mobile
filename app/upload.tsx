@@ -1,3 +1,6 @@
+import { LabelSourcePhoto } from "../components/LabelSourcePhoto";
+import { LabelRetakePanel } from "../components/LabelRetakePanel";
+import { RetakeAttempt, RetakeReference, fillRetakeBlanks } from "../lib/label-retake";
 import { photoOutcome, resultKey, mergeRecoveryResults } from "../lib/photo-accounting";
 import { loadRecovery, saveRecovery, clearRecovery, retainPhotos, RecoveryDraft } from "../lib/recovery";
 import { useAuth } from "../contexts/AuthContext";
@@ -35,6 +38,8 @@ import {
   getCurrentUserEmail,
 } from "../lib/api";
 
+
+const LABEL_RETAKES_ENABLED = Constants.expoConfig?.extra?.appVariant === "test" && Constants.expoConfig?.extra?.labelRetakes === true;
 
 const UPLOAD_API_URL = `${API_BASE_URL}/api/upload-sessions`;
 
@@ -74,6 +79,10 @@ type RecognitionResult = {
   confidence: number;
   review_needed: boolean;
   notes: string;
+  source_bbox?: number[];
+  source_identifier_bbox?: number[];
+  retake_attempt?: RetakeAttempt;
+  retake_references?: RetakeReference[];
   was_edited?: boolean;
   is_confirmed?: boolean;
 };
@@ -1166,6 +1175,8 @@ export default function UploadScreen() {
     }
   }
 
+  const retakeBusy = useRef(false);
+
   function beginEditing(index: number) {
     setEditingIndex(index);
     setEditDraft({
@@ -1185,6 +1196,7 @@ export default function UploadScreen() {
   }
 
   function cancelEditing() {
+    if (retakeBusy.current) { Alert.alert("Close-up processing", "Wait for this close-up before closing the review."); return; }
     setEditingIndex(null);
     setEditDraft(null);
   }
@@ -1332,6 +1344,8 @@ export default function UploadScreen() {
     if (editingIndex === null || !editDraft) {
       return;
     }
+
+    if (retakeBusy.current) { Alert.alert("Close-up processing", "Wait for the reading before saving this item."); return; }
 
     const finalPartNumber =
       cleanText(editDraft.part_number);
@@ -3657,7 +3671,7 @@ export default function UploadScreen() {
                   {(() => {
                     const index = getSourcePhotoIndex(editDraft.photo, photos.length);
                     const photo = index !== null && index >= 0 ? photos[index] : undefined;
-                    return photo ? <View><Text style={{ color: "#a9c9ef", marginBottom: 8 }}>Source photo · pinch to zoom</Text><ScrollView style={{ height: 270 }} minimumZoomScale={1} maximumZoomScale={5} centerContent><Image source={{ uri: photo.uri }} style={{ width: "100%", height: 270 }} resizeMode="contain" /></ScrollView></View> : <Text style={{ color: "#f5d078" }}>Source photo unavailable. Verify against the original label.</Text>;
+                    return photo ? (LABEL_RETAKES_ENABLED ? <LabelSourcePhoto key={photo.uri} uri={photo.uri} box={editDraft.source_identifier_bbox || editDraft.source_bbox} /> : <View><Text style={{ color: "#a9c9ef", marginBottom: 8 }}>Source photo · pinch to zoom</Text><ScrollView style={{ height: 270 }} minimumZoomScale={1} maximumZoomScale={5} centerContent><Image source={{ uri: photo.uri }} style={{ width: "100%", height: 270 }} resizeMode="contain" /></ScrollView></View>) : <Text style={{ color: "#f5d078" }}>Source photo unavailable. Verify against the original label.</Text>;
                   })()}
                   <View
                     style={
@@ -3726,6 +3740,21 @@ export default function UploadScreen() {
                   <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
                   {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
                     return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
+                  {LABEL_RETAKES_ENABLED && !correctedWorkbookUrl && <LabelRetakePanel key={editingIndex}
+                    original={editDraft} attempt={editDraft.retake_attempt} customer={completedCustomer || selectedCustomerName}
+                    customerId={customerId} location={editDraft.location}
+                    onBusy={value => { retakeBusy.current = value; }}
+                    onAttempt={async value => {
+                      const next = { ...editDraft, retake_attempt: value };
+                      setEditDraft(next);
+                      await checkpoint({ editDraft: next, editingIndex, results, removedPhotos });
+                    }}
+                    onApply={(candidate, index) => setEditDraft(current => {
+                      if (!current?.retake_attempt?.jobId) return current;
+                      const reference = { job_id: current.retake_attempt.jobId, candidate_index: index };
+                      const references = (current.retake_references || []).filter(ref => ref.job_id !== reference.job_id);
+                      return { ...fillRetakeBlanks(current, candidate), retake_references: [...references, reference] };
+                    })} />}
                   <Text style={{ color: "#CBD5E1", marginBottom: 12 }}>Source text: {editDraft.label_text || "No readable label text"}</Text>
                   <EditableField label="Observed part number (unclassified)" value={editDraft.part_number} onChangeText={value => updateDraft("part_number", value)} />
                   <EditableField label="Customer part number" value={editDraft.customer_part_number} onChangeText={value => updateDraft("customer_part_number", value)} />
