@@ -1,3 +1,5 @@
+import { SourcingSummary } from "../components/SourcingSummary";
+import { SavedSourcing } from "../lib/sourcing";
 import { downloadInBrowser } from "../lib/download";
 import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,6 +52,7 @@ type ReportRecord = {
   manufacturer?: string | null;
   customer_part_number?: string | null;
   fastenal_part_number?: string | null;
+  sourcing_recommendation?: SavedSourcing | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
   manufacturer_part_number?: string | null;
@@ -1471,6 +1474,7 @@ export default function CustomerReportScreen() {
                 </Text>
               </Pressable>
 
+              <SourcingSummary record={selectedReviewItem.sourcing_recommendation} />
               <View style={styles.reviewEditCard}>
                 <Text style={styles.reviewEditHeading}>Inventory details</Text>
                 <Text style={styles.reviewEditHelp}>

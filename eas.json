@@ -27,10 +27,24 @@
       "env": {
         "APP_VARIANT": "test"
       }
+    },
+    "testflight": {
+      "extends": "production",
+      "distribution": "store",
+      "env": {
+        "APP_VARIANT": "production",
+        "APP_STORE_VERSION": "2.0.1",
+        "ENABLE_COMPLETION_NOTIFICATIONS": "1"
+      }
     }
   },
   "submit": {
     "production": {
+      "ios": {
+        "ascAppId": "6796574559"
+      }
+    },
+    "testflight": {
       "ios": {
         "ascAppId": "6796574559"
       }

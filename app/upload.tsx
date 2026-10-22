@@ -1,3 +1,9 @@
+import { completionAlertsSupported, setCompletionAlert } from "../lib/completion-notifications";
+import { SourcingPanel } from "../components/SourcingPanel";
+import { SourcingState, applySourcingSelection } from "../lib/sourcing";
+import { LabelSourcePhoto } from "../components/LabelSourcePhoto";
+import { LabelRetakePanel } from "../components/LabelRetakePanel";
+import { RetakeAttempt, RetakeReference, fillRetakeBlanks } from "../lib/label-retake";
 import { photoOutcome, resultKey, mergeRecoveryResults } from "../lib/photo-accounting";
 import { loadRecovery, saveRecovery, clearRecovery, retainPhotos, RecoveryDraft } from "../lib/recovery";
 import { useAuth } from "../contexts/AuthContext";
@@ -10,6 +16,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
 
   Animated,
   Image,
@@ -35,6 +42,9 @@ import {
   getCurrentUserEmail,
 } from "../lib/api";
 
+
+const SOURCING_ENABLED = Constants.expoConfig?.extra?.appVariant === "test" && Constants.expoConfig?.extra?.sourcing === true;
+const LABEL_RETAKES_ENABLED = Constants.expoConfig?.extra?.appVariant === "test" && Constants.expoConfig?.extra?.labelRetakes === true;
 
 const UPLOAD_API_URL = `${API_BASE_URL}/api/upload-sessions`;
 
@@ -74,6 +84,16 @@ type RecognitionResult = {
   confidence: number;
   review_needed: boolean;
   notes: string;
+  source_bbox?: number[];
+  source_identifier_bbox?: number[];
+  sourcing_state?: SourcingState;
+  sourcing_previous_fastenal?: string;
+  sourcing_selection_id?: string;
+  sourcing_lookup_id?: string;
+  sourcing_lookup_token?: string;
+  sourcing_target_token?: string;
+  retake_attempt?: RetakeAttempt;
+  retake_references?: RetakeReference[];
   was_edited?: boolean;
   is_confirmed?: boolean;
 };
@@ -598,6 +618,31 @@ export default function UploadScreen() {
   const [isProcessing, setIsProcessing] =
     useState(false);
 
+  const [completionAlertToken, setCompletionAlertToken] = useState("");
+  const [alertBusy, setAlertBusy] = useState(false);
+  const backgroundTime = useRef({ total: 0, since: AppState.currentState === 'active' ? 0 : Date.now() });
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active' && backgroundTime.current.since) {
+        backgroundTime.current.total += Date.now() - backgroundTime.current.since;
+        backgroundTime.current.since = 0;
+      } else if (state !== 'active' && !backgroundTime.current.since) backgroundTime.current.since = Date.now();
+    });
+    return () => sub.remove();
+  }, []);
+
+  async function toggleCompletionAlert() {
+    if (!currentJobId || alertBusy) return;
+    setAlertBusy(true);
+    try {
+      const enabling = !completionAlertToken;
+      const token = await setCompletionAlert(currentJobId, enabling, completionAlertToken);
+      setCompletionAlertToken(enabling ? token : "");
+      await checkpoint({ completionAlertToken: enabling ? token : "" });
+    } catch (error) { Alert.alert("Completion notification", error instanceof Error ? error.message : "Could not update the alert. Analysis will continue."); }
+    finally { setAlertBusy(false); }
+  }
+
   const [jobProgress, setJobProgress] =
     useState(0);
 
@@ -692,6 +737,9 @@ export default function UploadScreen() {
 
   const [editDraft, setEditDraft] =
     useState<RecognitionResult | null>(null);
+  const editDraftLatest = useRef<RecognitionResult | null>(null);
+  editDraftLatest.current = editDraft;
+  const [reviewTask, setReviewTask] = useState<string | null>(null);
 
   const [emailSent, setEmailSent] =
     useState(false);
@@ -727,6 +775,7 @@ export default function UploadScreen() {
         recoveryRef.current = saved;
         pendingUpload.current = { key: JSON.stringify([saved.customerName, saved.customerId, saved.photos]), prepared: saved.prepared, uploadId: saved.uploadId, uploaded: new Set(saved.uploaded) };
         setCurrentJobId(saved.jobId);
+        setCompletionAlertToken(saved.completionAlertToken || "");
         setResults(saved.results.map(row => normalizeResult(row as RecognitionResult)));
         setRemovedPhotos(saved.removedPhotos || []);
         if (saved.editDraft && typeof saved.editingIndex === "number") { setEditingIndex(saved.editingIndex); setEditDraft(normalizeResult(saved.editDraft as RecognitionResult)); }
@@ -965,10 +1014,15 @@ export default function UploadScreen() {
       statusUrl: string
     ): Promise<JobStatusApiResponse> {
       const startedAt = Date.now();
+      const initialBackground = backgroundTime.current.total;
 
       while (true) {
         if (!uploadMounted.current) throw new Error("Analysis continues in the background. Use Resume walkthrough to return.");
-        if (Date.now() - startedAt > JOB_POLL_TIMEOUT_MS) {
+        if (AppState.currentState !== 'active') {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        if (Date.now() - startedAt - (backgroundTime.current.total - initialBackground) > JOB_POLL_TIMEOUT_MS) {
           throw new Error(
             "The background analysis is still running after two hours. Your upload may still finish, but this screen stopped checking it."
           );
@@ -1099,6 +1153,7 @@ export default function UploadScreen() {
       }
 
       setCurrentJobId(jobId);
+      if (recoveryRef.current?.jobId !== jobId) setCompletionAlertToken("");
       await checkpoint({ jobId });
 
       setJobStatusMessage(
@@ -1166,6 +1221,17 @@ export default function UploadScreen() {
     }
   }
 
+  const retakeBusy = useRef(false);
+
+  async function persistReviewPatch(patch: Partial<RecognitionResult>) {
+    const current = editDraftLatest.current;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    editDraftLatest.current = next;
+    setEditDraft(next);
+    await checkpoint({ editDraft: next, editingIndex, results, removedPhotos });
+  }
+
   function beginEditing(index: number) {
     setEditingIndex(index);
     setEditDraft({
@@ -1185,6 +1251,7 @@ export default function UploadScreen() {
   }
 
   function cancelEditing() {
+    if (retakeBusy.current || reviewTask) { Alert.alert("Review in progress", "Wait for the current review task before closing this item."); return; }
     setEditingIndex(null);
     setEditDraft(null);
   }
@@ -1332,6 +1399,8 @@ export default function UploadScreen() {
     if (editingIndex === null || !editDraft) {
       return;
     }
+
+    if (retakeBusy.current || reviewTask) { Alert.alert("Review in progress", "Wait for the current review task before saving this item."); return; }
 
     const finalPartNumber =
       cleanText(editDraft.part_number);
@@ -2120,6 +2189,16 @@ export default function UploadScreen() {
               >
                 {currentJobId ? `${jobProgress}% analyzed` : jobStatusMessage}
               </Text>
+
+              <Text style={styles.processingNote}>{currentJobId
+                ? "Your photos are uploaded. Analysis continues on the server if you lock your phone or switch apps. Return here to review the results."
+                : "Keep the app open until all photos finish uploading. Upload progress is saved so you can resume if interrupted."}</Text>
+              {currentJobId && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14, marginTop: 10 }}>
+                <Text style={{ color: "#93C5FD", fontWeight: "700", textAlign: "center" }}>{alertBusy ? "Updating notification…" : completionAlertToken ? "Completion notification on · Turn off" : "Notify me when analysis finishes"}</Text>
+              </Pressable>}
+              {currentJobId && <Pressable accessibilityRole="button" onPress={() => router.replace("/")} style={{ padding: 14 }}>
+                <Text style={{ color: "#BFDBFE", textAlign: "center" }}>Continue in background</Text>
+              </Pressable>}
 
               <View
                 style={
@@ -3657,7 +3736,7 @@ export default function UploadScreen() {
                   {(() => {
                     const index = getSourcePhotoIndex(editDraft.photo, photos.length);
                     const photo = index !== null && index >= 0 ? photos[index] : undefined;
-                    return photo ? <View><Text style={{ color: "#a9c9ef", marginBottom: 8 }}>Source photo · pinch to zoom</Text><ScrollView style={{ height: 270 }} minimumZoomScale={1} maximumZoomScale={5} centerContent><Image source={{ uri: photo.uri }} style={{ width: "100%", height: 270 }} resizeMode="contain" /></ScrollView></View> : <Text style={{ color: "#f5d078" }}>Source photo unavailable. Verify against the original label.</Text>;
+                    return photo ? (LABEL_RETAKES_ENABLED ? <LabelSourcePhoto key={photo.uri} uri={photo.uri} box={editDraft.source_identifier_bbox || editDraft.source_bbox} /> : <View><Text style={{ color: "#a9c9ef", marginBottom: 8 }}>Source photo · pinch to zoom</Text><ScrollView style={{ height: 270 }} minimumZoomScale={1} maximumZoomScale={5} centerContent><Image source={{ uri: photo.uri }} style={{ width: "100%", height: 270 }} resizeMode="contain" /></ScrollView></View>) : <Text style={{ color: "#f5d078" }}>Source photo unavailable. Verify against the original label.</Text>;
                   })()}
                   <View
                     style={
@@ -3726,6 +3805,28 @@ export default function UploadScreen() {
                   <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
                   {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
                     return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
+                  {LABEL_RETAKES_ENABLED && !correctedWorkbookUrl && <LabelRetakePanel key={editingIndex}
+                    original={editDraft} attempt={editDraft.retake_attempt} customer={completedCustomer || selectedCustomerName}
+                    customerId={customerId} location={editDraft.location}
+                    blocked={reviewTask === "sourcing"}
+                    onBusy={value => { retakeBusy.current = value; setReviewTask(value ? "retake" : null); }}
+                    onAttempt={value => persistReviewPatch({ retake_attempt: value })}
+                    onApply={(candidate, index) => setEditDraft(current => {
+                      if (!current?.retake_attempt?.jobId) return current;
+                      const reference = { job_id: current.retake_attempt.jobId, candidate_index: index };
+                      const references = (current.retake_references || []).filter(ref => ref.job_id !== reference.job_id);
+                      return { ...fillRetakeBlanks(current, candidate), retake_references: [...references, reference] };
+                    })} />}
+                  {SOURCING_ENABLED && !correctedWorkbookUrl && <SourcingPanel initialManufacturer={editDraft.manufacturer} initialManufacturerPartNumber={editDraft.manufacturer_part_number} key={`sourcing-${editingIndex}`}
+                    saved={editDraft.sourcing_state} jobId={currentJobId} photo={editDraft.photo}
+                    existingFastenal={editDraft.fastenal_part_number} blocked={reviewTask === "retake"}
+                    onBusy={value => setReviewTask(value ? "sourcing" : null)}
+                    onState={value => persistReviewPatch({ sourcing_state: value, sourcing_lookup_id: value.proposalId, sourcing_lookup_token: value.targetToken })}
+                    onClear={() => persistReviewPatch({ fastenal_part_number: editDraftLatest.current?.sourcing_selection_id ? (editDraftLatest.current?.sourcing_previous_fastenal || "") : (editDraftLatest.current?.fastenal_part_number || ""), sourcing_lookup_id: undefined, sourcing_lookup_token: undefined, sourcing_selection_id: undefined, sourcing_target_token: undefined, sourcing_previous_fastenal: undefined, sourcing_state: undefined, is_confirmed: false, review_needed: true })}
+                    onSelected={async (state, proposal) => {
+                      const current = editDraftLatest.current;
+                      if (current) await persistReviewPatch(applySourcingSelection(current, state, proposal));
+                    }} />}
                   <Text style={{ color: "#CBD5E1", marginBottom: 12 }}>Source text: {editDraft.label_text || "No readable label text"}</Text>
                   <EditableField label="Observed part number (unclassified)" value={editDraft.part_number} onChangeText={value => updateDraft("part_number", value)} />
                   <EditableField label="Customer part number" value={editDraft.customer_part_number} onChangeText={value => updateDraft("customer_part_number", value)} />

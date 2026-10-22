@@ -1,0 +1,14 @@
+const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),assert=require('node:assert/strict');
+const lib={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/label-retake.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:lib});
+const original={photo:'photo_001.jpg',part_number:'CORRECTED',manufacturer_part_number:'',description:'Employee description',is_confirmed:true};
+const candidate={part_number:'OTHER',manufacturer_part_number:'000123',description:'New description',package_quantity:'1'};
+const next=lib.fillRetakeBlanks(original,candidate);
+assert.equal(next.part_number,'CORRECTED');assert.equal(next.description,'Employee description');
+assert.equal(next.manufacturer_part_number,'000123');assert.equal(next.package_quantity,'1');assert.equal(next.photo,'photo_001.jpg');
+assert.equal(next.is_confirmed,false);assert.equal(next.review_needed,true);
+assert.equal(original.manufacturer_part_number,'');assert.equal(lib.retakeChanges(original,candidate).filter(c=>c.conflict).length,2);
+for(const value of [[-1,0,50,50],[0,0,1001,500],[0,0,0,5],[0,0,NaN,2],['0',0,1,2],null])assert.equal(lib.validLabelBox(value),null);
+assert.equal(lib.validLabelBox([0,0,1000,1000]).length,4);
+const config=require('../app.config.js');process.env.APP_VARIANT='production';assert.notEqual(config().extra?.labelRetakes,true);
+process.env.APP_VARIANT='test';assert.equal(config().extra.labelRetakes,true);assert.equal(config().extra.appVariant,'test');
+console.log('PASS: blank-only application, conflict preservation, explicit review, valid highlight geometry, production/test isolation.');

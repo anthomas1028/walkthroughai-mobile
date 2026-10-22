@@ -1,3 +1,5 @@
+import { SourcingSummary } from "../components/SourcingSummary";
+import { SavedSourcing } from "../lib/sourcing";
 import { downloadInBrowser } from "../lib/download";
 import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,6 +27,7 @@ import { API_BASE_URL, apiFetch } from "../lib/api";
 type WalkthroughItem = {
   customer_part_number?: string | null;
   fastenal_part_number?: string | null;
+  sourcing_recommendation?: SavedSourcing | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
   review_history?: Array<{ at: string; by: string; event: string }>;
@@ -818,6 +821,7 @@ export default function WalkthroughDetailScreen() {
                 </View>
                 <Text style={styles.confirmedText}>{selectedItem.is_confirmed ? "✓ Confirmed" : "Not confirmed"}</Text>
               </View>
+              <SourcingSummary record={selectedItem.sourcing_recommendation} />
               <View style={styles.detailsCard}>
                 <DetailRow label="Location" value={selectedItem.location || "Unassigned"} />
                 <DetailRow label="Vendor" value={selectedItem.vendor} />

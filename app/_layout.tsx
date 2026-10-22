@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, Pressable, Text, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { CompletionNotificationListener } from "../components/CompletionNotificationListener";
 import { RecoveryBanner } from "../components/RecoveryBanner";
 import { AlertHost } from "../lib/alerts";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
@@ -58,6 +59,7 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <AuthProvider>
         <AuthenticatedStack />
+        <CompletionNotificationListener />
         <AlertHost />
       </AuthProvider>
     </SafeAreaProvider>
