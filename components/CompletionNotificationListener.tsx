@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL, apiFetch } from '../lib/api';
 import { completionAlertsSupported } from '../lib/completion-notifications';
 import { loadRecovery } from '../lib/recovery';
+import { serverBatchStatus } from '../lib/native-upload';
 
 export function CompletionNotificationListener() {
   const { session, isLoading } = useAuth();
@@ -30,12 +31,14 @@ export function CompletionNotificationListener() {
           if (!active || !result.ok || !job.success) return;
           const saved = await loadRecovery();
           if (!active) return;
-          if (saved?.jobId && saved.jobId !== data.jobId) return; // Preserve another in-progress review.
+          const savedJobId = saved?.jobId || (saved?.nativeBatchId ? (await serverBatchStatus(saved.nativeBatchId))?.result?.job_id : '');
+          if (saved && savedJobId !== data.jobId) return; // Preserve another draft or in-progress review.
           handled.current.add(id);
           await Notifications.clearLastNotificationResponseAsync();
-          router.push({ pathname: '/upload', params: {
+          router.replace({ pathname: '/upload', params: {
             resume: '1', resumeJobId: data.jobId,
-            customerId: String(job.customer_id || ''), customerName: job.customer || '',
+            customerId: saved?.customerId || String(job.customer_id || ''), customerName: saved?.customerName || job.customer || '',
+            ...(saved ? { contactName: saved.contactName, photos: JSON.stringify(saved.photos) } : {}),
           } });
         } catch { /* The saved job remains accessible through Resume walkthrough. */ }
       }
