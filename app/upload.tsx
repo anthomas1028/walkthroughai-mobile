@@ -1,4 +1,5 @@
-import { completionAlertsSupported, setCompletionAlert } from "../lib/completion-notifications";
+import { nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus } from "../lib/native-upload";
+import { completionAlertsSupported, setCompletionAlert, requestCompletionToken } from "../lib/completion-notifications";
 import { SourcingPanel } from "../components/SourcingPanel";
 import { SourcingState, applySourcingSelection } from "../lib/sourcing";
 import { LabelSourcePhoto } from "../components/LabelSourcePhoto";
@@ -618,6 +619,7 @@ export default function UploadScreen() {
   const [isProcessing, setIsProcessing] =
     useState(false);
 
+  const [nativeUploadQueued, setNativeUploadQueued] = useState(false);
   const [completionAlertToken, setCompletionAlertToken] = useState("");
   const [alertBusy, setAlertBusy] = useState(false);
   const backgroundTime = useRef({ total: 0, since: AppState.currentState === 'active' ? 0 : Date.now() });
@@ -632,13 +634,15 @@ export default function UploadScreen() {
   }, []);
 
   async function toggleCompletionAlert() {
-    if (!currentJobId || alertBusy) return;
+    if (alertBusy) return;
     setAlertBusy(true);
     try {
       const enabling = !completionAlertToken;
-      const token = await setCompletionAlert(currentJobId, enabling, completionAlertToken);
+      const token = currentJobId
+        ? await setCompletionAlert(currentJobId, enabling, completionAlertToken)
+        : enabling ? await requestCompletionToken() : "";
       setCompletionAlertToken(enabling ? token : "");
-      await checkpoint({ completionAlertToken: enabling ? token : "" });
+      if (recoveryRef.current) await checkpoint({ completionAlertToken: enabling ? token : "" });
     } catch (error) { Alert.alert("Completion notification", error instanceof Error ? error.message : "Could not update the alert. Analysis will continue."); }
     finally { setAlertBusy(false); }
   }
@@ -797,7 +801,7 @@ export default function UploadScreen() {
 
   async function checkpoint(overrides: Partial<RecoveryDraft> = {}) {
     const pending = pendingUpload.current;
-    const draft: RecoveryDraft = { version: 1, customerId, customerName: walkthroughName, contactName: selectedContactName,
+    const draft: RecoveryDraft = { ...recoveryRef.current, version: 1, customerId, customerName: walkthroughName, contactName: selectedContactName,
       photos: recoveryRef.current?.photos || photos, prepared: pending?.prepared || [], uploadId: pending?.uploadId || "",
       uploaded: Array.from(pending?.uploaded || []), jobId: recoveryRef.current?.jobId || currentJobId,
       results: recoveryRef.current?.results || results, updatedAt: new Date().toISOString(), ...overrides };
@@ -958,6 +962,29 @@ export default function UploadScreen() {
       }
     }
 
+    async function submitNativeJob(): Promise<{ response: Response; data: UploadApiResponse }> {
+      const id = recoveryRef.current?.nativeBatchId || newBatchId();
+      await checkpoint({ nativeBatchId: id, completionAlertToken });
+      // All file transfers and retries are queued natively. No JS "submit" call is required.
+      await enqueueNativeUpload(id, preparedPhotos, {
+        customer, customer_id: customerId, photo_locations: preparedPhotos.map(p => cleanText(p.location)),
+        completion_token: completionAlertToken,
+      });
+      setNativeUploadQueued(true);
+      while (true) {
+        if (!uploadMounted.current) throw new Error("Upload continues with iOS. Resume your walkthrough to review it.");
+        if (AppState.currentState === 'active') {
+          const local = await nativeUploadStatus(id);
+          const remote = await serverBatchStatus(id);
+          if (remote?.result?.job_id) return { response: { ok: true } as Response, data: remote.result };
+          if (local.error) throw new Error(local.error);
+          const count = remote?.uploaded_slots?.length ?? local.uploaded?.filter(v => v !== 'metadata').length ?? 0;
+          setJobStatusMessage(`${count} of ${preparedPhotos.length} photos received. You can switch apps or lock your phone.`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 2500));
+      }
+    }
+
     async function submitBackgroundJob(): Promise<{
       response: Response;
       data: UploadApiResponse;
@@ -1114,7 +1141,7 @@ export default function UploadScreen() {
         const originals = await retainPhotos(photos, `source-${Date.now()}`);
         recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
         await saveRecovery(recoveryRef.current);
-        preparedPhotos = await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
+        preparedPhotos = nativeUploadSupported ? originals : await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
         recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
         pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: priorUpload, uploaded: new Set() };
       } else {
@@ -1129,7 +1156,7 @@ export default function UploadScreen() {
       const existingJobId = recoveryRef.current?.jobId || resumeJobId;
       const { response, data } = existingJobId
         ? { response: { ok: true } as Response, data: { success: true, job_id: existingJobId } as UploadApiResponse }
-        : await submitBackgroundJob();
+        : await (nativeUploadSupported ? submitNativeJob() : submitBackgroundJob());
 
       if (!response.ok || !data.success) {
         throw new Error(
@@ -1153,7 +1180,7 @@ export default function UploadScreen() {
       }
 
       setCurrentJobId(jobId);
-      if (recoveryRef.current?.jobId !== jobId) setCompletionAlertToken("");
+      if (!nativeUploadSupported && recoveryRef.current?.jobId !== jobId) setCompletionAlertToken("");
       await checkpoint({ jobId });
 
       setJobStatusMessage(
@@ -2192,11 +2219,11 @@ export default function UploadScreen() {
 
               <Text style={styles.processingNote}>{currentJobId
                 ? "Your photos are uploaded. Analysis continues on the server if you lock your phone or switch apps. Return here to review the results."
-                : "Keep the app open until all photos finish uploading. Upload progress is saved so you can resume if interrupted."}</Text>
+                : nativeUploadQueued ? "iOS is uploading your photos. You can switch apps or lock your phone. Analysis starts automatically after every photo arrives. Do not swipe the app closed." : nativeUploadSupported ? "Preparing the iOS upload queue. Transfers continue when you switch apps once queued." : "Keep the app open until all photos finish uploading. Install the latest TestFlight build for background uploads."}</Text>
               {currentJobId && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14, marginTop: 10 }}>
                 <Text style={{ color: "#93C5FD", fontWeight: "700", textAlign: "center" }}>{alertBusy ? "Updating notification…" : completionAlertToken ? "Completion notification on · Turn off" : "Notify me when analysis finishes"}</Text>
               </Pressable>}
-              {currentJobId && <Pressable accessibilityRole="button" onPress={() => router.replace("/")} style={{ padding: 14 }}>
+              {(currentJobId || nativeUploadQueued) && <Pressable accessibilityRole="button" onPress={() => router.replace("/")} style={{ padding: 14 }}>
                 <Text style={{ color: "#BFDBFE", textAlign: "center" }}>Continue in background</Text>
               </Pressable>}
 
@@ -3238,6 +3265,10 @@ export default function UploadScreen() {
           ]}
         >
           {!hasResults ? (
+            <>
+            {nativeUploadSupported && !isProcessing && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14 }}>
+              <Text style={{ color: "#93C5FD", textAlign: "center" }}>{alertBusy ? "Updating notification…" : completionAlertToken ? "Completion notification on · Turn off" : "Notify me when analysis finishes"}</Text>
+            </Pressable>}
             <Pressable
               disabled={
                 isProcessing ||
@@ -3293,6 +3324,7 @@ export default function UploadScreen() {
                 </Text>
               )}
             </Pressable>
+            </>
           ) : (
             <>
               {!correctedWorkbookUrl && !allResultsConfirmed && (

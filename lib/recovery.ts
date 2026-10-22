@@ -8,6 +8,7 @@ export type RecoveryDraft = {
   version: 1; customerId: string; customerName: string; contactName: string;
   photos: RecoveryPhoto[]; prepared: RecoveryPhoto[]; uploadId: string;
   completionAlertToken?: string;
+  nativeBatchId?: string;
   removedPhotos?: string[];
   editingIndex?: number | null; editDraft?: unknown;
   uploaded: number[]; jobId: string; results: unknown[]; updatedAt: string;
@@ -39,6 +40,10 @@ export async function clearRecovery() {
     await AsyncStorage.removeItem(storageKey);
     if (Platform.OS !== 'web' && raw) {
       const draft: RecoveryDraft = JSON.parse(raw);
+      if (draft.nativeBatchId) {
+        const { clearNativeUpload } = await import("./native-upload");
+        await clearNativeUpload(draft.nativeBatchId);
+      }
       const retakes = [...draft.results, draft.editDraft].flatMap((row: any) => row?.retake_attempt?.uri ? [{ uri: row.retake_attempt.uri }] : []);
       for (const photo of [...draft.photos, ...draft.prepared, ...retakes]) {
         if (photo.uri.startsWith(new Directory(Paths.document, 'walkthrough-recovery').uri)) {
