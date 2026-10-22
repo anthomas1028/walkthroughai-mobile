@@ -13,10 +13,27 @@
     },
     "production": {
       "environment": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production",
+        "APP_STORE_VERSION": "2.0.1"
+      }
+    },
+    "test": {
+      "distribution": "internal",
+      "environment": "preview",
+      "channel": "testing",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "test"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6796574559"
+      }
+    }
   }
 }

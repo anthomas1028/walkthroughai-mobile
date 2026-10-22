@@ -1,9 +1,11 @@
+import { TestUpdates } from "../components/TestUpdates";
+import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -465,6 +467,7 @@ export default function AccountScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+          <TestUpdates />
             <View style={styles.card}>
               <Text style={styles.cardLabel}>FASTENAL PROFILE</Text>
               <Text style={styles.cardTitle}>Name</Text>
@@ -473,7 +476,7 @@ export default function AccountScreen() {
                 reports.
               </Text>
 
-              <TextInput
+              <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Your name</Text><TextInput accessibilityLabel="Your name"
                 autoCapitalize="words"
                 maxLength={120}
                 onChangeText={setWorkspaceName}
@@ -481,7 +484,7 @@ export default function AccountScreen() {
                 placeholderTextColor="#64748B"
                 style={styles.input}
                 value={workspaceName}
-              />
+              /></View>
 
               <Pressable
                 accessibilityRole="button"
@@ -513,7 +516,7 @@ export default function AccountScreen() {
                 can be used to sign in.
               </Text>
 
-              <TextInput
+              <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>New email address</Text><TextInput accessibilityLabel="New email address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -522,7 +525,7 @@ export default function AccountScreen() {
                 placeholderTextColor="#64748B"
                 style={styles.input}
                 value={emailAddress}
-              />
+              /></View>
 
               <Pressable
                 accessibilityRole="button"
@@ -686,7 +689,7 @@ export default function AccountScreen() {
                 value={deletionPassword}
               />
 
-              <TextInput
+              <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Type DELETE</Text><TextInput accessibilityLabel="Type DELETE"
                 autoCapitalize="characters"
                 autoCorrect={false}
                 editable={!isDeletingAccount}
@@ -695,7 +698,7 @@ export default function AccountScreen() {
                 placeholderTextColor="#7F1D1D"
                 style={[styles.input, styles.dangerInput]}
                 value={deletionConfirmation}
-              />
+              /></View>
 
               <Pressable
                 accessibilityRole="button"

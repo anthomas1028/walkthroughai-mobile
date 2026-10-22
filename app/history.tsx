@@ -1,8 +1,9 @@
+import { Alert } from "../lib/alerts";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   FlatList,
   Pressable,
   RefreshControl,
@@ -556,7 +557,7 @@ export default function HistoryScreen() {
         </View>
 
         {item.workbook_file ? (
-          <Text style={styles.fileName}>
+          <Text numberOfLines={1} ellipsizeMode="middle" style={styles.fileName}>
             {item.workbook_file}
           </Text>
         ) : null}
@@ -941,7 +942,7 @@ const styles = StyleSheet.create({
   },
 
   bulkActionCount: {
-    color: "#718096",
+    color: "#AAB7CA",
     fontSize: 10,
     marginTop: 2,
   },
@@ -1051,7 +1052,7 @@ const styles = StyleSheet.create({
   },
 
   statLabel: {
-    color: "#718096",
+    color: "#AAB7CA",
     fontSize: 11,
     marginTop: 3,
   },

@@ -1,10 +1,13 @@
+import { ResumeWalkthrough } from "../components/ResumeWalkthrough";
+import { Alert } from "../lib/alerts";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -83,6 +86,15 @@ export default function HomeScreen() {
   const [state, setState] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [notes, setNotes] = useState("");
+  const contactRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const loadDemoCustomer = useCallback(async () => {
     try {
@@ -489,13 +501,12 @@ export default function HomeScreen() {
         accessibilityLabel={
           isSelected
             ? `${item.company_name}, selected. Tap to clear selection.`
-            : `Select ${item.company_name}`
+            : `Open ${item.company_name}`
         }
-        onPress={() =>
-          setSelectedCustomerId((currentId) =>
-            currentId === item.id ? null : item.id
-          )
-        }
+        onPress={() => {
+          if (customerView === "active") router.push({ pathname: "/customer-dashboard", params: { customerId: String(item.id), customerName: item.company_name } });
+          else setSelectedCustomerId(currentId => currentId === item.id ? null : item.id);
+        }}
         style={({ pressed }) => [
           styles.customerCard,
           isSelected && styles.customerCardSelected,
@@ -600,6 +611,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
+          {!showNewCustomerForm ? <ResumeWalkthrough /> : null}
           {demoCustomer && !showNewCustomerForm ? (
             <View style={styles.demoSection}>
               <View style={styles.demoSectionHeader}>
@@ -655,7 +667,6 @@ export default function HomeScreen() {
 
           {showNewCustomerForm ? (
             <ScrollView
-              automaticallyAdjustKeyboardInsets
               contentContainerStyle={styles.formScrollContent}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
@@ -666,17 +677,22 @@ export default function HomeScreen() {
                   New customer
                 </Text>
 
-                <TextInput
+                <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Company name *</Text><TextInput accessibilityLabel="Company name *"
                   autoCapitalize="words"
                   onChangeText={setCompanyName}
                   placeholder="Company name *"
                   placeholderTextColor="#64748B"
                   returnKeyType="next"
+
+                  onSubmitEditing={() => contactRef.current?.focus()}
                   style={styles.input}
                   value={companyName}
-                />
+                /></View>
 
-                <TextInput
+                <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Contact name</Text><TextInput accessibilityLabel="Contact name"
+                  ref={contactRef}
+
+                  onSubmitEditing={() => emailRef.current?.focus()}
                   autoCapitalize="words"
                   onChangeText={setContactName}
                   placeholder="Contact name"
@@ -684,9 +700,12 @@ export default function HomeScreen() {
                   returnKeyType="next"
                   style={styles.input}
                   value={contactName}
-                />
+                /></View>
 
-                <TextInput
+                <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Email address</Text><TextInput accessibilityLabel="Email address"
+                  ref={emailRef}
+
+                  onSubmitEditing={() => phoneRef.current?.focus()}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
@@ -696,9 +715,12 @@ export default function HomeScreen() {
                   returnKeyType="next"
                   style={styles.input}
                   value={email}
-                />
+                /></View>
 
-                <TextInput
+                <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Phone number</Text><TextInput accessibilityLabel="Phone number"
+                  ref={phoneRef}
+
+                  onSubmitEditing={Keyboard.dismiss}
                   keyboardType="phone-pad"
                   onChangeText={setPhone}
                   placeholder="Phone number"
@@ -706,10 +728,11 @@ export default function HomeScreen() {
                   returnKeyType="done"
                   style={styles.input}
                   value={phone}
-                />
+                /></View>
 
                 <View style={styles.addressRow}>
-                  <TextInput
+                  <TextInput accessibilityLabel="City"
+
                     autoCapitalize="words"
                     onChangeText={setCity}
                     placeholder="City"
@@ -721,7 +744,8 @@ export default function HomeScreen() {
                     value={city}
                   />
 
-                  <TextInput
+                  <TextInput accessibilityLabel="State"
+
                     autoCapitalize="characters"
                     maxLength={2}
                     onChangeText={setState}
@@ -734,7 +758,8 @@ export default function HomeScreen() {
                     value={state}
                   />
 
-                  <TextInput
+                  <TextInput accessibilityLabel="ZIP"
+
                     keyboardType="number-pad"
                     maxLength={10}
                     onChangeText={setPostalCode}
@@ -748,7 +773,8 @@ export default function HomeScreen() {
                   />
                 </View>
 
-                <TextInput
+                <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Customer notes</Text><TextInput accessibilityLabel="Customer notes"
+
                   blurOnSubmit={false}
                   multiline
                   onChangeText={setNotes}
@@ -761,12 +787,12 @@ export default function HomeScreen() {
                   ]}
                   textAlignVertical="top"
                   value={notes}
-                />
+                /></View>
 
                 <Pressable
                   accessibilityRole="button"
                   disabled={isSaving}
-                  onPress={saveCustomer}
+                  onPress={() => { Keyboard.dismiss(); void saveCustomer(); }}
                   style={({ pressed }) => [
                     styles.saveButton,
                     pressed && styles.buttonPressed,
@@ -835,7 +861,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.searchRow}>
-                <TextInput
+                <TextInput accessibilityLabel="Search customers"
                   autoCapitalize="none"
                   autoCorrect={false}
                   onChangeText={setSearchText}
@@ -919,6 +945,14 @@ export default function HomeScreen() {
               )}
             </>
           )}
+
+          {showNewCustomerForm && isKeyboardVisible ? (
+            <View style={{ alignItems: "flex-end", borderTopWidth: 1, borderColor: "#31547D" }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Done editing customer" onPress={Keyboard.dismiss} style={{ minHeight: 44, paddingHorizontal: 20, justifyContent: "center" }}>
+                <Text style={{ color: "#BFDBFE", fontSize: 16, fontWeight: "700" }}>Done</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {!showNewCustomerForm ? (
             <View style={styles.bottomArea}>
@@ -1030,16 +1064,16 @@ export default function HomeScreen() {
                     </Pressable>
                   </View>
                 </>
-              ) : (
+              ) : customerView === "archived" ? (
                 <View style={styles.noSelectionCard}>
                   <Text style={styles.noSelectionTitle}>
-                    No customer selected
+                    Choose a customer
                   </Text>
                   <Text style={styles.noSelectionText}>
-                    Tap a customer above to see walkthrough actions.
+                    Open a customer above to start a walkthrough or view reports.
                   </Text>
                 </View>
-              )}
+              ) : null}
 
               <Pressable
                 accessibilityRole="button"
@@ -1060,6 +1094,7 @@ export default function HomeScreen() {
           ) : null}
         </View>
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 }
@@ -1074,7 +1109,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  container: {
+  container: { width: "100%", maxWidth: 1180, alignSelf: "center",
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 10,

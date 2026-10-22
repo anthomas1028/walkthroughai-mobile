@@ -1,3 +1,5 @@
+import { downloadInBrowser } from "../lib/download";
+import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import { router, useLocalSearchParams } from "expo-router";
@@ -5,9 +7,10 @@ import * as Sharing from "expo-sharing";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,6 +23,11 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { API_BASE_URL, apiFetch } from "../lib/api";
 
 type WalkthroughItem = {
+  customer_part_number?: string | null;
+  fastenal_part_number?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_history?: Array<{ at: string; by: string; event: string }>;
   id: number;
   walkthrough_id: number;
   item_number: number;
@@ -145,7 +153,8 @@ export default function WalkthroughDetailScreen() {
   const fallbackCustomer = typeof params.customerName === "string" ? params.customerName : "Customer";
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
-  const viewerHeight = Math.max(windowHeight - 120, 320);
+  const [viewerSize, setViewerSize] = useState({ width: windowWidth, height: Math.max(windowHeight - 120, 320) });
+  const { width: viewerWidth, height: viewerHeight } = viewerSize;
 
   const [walkthrough, setWalkthrough] = useState<Walkthrough | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -212,6 +221,8 @@ export default function WalkthroughDetailScreen() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [walkthrough]);
 
+  const [visibleCount, setVisibleCount] = useState(40);
+  useEffect(() => setVisibleCount(40), [selectedLocation, selectedVendor]);
   const visibleItems = useMemo(() => {
     if (!walkthrough) return [];
     if (selectedLocation === "__ALL__") return walkthrough.items;
@@ -271,6 +282,7 @@ export default function WalkthroughDetailScreen() {
     }
     setIsSharing(true);
     try {
+      if (await downloadInBrowser(walkthrough.download_url, walkthrough.workbook_file)) return;
       if (!(await Sharing.isAvailableAsync())) {
         throw new Error("Sharing is not available on this device.");
       }
@@ -346,10 +358,10 @@ export default function WalkthroughDetailScreen() {
     lastPhotoViewerTapTime.current = 0;
     const shouldZoomIn = !photoViewerIsZoomed.current;
     const zoomScale = shouldZoomIn ? 2.5 : 1;
-    const targetWidth = windowWidth / zoomScale;
+    const targetWidth = viewerWidth / zoomScale;
     const targetHeight = viewerHeight / zoomScale;
     photoViewerScrollRef.current?.scrollResponderZoomTo({
-      x: shouldZoomIn ? (windowWidth - targetWidth) / 2 : 0,
+      x: shouldZoomIn ? (viewerWidth - targetWidth) / 2 : 0,
       y: shouldZoomIn ? (viewerHeight - targetHeight) / 2 : 0,
       width: targetWidth,
       height: targetHeight,
@@ -582,7 +594,7 @@ export default function WalkthroughDetailScreen() {
                     ) : (
                       <>
                         <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
-                        <Text style={styles.shareButtonText}>Open / Share Excel Report</Text>
+                        <Text style={styles.shareButtonText}>{Platform.OS === "web" ? "Download Excel" : "Open / Share Excel Report"}</Text>
                       </>
                     )}
                   </Pressable>
@@ -601,9 +613,11 @@ export default function WalkthroughDetailScreen() {
                 </View>
 
                 <View style={styles.metricList}>
-                  {photoGroups.map((group) => (
+                  {photoGroups.map((group, index) => (
                     <Pressable
                       key={group.name}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open photo ${index + 1}, ${group.item.location?.trim() || "Unassigned"}`}
                       disabled={!group.item.photo_url}
                       onPress={() => openSourcePhoto(group.item)}
                       style={({ pressed }) => [
@@ -616,7 +630,7 @@ export default function WalkthroughDetailScreen() {
                         <Ionicons name="image-outline" size={21} color="#93C5FD" />
                       </View>
                       <View style={styles.navigationText}>
-                        <Text numberOfLines={1} style={styles.navigationTitle}>{group.name}</Text>
+                        <Text numberOfLines={1} style={styles.navigationTitle}>Photo {index + 1}</Text>
                         <Text style={styles.navigationMeta}>
                           {plural(group.itemCount, "part")} · {group.item.location?.trim() || "Unassigned"}
                         </Text>
@@ -729,7 +743,7 @@ export default function WalkthroughDetailScreen() {
                 </View>
 
                 <View style={styles.partsList}>
-                  {(selectedVendor ? selectedVendorItems : visibleItems).map((item) => (
+                  {(selectedVendor ? selectedVendorItems : visibleItems).slice(0, visibleCount).map((item) => (
                     <View key={item.id} style={styles.partRow}>
                       <Pressable
                         accessibilityRole="button"
@@ -767,7 +781,8 @@ export default function WalkthroughDetailScreen() {
                       </Pressable>
                     </View>
                   ))}
-                </View>
+                {(selectedVendor ? selectedVendorItems : visibleItems).length > visibleCount ? <Pressable accessibilityRole="button" onPress={() => setVisibleCount(count => count + 40)} style={{ padding: 18, backgroundColor: "#1b2c43", borderRadius: 12 }}><Text style={{ color: "#bfdbfe", textAlign: "center", fontWeight: "700" }}>Show 40 more products</Text></Pressable> : null}
+</View>
               </>
             )}
           </ScrollView>
@@ -809,6 +824,12 @@ export default function WalkthroughDetailScreen() {
                 <DetailRow label="Manufacturer" value={selectedItem.manufacturer} />
                 <DetailRow label="Manufacturer Part #" value={selectedItem.manufacturer_part_number} />
                 <DetailRow label="Vendor Part #" value={selectedItem.vendor_part_number} />
+                <DetailRow label="Observed Part # (unclassified)" value={selectedItem.part_number} />
+                <DetailRow label="Customer Part #" value={selectedItem.customer_part_number} />
+                <DetailRow label="Fastenal Item #" value={selectedItem.fastenal_part_number} />
+                <DetailRow label="Reviewed By" value={selectedItem.reviewed_by} />
+                <DetailRow label="Reviewed At" value={selectedItem.reviewed_at} />
+                {selectedItem.review_history?.map((event, index) => <DetailRow key={index} label={`${event.event} · ${event.at}`} value={event.by} />)}
                 <DetailRow label="Size / Specification" value={selectedItem.size_specification} />
                 <DetailRow label="Package Quantity" value={selectedItem.package_quantity} />
                 <DetailRow label="Notes" value={selectedItem.notes} />
@@ -829,25 +850,31 @@ export default function WalkthroughDetailScreen() {
       <Modal
         visible={photoViewer !== null}
         animationType="fade"
-        presentationStyle="pageSheet"
-        allowSwipeDismissal
+        presentationStyle="fullScreen"
         onDismiss={closePhotoViewer}
         onRequestClose={closePhotoViewer}
       >
-        <View style={styles.viewerSafeArea}>
+        <View style={[styles.viewerSafeArea, { paddingBottom: safeAreaInsets.bottom }]}>
           <View style={[styles.viewerHeader, { minHeight: 68 + safeAreaInsets.top, paddingTop: safeAreaInsets.top }]}>
-            <Pressable onPress={closePhotoViewer} style={styles.viewerCloseButton}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close source photo" onPress={closePhotoViewer} style={styles.viewerCloseButton}>
               <Text style={styles.viewerCloseText}>Close</Text>
             </Pressable>
             <View style={styles.viewerTitleArea}>
               <Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text>
               <Text style={styles.viewerHint}>Pinch or double-tap to zoom</Text>
             </View>
-            <View style={styles.viewerSpacer} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Fit source photo to screen" style={styles.viewerCloseButton} onPress={() => {
+              photoViewerScrollRef.current?.scrollResponderZoomTo({ x: 0, y: 0, width: viewerWidth, height: viewerHeight, animated: true });
+              photoViewerIsZoomed.current = false;
+            }}><Text style={styles.viewerCloseText}>Fit</Text></Pressable>
           </View>
           {photoViewer ? (
             <ScrollView
               ref={photoViewerScrollRef}
+              key={photoViewer.uri}
+              onLayout={({ nativeEvent: { layout } }) => {
+                if (layout.width > 0 && layout.height > 0) setViewerSize(current => current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height });
+              }}
               style={styles.viewerScroll}
               contentContainerStyle={styles.viewerContent}
               centerContent
@@ -860,7 +887,7 @@ export default function WalkthroughDetailScreen() {
               showsHorizontalScrollIndicator={false}
               showsVerticalScrollIndicator={false}
             >
-              <Pressable onPress={handlePhotoViewerTap} style={{ width: windowWidth, height: viewerHeight }}>
+              <Pressable onPress={handlePhotoViewerTap} style={{ width: viewerWidth, height: viewerHeight }}>
                 <Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} />
               </Pressable>
             </ScrollView>
@@ -873,7 +900,7 @@ export default function WalkthroughDetailScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#0B1220" },
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 10 },
+  container: { width: "100%", maxWidth: 1180, alignSelf: "center", flex: 1, paddingHorizontal: 20, paddingTop: 10 },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
   backButton: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#17243A", borderWidth: 1, borderColor: "#31547D", alignItems: "center", justifyContent: "center", marginRight: 13 },
   headerText: { flex: 1 },
@@ -972,11 +999,11 @@ const styles = StyleSheet.create({
   exportStatusText: { color: "#94A3B8", fontSize: 12, flex: 1 },
   viewerSafeArea: { flex: 1, backgroundColor: "#02070D" },
   viewerHeader: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#1C2D43", paddingHorizontal: 14 },
-  viewerCloseButton: { width: 70, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#17283C" },
+  viewerCloseButton: { width: 70, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#17283C" },
   viewerCloseText: { color: "#BFD5EA", fontSize: 13, fontWeight: "900" },
   viewerTitleArea: { flex: 1, alignItems: "center", paddingHorizontal: 10 },
   viewerTitle: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
-  viewerHint: { color: "#71849D", fontSize: 10, marginTop: 2 },
+  viewerHint: { color: "#AABBD0", fontSize: 12, marginTop: 2 },
   viewerSpacer: { width: 70 },
   viewerScroll: { flex: 1 },
   viewerContent: { flexGrow: 1, alignItems: "center", justifyContent: "center" },

@@ -1,10 +1,13 @@
+import { useAuth } from "../contexts/AuthContext";
+import { draftKey, restoreGroups, storeGroups, writeDraft } from "../lib/drafts";
+import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionSheetIOS,
-  Alert,
+
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -76,7 +79,32 @@ export default function WalkthroughPhotoScreen() {
       ? customerName.trim()
       : "Selected Customer";
 
+  const { session } = useAuth();
+  const key = draftKey(session?.user.id || "", String(customerId || ""));
+  const [draftReady, setDraftReady] = useState(false);
   const [groups, setGroups] = useState<LocationGroup[]>([]);
+  useEffect(() => {
+    if (!session) return;
+    let alive = true;
+    restoreGroups(key).then(saved => {
+      if (!alive) return;
+      if (saved?.length) Alert.alert("Saved walkthrough", "Restore the photos and locations saved on this device?", [
+        { text: "Discard draft", style: "destructive", onPress: () => { void writeDraft(key, null); setDraftReady(true); } },
+        { text: "Restore draft", onPress: () => { setGroups(saved); setDraftReady(true); } },
+      ]); else setDraftReady(true);
+    }).catch(() => { setDraftReady(true); Alert.alert("Draft recovery unavailable", "Device storage is unavailable. Keep the app open until your walkthrough is saved."); });
+    return () => { alive = false; };
+  }, [key]);
+  useEffect(() => {
+    if (!draftReady || !session) return;
+    const timer = setTimeout(() => { storeGroups(key, groups).catch(() => Alert.alert("Draft could not be saved", "Device storage is full or unavailable. Keep the app open until you finish.")); }, 700);
+    return () => clearTimeout(timer);
+  }, [groups, key, draftReady]);
+  useEffect(() => {
+    if (Platform.OS !== "web" || !groups.some(group => group.photos.length)) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
+  }, [groups]);
   const [areaModal, setAreaModal] = useState<AreaModalState>({
     visible: false,
     mode: "create",
@@ -238,6 +266,9 @@ export default function WalkthroughPhotoScreen() {
     groupId: string,
     assets: ImagePicker.ImagePickerAsset[]
   ) {
+    if (assets.some(asset => asset.width > 0 && asset.height > 0 && Math.min(asset.width, asset.height) < 700)) {
+      Alert.alert("Check photo detail", "A photo has a short edge below 700 pixels. Zoom in to check that part numbers are readable; remove it and retake closer if needed. This checks resolution, not blur or lighting.");
+    }
     setGroups((currentGroups) => {
       const currentCount = currentGroups.reduce(
         (total, group) => total + group.photos.length,
@@ -414,7 +445,11 @@ export default function WalkthroughPhotoScreen() {
     photoViewerIsZoomed.current = shouldZoomIn;
   }
 
-  function continueToUpload() {
+  async function continueToUpload() {
+    if (!draftReady) return;
+    {
+      try { await storeGroups(key, groups); } catch { Alert.alert("Unable to save draft", "Keep the app open and try again. Device storage may be full."); return; }
+    }
     if (photos.length === 0) {
       Alert.alert(
         "Add at least one photo",
@@ -426,7 +461,8 @@ export default function WalkthroughPhotoScreen() {
     router.push({
       pathname: "/upload",
       params: {
-        photos: JSON.stringify(photos),
+        photos: "",
+        savedDraft: "true",
         customerId: typeof customerId === "string" ? customerId : "",
         customerName: selectedCustomerName,
         customerEmail:

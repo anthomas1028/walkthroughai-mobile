@@ -1,8 +1,9 @@
+import { Alert } from "../lib/alerts";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   FlatList,
   Image,
   Pressable,
@@ -264,6 +265,10 @@ export default function CustomerDashboardScreen() {
             )}
             ListHeaderComponent={
               <>
+                {!isReadOnly ? <View style={{ marginBottom: 16, gap: 10 }}>
+                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/walkthrough", params: { customerId: String(customerId), customerName: name, customerEmail: dashboard.customer.email || "", contactName: dashboard.customer.contact_name || "" } })} style={{ backgroundColor: "#2563eb", padding: 16, borderRadius: 14 }}><Text style={{ color: "white", textAlign: "center", fontWeight: "700", fontSize: 17 }}>Start walkthrough</Text></Pressable>
+                  <View style={{ flexDirection: "row", gap: 12 }}>{[{ label: "History", route: "/history" }, { label: "Edit customer", route: "/customer-edit" }].map(action => <Pressable key={action.route} accessibilityRole="button" onPress={() => router.push({ pathname: action.route as any, params: { customerId: String(customerId), customerName: name } })} style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: "#1b2c43" }}><Text style={{ color: "#bfdbfe", textAlign: "center", fontWeight: "600" }}>{action.label}</Text></Pressable>)}</View>
+                </View> : null}
                 <View style={s.customerCard}>
                   {isReadOnly ? (
                     <Text style={s.demoLabel}>
@@ -317,7 +322,7 @@ export default function CustomerDashboardScreen() {
                     ],
                     [
                       dashboard.total_inventory_items,
-                      "Inventory Items",
+                      "Unique parts",
                       "inventory",
                     ],
                     [active, "Active", "active"],
@@ -329,11 +334,13 @@ export default function CustomerDashboardScreen() {
                     [dashboard.total_photos, "Photos", "photos"],
                     [
                       dashboard.review_item_count,
-                      "Review Items",
+                      "Rows to review",
                       "review",
                     ],
                   ].map(([number, label, report]) => (
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${number} ${label}. Open report.`}
                       key={String(label)}
                       onPress={() => openReport(String(report))}
                       style={s.stat}
@@ -343,6 +350,8 @@ export default function CustomerDashboardScreen() {
                     </Pressable>
                   ))}
                 </View>
+
+                <Text style={s.statsHint}>Unique parts are counted once. Review rows include repeat sightings across reports.</Text>
 
                 <Pressable
                   onPress={() => openReport("last")}
@@ -474,7 +483,7 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0B1220",
   },
-  container: {
+  container: { width: "100%", maxWidth: 1180, alignSelf: "center",
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 14,
@@ -612,8 +621,8 @@ const s = StyleSheet.create({
     paddingBottom: 4,
   },
   statLabel: {
-    color: "#718096",
-    fontSize: 10,
+    color: "#B8C8DB",
+    fontSize: 12,
     lineHeight: 14,
     fontWeight: "700",
     textAlign: "center",
@@ -627,6 +636,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 5,
     paddingBottom: 10,
   },
+  statsHint: { color: "#AAB7CA", fontSize: 12, lineHeight: 18, marginBottom: 14 },
   last: {
     backgroundColor: "#0C1524",
     borderRadius: 15,
@@ -636,7 +646,7 @@ const s = StyleSheet.create({
     marginBottom: 19,
   },
   eyebrow: {
-    color: "#718096",
+    color: "#AAB7CA",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.7,
@@ -693,7 +703,7 @@ const s = StyleSheet.create({
     fontWeight: "800",
   },
   muted: {
-    color: "#718096",
+    color: "#AAB7CA",
     fontSize: 10.5,
     lineHeight: 15,
     marginTop: 3,

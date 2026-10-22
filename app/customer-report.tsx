@@ -1,3 +1,5 @@
+import { downloadInBrowser } from "../lib/download";
+import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import { router, useLocalSearchParams } from "expo-router";
@@ -5,10 +7,11 @@ import * as Sharing from "expo-sharing";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   FlatList,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -45,6 +48,10 @@ type ReportRecord = {
   photo?: string | null;
   vendor?: string | null;
   manufacturer?: string | null;
+  customer_part_number?: string | null;
+  fastenal_part_number?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   manufacturer_part_number?: string | null;
   vendor_part_number?: string | null;
   part_number?: string | null;
@@ -400,6 +407,7 @@ export default function CustomerReportScreen() {
         );
       }
 
+      if (await downloadInBrowser(data.download_url, data.workbook_file)) return;
       const sharingAvailable = await Sharing.isAvailableAsync();
 
       if (!sharingAvailable) {
@@ -583,6 +591,8 @@ export default function CustomerReportScreen() {
         manufacturer_part_number:
           reviewDraft.manufacturer_part_number || "",
         vendor_part_number: reviewDraft.vendor_part_number || "",
+        customer_part_number: reviewDraft.customer_part_number || "",
+        fastenal_part_number: reviewDraft.fastenal_part_number || "",
         part_number: reviewDraft.part_number || "",
         description: reviewDraft.description || "",
         size_specification: reviewDraft.size_specification || "",
@@ -1236,7 +1246,7 @@ export default function CustomerReportScreen() {
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={styles.exportButtonText}>
-                {isUniquePartsReport ? "Export Inventory" : "Export Excel"}
+                {Platform.OS === "web" ? "Download Excel" : isUniquePartsReport ? "Export Inventory" : "Export Excel"}
               </Text>
             )}
           </Pressable>
@@ -1471,7 +1481,9 @@ export default function CustomerReportScreen() {
                 {[
                   ["Manufacturer Part #", "manufacturer_part_number"],
                   ["Vendor Part #", "vendor_part_number"],
-                  ["Part #", "part_number"],
+                  ["Observed Part # (unclassified)", "part_number"],
+                  ["Customer Part #", "customer_part_number"],
+                  ["Fastenal Item #", "fastenal_part_number"],
                   ["Description", "description"],
                   ["Vendor", "vendor"],
                   ["Manufacturer", "manufacturer"],
@@ -1602,7 +1614,7 @@ export default function CustomerReportScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#0B1220" },
-  container: { flex: 1, paddingHorizontal: 18, paddingTop: 12 },
+  container: { width: "100%", maxWidth: 1180, alignSelf: "center", flex: 1, paddingHorizontal: 18, paddingTop: 12 },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
   backButton: {
     width: 46,

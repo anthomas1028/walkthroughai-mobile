@@ -1,8 +1,9 @@
+import { Alert } from "../lib/alerts";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   FlatList,
   Pressable,
   RefreshControl,

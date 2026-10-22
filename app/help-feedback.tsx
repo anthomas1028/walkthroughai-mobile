@@ -1,9 +1,10 @@
+import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   KeyboardAvoidingView,
   Platform,
   Pressable,

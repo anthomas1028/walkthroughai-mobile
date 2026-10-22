@@ -1,0 +1,7 @@
+const fs=require('fs'), vm=require('vm'),ts=require('typescript'),assert=require('node:assert/strict');
+const metadata=new Map(),files=new Set(['cache:photo']);
+const storage={getItem:async key=>metadata.get(key)||null,setItem:async(k,v)=>metadata.set(k,v),removeItem:async k=>metadata.delete(k)};
+const fileSystem={documentDirectory:'file:documents/',makeDirectoryAsync:async()=>{},getInfoAsync:async uri=>({exists:files.has(uri)}),copyAsync:async({from,to})=>{assert(files.has(from));files.add(to)}};
+const exportsObject={};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/drafts.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports:exportsObject,require:name=>name==='react-native'?{Platform:{OS:'ios'}}:name.includes('async-storage')?{default:storage}:fileSystem,Map,Promise,JSON,encodeURIComponent});
+(async()=>{const d=exportsObject,key=d.draftKey('test','customer');await d.storeGroups(key,[{name:'Area',photos:[{id:'one',uri:'cache:photo'}]}]);files.delete('cache:photo');let groups=await d.restoreGroups(key);assert(files.has(groups[0].photos[0].uri));assert.equal(groups[0].name,'Area');await d.storeGroups(key,groups);await d.writeDraft(key,null);assert.equal(await d.restoreGroups(key),null);console.log('PASS: native durable photo copy survives cache removal, repeat save, scoped metadata deletion.');})().catch(e=>{console.error(e);process.exitCode=1});

@@ -21,6 +21,7 @@ type Workspace = {
 type AuthContextValue = {
   session: Session | null;
   workspace: Workspace | null;
+  workspaceError: string;
   isLoading: boolean;
   refreshWorkspace: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -86,6 +87,7 @@ async function applyAuthCallback(url: string | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [workspaceError, setWorkspaceError] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setWorkspace(data.workspace);
+    setWorkspaceError("");
   }
 
   useEffect(() => {
@@ -112,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setSession(data.session);
       setIsLoading(false);
-    });
+    }).catch(() => { if (isMounted) { setWorkspaceError("Your saved session could not be loaded. Sign in again."); setIsLoading(false); } });
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
       (_event, nextSession) => {
@@ -158,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     refreshWorkspace().catch((error) => {
-      console.warn("Workspace loading error:", error);
+      setWorkspaceError(error instanceof Error ? error.message : "Your workspace could not be loaded.");
     });
   }, [session?.access_token]);
 
@@ -170,17 +173,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setWorkspace(null);
+    setWorkspaceError("");
   }
 
   const value = useMemo(
     () => ({
       session,
       workspace,
+      workspaceError,
       isLoading,
       refreshWorkspace,
       signOut,
     }),
-    [session, workspace, isLoading]
+    [session, workspace, workspaceError, isLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

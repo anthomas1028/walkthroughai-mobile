@@ -1,9 +1,10 @@
+import { Alert } from "../lib/alerts";
 import * as ImagePicker from "expo-image-picker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -182,7 +183,11 @@ export default function CustomerEditScreen() {
     const mimeType = asset.mimeType || `image/${fallbackExtension}`;
 
     const formData = new FormData();
-    formData.append(
+    if (Platform.OS === "web") {
+      const source = await fetch(asset.uri);
+      if (!source.ok) throw new Error("The selected logo could not be read. Select it again.");
+      formData.append("logo", await source.blob(), fileName);
+    } else formData.append(
       "logo",
       {
         uri: asset.uri,
@@ -634,29 +639,29 @@ export default function CustomerEditScreen() {
                     </View>
                   </View>
 
-                  <TextInput
+                  <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Company name *</Text><TextInput accessibilityLabel="Company name *"
                     autoCapitalize="words"
                     onChangeText={setCompanyName}
                     placeholder="Company name *"
                     placeholderTextColor="#64748B"
                     style={styles.input}
                     value={companyName}
-                  />
+                  /></View>
 
-                  <TextInput
+                  <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Contact name</Text><TextInput accessibilityLabel="Contact name"
                     autoCapitalize="words"
                     onChangeText={setContactName}
                     placeholder="Contact name"
                     placeholderTextColor="#64748B"
                     style={styles.input}
                     value={contactName}
-                  />
+                  /></View>
 
                   <Text style={styles.sectionTitle}>
                     Contact
                   </Text>
 
-                  <TextInput
+                  <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Email address</Text><TextInput accessibilityLabel="Email address"
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType="email-address"
@@ -665,41 +670,41 @@ export default function CustomerEditScreen() {
                     placeholderTextColor="#64748B"
                     style={styles.input}
                     value={email}
-                  />
+                  /></View>
 
-                  <TextInput
+                  <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Phone number</Text><TextInput accessibilityLabel="Phone number"
                     keyboardType="phone-pad"
                     onChangeText={setPhone}
                     placeholder="Phone number"
                     placeholderTextColor="#64748B"
                     style={styles.input}
                     value={phone}
-                  />
+                  /></View>
 
                   <Text style={styles.sectionTitle}>
                     Address
                   </Text>
 
-                  <TextInput
+                  <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Address line 1</Text><TextInput accessibilityLabel="Address line 1"
                     autoCapitalize="words"
                     onChangeText={setAddressLine1}
                     placeholder="Address line 1"
                     placeholderTextColor="#64748B"
                     style={styles.input}
                     value={addressLine1}
-                  />
+                  /></View>
 
-                  <TextInput
+                  <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Address line 2</Text><TextInput accessibilityLabel="Address line 2"
                     autoCapitalize="words"
                     onChangeText={setAddressLine2}
                     placeholder="Address line 2"
                     placeholderTextColor="#64748B"
                     style={styles.input}
                     value={addressLine2}
-                  />
+                  /></View>
 
                   <View style={styles.addressRow}>
-                    <TextInput
+                    <TextInput accessibilityLabel="City"
                       autoCapitalize="words"
                       onChangeText={setCity}
                       placeholder="City"
@@ -711,7 +716,7 @@ export default function CustomerEditScreen() {
                       value={city}
                     />
 
-                    <TextInput
+                    <TextInput accessibilityLabel="State"
                       autoCapitalize="characters"
                       maxLength={2}
                       onChangeText={setState}
@@ -724,7 +729,7 @@ export default function CustomerEditScreen() {
                       value={state}
                     />
 
-                    <TextInput
+                    <TextInput accessibilityLabel="ZIP"
                       keyboardType="number-pad"
                       maxLength={10}
                       onChangeText={setPostalCode}
@@ -742,7 +747,7 @@ export default function CustomerEditScreen() {
                     Notes
                   </Text>
 
-                  <TextInput
+                  <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Customer notes</Text><TextInput accessibilityLabel="Customer notes"
                     multiline
                     onChangeText={setNotes}
                     placeholder="Customer notes"
@@ -753,7 +758,7 @@ export default function CustomerEditScreen() {
                     ]}
                     textAlignVertical="top"
                     value={notes}
-                  />
+                  /></View>
                 </View>
 
                 <View style={styles.managementCard}>
@@ -795,7 +800,7 @@ export default function CustomerEditScreen() {
                           <Text style={styles.deleteInstruction}>
                             Type {savedCompanyName} exactly to continue.
                           </Text>
-                          <TextInput
+                          <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Type company name</Text><TextInput accessibilityLabel="Type company name"
                             autoCapitalize="none"
                             autoCorrect={false}
                             onChangeText={setDeleteConfirmation}
@@ -803,7 +808,7 @@ export default function CustomerEditScreen() {
                             placeholderTextColor="#64748B"
                             style={styles.deleteInput}
                             value={deleteConfirmation}
-                          />
+                          /></View>
 
                           <View style={styles.deleteActionRow}>
                             <Pressable

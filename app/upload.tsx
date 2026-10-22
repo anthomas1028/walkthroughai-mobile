@@ -1,9 +1,16 @@
+import { photoOutcome, resultKey, mergeRecoveryResults } from "../lib/photo-accounting";
+import { loadRecovery, saveRecovery, clearRecovery, retainPhotos, RecoveryDraft } from "../lib/recovery";
+import { useAuth } from "../contexts/AuthContext";
+import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { draftKey, restoreGroups, writeDraft } from "../lib/drafts";
+import { Alert } from "../lib/alerts";
 import * as ImageManipulator from "expo-image-manipulator";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   Animated,
   Image,
   KeyboardAvoidingView,
@@ -36,86 +43,9 @@ const FINALIZE_API_URL = `${API_BASE_URL}/api/finalize`;
 const JOB_POLL_INTERVAL_MS = 2500;
 
 const ANALYSIS_WAITING_MESSAGES = [
-  {
-    heading: "While you wait…",
-    text: "Why did the inventory label get promoted? It always had the right part number.",
-  },
-  {
-    heading: "Did you know?",
-    text: "Octopuses have three hearts.",
-  },
-  {
-    heading: "While you wait…",
-    text: "I only know 25 letters of the alphabet. I do not know y.",
-  },
-  {
-    heading: "Did you know?",
-    text: "A day on Venus is longer than a year on Venus.",
-  },
-  {
-    heading: "While you wait…",
-    text: "Why was the bolt so confident? It knew it was a perfect fit.",
-  },
-  {
-    heading: "Did you know?",
-    text: "Bananas are berries, but strawberries are not.",
-  },
-  {
-    heading: "While you wait…",
-    text: "What do you call a factory that makes okay products? A satisfactory.",
-  },
-  {
-    heading: "Did you know?",
-    text: "Honey can remain edible for thousands of years when properly sealed.",
-  },
-  {
-    heading: "While you wait…",
-    text: "Why did the shelf apply for a job? It had plenty of experience supporting things.",
-  },
-  {
-    heading: "Did you know?",
-    text: "Sharks existed before trees.",
-  },
-  {
-    heading: "While you wait…",
-    text: "I ordered a chicken and an egg online. I will let you know.",
-  },
-  {
-    heading: "Did you know?",
-    text: "The Eiffel Tower can grow several inches taller during hot weather.",
-  },
-  {
-    heading: "While you wait…",
-    text: "Why did the screw stay calm? It knew how to keep things together.",
-  },
-  {
-    heading: "Did you know?",
-    text: "Wombat droppings are cube-shaped.",
-  },
-  {
-    heading: "While you wait…",
-    text: "What did one wall say to the other? I will meet you at the corner.",
-  },
-  {
-    heading: "Did you know?",
-    text: "A group of flamingos is called a flamboyance.",
-  },
-  {
-    heading: "While you wait…",
-    text: "Why could the bicycle not stand up by itself? It was two-tired.",
-  },
-  {
-    heading: "Did you know?",
-    text: "The shortest war in recorded history lasted less than an hour.",
-  },
-  {
-    heading: "While you wait…",
-    text: "I used to hate facial hair, but then it grew on me.",
-  },
-  {
-    heading: "Did you know?",
-    text: "Sea otters hold hands while sleeping so they do not drift apart.",
-  },
+  { heading: "Reading labels", text: "Clear, close-up photos help preserve part numbers and small print." },
+  { heading: "Review comes next", text: "Check uncertain part numbers against the source photo before confirming." },
+  { heading: "Organized by location", text: "Your location labels stay attached to the products in your report." },
 ];
 const JOB_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
@@ -132,6 +62,8 @@ type RecognitionResult = {
   location: string;
   vendor: string;
   manufacturer: string;
+  customer_part_number: string;
+  fastenal_part_number: string;
   manufacturer_part_number: string;
   vendor_part_number: string;
   part_number: string;
@@ -167,6 +99,7 @@ type UploadApiResponse = {
 };
 
 type JobStatusApiResponse = {
+  diagnostics?: Record<string, string>;
   success: boolean;
   job_id?: string;
   status?: "queued" | "processing" | "complete" | "failed" | string;
@@ -286,6 +219,9 @@ function normalizeResult(
   const confidenceNumber = Number(value.confidence);
 
   return {
+    ...value,
+    customer_part_number: cleanText(value.customer_part_number),
+    fastenal_part_number: cleanText(value.fastenal_part_number),
     photo: cleanText(value.photo),
     location: cleanText(value.location),
     vendor: cleanText(value.vendor),
@@ -353,7 +289,7 @@ function getReviewReasons(
   );
 
   if (confidence < 90) {
-    reasons.push(`AI confidence is ${confidence}%`);
+    reasons.push(`Model confidence signal: ${confidence}%`);
   }
 
   if (!cleanText(result.vendor)) {
@@ -367,7 +303,7 @@ function getReviewReasons(
   const hasPartNumber =
     cleanText(result.manufacturer_part_number).length > 0 ||
     cleanText(result.vendor_part_number).length > 0 ||
-    cleanText(result.part_number).length > 0;
+    cleanText(result.part_number).length > 0 || cleanText(result.customer_part_number).length > 0 || cleanText(result.fastenal_part_number).length > 0;
 
   if (!hasPartNumber) {
     reasons.push("Part number is missing");
@@ -564,12 +500,21 @@ function EditableField({
 }
 
 export default function UploadScreen() {
+  const { session } = useAuth();
+  const recoveryRef = useRef<RecoveryDraft | null>(null);
+  const analysisBusy = useRef(false);
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [backendDiagnostics, setBackendDiagnostics] = useState<Record<string, string>>({});
+  const [showPhotoDetails, setShowPhotoDetails] = useState(false);
+  const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
+
   const pendingUpload = useRef<{
     key: string;
     prepared: SelectedPhoto[];
     uploadId: string;
     uploaded: Set<number>;
   } | null>(null);
+
   const { width: windowWidth, height: windowHeight } =
     useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
@@ -579,7 +524,10 @@ export default function UploadScreen() {
   );
 
   const params = useLocalSearchParams<{
+    resume?: string;
     photos?: string | string[];
+    savedDraft?: string;
+    resumeJobId?: string;
     customerId?: string | string[];
     customerName?: string | string[];
     customerEmail?: string | string[];
@@ -598,10 +546,16 @@ export default function UploadScreen() {
     params.contactName
   );
 
-  const photos = useMemo(
-    () => parsePhotos(params.photos),
-    [params.photos]
-  );
+  const uploadMounted = useRef(true);
+  useEffect(() => { uploadMounted.current = true; return () => { uploadMounted.current = false; }; }, []);
+  const activeKey = `active-walkthrough:${session?.user.id || ""}`;
+  const photoDraftKey = draftKey(session?.user.id || "", customerId);
+  const resumeJobId = typeof params.resumeJobId === "string" ? params.resumeJobId : "";
+  const [photos, setPhotos] = useState<SelectedPhoto[]>(() => parsePhotos(params.photos));
+  useEffect(() => {
+    if (params.savedDraft !== "true" || !session) return;
+    restoreGroups(photoDraftKey).then(groups => setPhotos((groups || []).flatMap(group => group.photos.map((photo: any) => ({ ...photo, location: group.name }))))).catch(() => Alert.alert("Photos unavailable", "Return to photos and select them again."));
+  }, [photoDraftKey, params.savedDraft]);
 
   const [walkthroughName, setWalkthroughName] =
     useState(
@@ -759,8 +713,58 @@ export default function UploadScreen() {
   const reviewSectionY = useRef(0);
   const resultCardPositions = useRef<Record<number, number>>({});
 
+  useEffect(() => {
+    let active = true;
+    loadRecovery().then(async saved => {
+      if (!active) return;
+      if (saved && params.resume === "1" && saved.customerId === customerId) {
+        if (Platform.OS === "web") {
+          const groups = await restoreGroups(photoDraftKey);
+          if (groups) saved.photos = groups.flatMap(group => group.photos.map((photo: SelectedPhoto) => ({ ...photo, location: group.name })));
+          saved.prepared = [];
+        }
+        setPhotos(saved.photos);
+        recoveryRef.current = saved;
+        pendingUpload.current = { key: JSON.stringify([saved.customerName, saved.customerId, saved.photos]), prepared: saved.prepared, uploadId: saved.uploadId, uploaded: new Set(saved.uploaded) };
+        setCurrentJobId(saved.jobId);
+        setResults(saved.results.map(row => normalizeResult(row as RecognitionResult)));
+        setRemovedPhotos(saved.removedPhotos || []);
+        if (saved.editDraft && typeof saved.editingIndex === "number") { setEditingIndex(saved.editingIndex); setEditDraft(normalizeResult(saved.editDraft as RecognitionResult)); }
+        setCompletedCustomer(saved.customerName);
+        setWalkthroughName(saved.customerName);
+      }
+      setRecoveryReady(true);
+    }).catch(error => { if (active) { setErrorMessage(String(error)); setRecoveryReady(true); } });
+    apiFetch(`${API_BASE_URL}/api/diagnostics`).then(response => response.json()).then(data => { if (active && data.success) setBackendDiagnostics(data); }).catch(() => {});
+    return () => { active = false; };
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!recoveryReady || !recoveryRef.current || isProcessing || isFinalizing) return;
+    const draft = { ...recoveryRef.current, results, removedPhotos, editingIndex, editDraft };
+    recoveryRef.current = draft;
+    void saveRecovery(draft).catch(error => setErrorMessage(`Review progress could not be saved: ${String(error)}`));
+  }, [results, removedPhotos, editingIndex, editDraft, recoveryReady, isProcessing, isFinalizing]);
+
+  async function checkpoint(overrides: Partial<RecoveryDraft> = {}) {
+    const pending = pendingUpload.current;
+    const draft: RecoveryDraft = { version: 1, customerId, customerName: walkthroughName, contactName: selectedContactName,
+      photos: recoveryRef.current?.photos || photos, prepared: pending?.prepared || [], uploadId: pending?.uploadId || "",
+      uploaded: Array.from(pending?.uploaded || []), jobId: recoveryRef.current?.jobId || currentJobId,
+      results: recoveryRef.current?.results || results, updatedAt: new Date().toISOString(), ...overrides };
+    recoveryRef.current = draft;
+    await saveRecovery(draft);
+  }
+
   const photoCount = photos.length;
   const hasResults = results.length > 0;
+
+  const photoOutcomes = photos.map((photo, index) => {
+    const rows = results.filter(row => getSourcePhotoIndex(row.photo, photos.length) === index);
+    const excluded = removedPhotos.some(key => { try { return getSourcePhotoIndex(JSON.parse(key)[0], photos.length) === index; } catch { return false; } });
+    return { photo, index, rows, status: photoOutcome(rows, excluded) };
+  });
+  const countOutcome = (status: string) => photoOutcomes.filter(photo => photo.status === status).length;
 
   const reviewGroups = useMemo(() => {
     const groups = new Map<
@@ -812,6 +816,23 @@ export default function UploadScreen() {
       ? Math.round((confirmedCount / results.length) * 100)
       : 0;
 
+  useEffect(() => {
+    if (!currentJobId || !results.length || correctedWorkbookUrl) return;
+    const timer = setTimeout(() => { void AsyncStorage.setItem(`${activeKey}:review`, JSON.stringify({ jobId: currentJobId, results, walkthroughName, recipientEmail, editingIndex, editDraft })).catch(() => {}); }, 300);
+    return () => clearTimeout(timer);
+  }, [results, currentJobId, correctedWorkbookUrl, activeKey, walkthroughName, recipientEmail, editingIndex, editDraft]);
+  useEffect(() => {
+    if (Platform.OS !== "web" || !(isProcessing || (results.length && !correctedWorkbookUrl))) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
+  }, [isProcessing, results.length, correctedWorkbookUrl]);
+  const resumedJob = useRef("");
+  useEffect(() => {
+    if (!resumeJobId || !session || !recoveryReady || resumedJob.current === resumeJobId) return;
+    resumedJob.current = resumeJobId;
+    void analyzePhotos();
+  }, [resumeJobId, session?.user.id, recoveryReady]);
+
   function returnToPhotos() {
     if (
       isProcessing ||
@@ -829,14 +850,31 @@ export default function UploadScreen() {
   }
 
   async function analyzePhotos() {
+    if (analysisBusy.current || !recoveryReady) return;
+    analysisBusy.current = true;
+    if (!recoveryRef.current && !resumeJobId && params.resume !== "1") {
+      try {
+        const saved = await loadRecovery();
+        if (saved) {
+          analysisBusy.current = false;
+          Alert.alert("Unfinished walkthrough", "Resume your saved walkthrough, or replace its local recovery draft. Saved reports in History are kept.", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Resume saved", onPress: () => router.replace({ pathname: "/upload", params: { resume: "1", customerId: saved.customerId, customerName: saved.customerName, contactName: saved.contactName, photos: JSON.stringify(saved.photos) } }) },
+            { text: "Replace draft", style: "destructive", onPress: () => { void clearRecovery().then(() => analyzePhotos()); } },
+          ]);
+          return;
+        }
+      } catch (error) { analysisBusy.current = false; setErrorMessage(String(error)); return; }
+    }
     const customer =
       walkthroughName.trim() || "Mobile Walkthrough";
 
-    if (photoCount === 0) {
+    if (photoCount === 0 && !resumeJobId) {
       Alert.alert(
         "No photos received",
         "Return to the previous screen and select at least one inventory photo."
       );
+      analysisBusy.current = false;
       return;
     }
 
@@ -884,20 +922,34 @@ export default function UploadScreen() {
         });
         if (!data.upload_id) throw new Error("The server did not create an upload session.");
         pending.uploadId = data.upload_id;
+        await checkpoint();
       }
       const base = `${UPLOAD_API_URL}/${pending.uploadId}`;
+      const reconciledResponse = await apiFetch(base);
+      const reconciled = await readJsonResponse<{ uploaded_slots?: number[]; result?: UploadApiResponse }>(reconciledResponse);
+      if (!reconciledResponse.ok) throw new Error("This upload is unavailable or expired. Your local photos remain saved; start a new walkthrough when ready.");
+      pending.uploaded = new Set(reconciled.uploaded_slots || []);
+      if (reconciled.result?.job_id) return { response: reconciledResponse, data: reconciled.result };
+
       for (let index = 0; index < preparedPhotos.length; index += 1) {
         if (pending.uploaded.has(index)) continue;
         setJobStatusMessage(`Uploading photo ${index + 1} of ${preparedPhotos.length}. Keep the app open.`);
         const photo = preparedPhotos[index];
         const body = new FormData();
-        body.append("photo", {
-          uri: photo.uri, name: getFileName(photo, index), type: getMimeType(photo),
-        } as unknown as Blob);
+        if (Platform.OS === "web") {
+          const source = await fetch(photo.uri);
+          if (!source.ok) throw new Error("The selected photo could not be read. Select it again.");
+          body.append("photo", await source.blob(), getFileName(photo, index));
+        } else {
+          body.append("photo", {
+            uri: photo.uri, name: getFileName(photo, index), type: getMimeType(photo),
+          } as unknown as Blob);
+        }
         await uploadRequest(`${base}/photos/${index}`, {
           method: "POST", headers: { Accept: "application/json" }, body,
         });
         pending.uploaded.add(index);
+        await checkpoint();
       }
       setJobStatusMessage("All photos uploaded. Starting analysis.");
       const body = new FormData();
@@ -915,19 +967,32 @@ export default function UploadScreen() {
       const startedAt = Date.now();
 
       while (true) {
+        if (!uploadMounted.current) throw new Error("Analysis continues in the background. Use Resume walkthrough to return.");
         if (Date.now() - startedAt > JOB_POLL_TIMEOUT_MS) {
           throw new Error(
             "The background analysis is still running after two hours. Your upload may still finish, but this screen stopped checking it."
           );
         }
 
-        const response = await apiFetch(statusUrl, {
+        let response: Response;
+        try {
+          response = await apiFetch(statusUrl, {
           method: "GET",
           headers: {
             Accept: "application/json",
           },
         });
 
+        } catch (error) {
+          if (error instanceof Error && /session|sign in/i.test(error.message)) throw error;
+          setJobStatusMessage("Connection interrupted. Your job is saved; reconnecting…");
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          continue;
+        }
+        if (response.status >= 500) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          continue;
+        }
         const data =
           await readJsonResponse<JobStatusApiResponse>(
             response
@@ -946,6 +1011,7 @@ export default function UploadScreen() {
           Math.min(100, Number(data.progress) || 0)
         );
 
+        if (data.diagnostics) setBackendDiagnostics(data.diagnostics);
         setJobProgress(safeProgress);
         setJobStatusMessage(
           data.message ||
@@ -958,6 +1024,7 @@ export default function UploadScreen() {
           return data;
         }
 
+        if (data.status === "failed" && data.results?.length) return data;
         if (data.status === "failed") {
           throw new Error(
             data.error ||
@@ -979,7 +1046,7 @@ export default function UploadScreen() {
       setJobStatusMessage(
         "Preparing photos for upload."
       );
-      setResults([]);
+      if (!recoveryRef.current?.jobId) setResults([]);
       setOriginalWorkbookUrl(null);
       setCorrectedWorkbookUrl(null);
       setCompletedCustomer("");
@@ -988,19 +1055,27 @@ export default function UploadScreen() {
       setEmailedRecipient("");
 
       const uploadKey = JSON.stringify([customer, customerId, photos]);
-      if (!pendingUpload.current || pendingUpload.current.key !== uploadKey) {
-        preparedPhotos = await preparePhotosForUpload(photos);
-        pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: "", uploaded: new Set() };
+      if (!(recoveryRef.current?.jobId || resumeJobId) && (!pendingUpload.current || pendingUpload.current.key !== uploadKey || !pendingUpload.current.prepared.length)) {
+        const priorUpload = recoveryRef.current?.uploadId || "";
+        const originals = await retainPhotos(photos, `source-${Date.now()}`);
+        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
+        await saveRecovery(recoveryRef.current);
+        preparedPhotos = await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
+        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
+        pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: priorUpload, uploaded: new Set() };
       } else {
-        preparedPhotos = pendingUpload.current.prepared;
+        preparedPhotos = pendingUpload.current?.prepared || [];
       }
 
       setJobStatusMessage(
         "Uploading photos to Walkthrough AI."
       );
 
-      const { response, data } =
-        await submitBackgroundJob();
+      await checkpoint();
+      const existingJobId = recoveryRef.current?.jobId || resumeJobId;
+      const { response, data } = existingJobId
+        ? { response: { ok: true } as Response, data: { success: true, job_id: existingJobId } as UploadApiResponse }
+        : await submitBackgroundJob();
 
       if (!response.ok || !data.success) {
         throw new Error(
@@ -1024,6 +1099,7 @@ export default function UploadScreen() {
       }
 
       setCurrentJobId(jobId);
+      await checkpoint({ jobId });
 
       setJobStatusMessage(
         data.message ||
@@ -1033,6 +1109,7 @@ export default function UploadScreen() {
       const completedJob =
         await waitForJobCompletion(statusUrl);
 
+      if (!uploadMounted.current) return;
       const recognizedResults = Array.isArray(
         completedJob.results
       )
@@ -1041,7 +1118,14 @@ export default function UploadScreen() {
             .map(applySmartConfirmation)
         : [];
 
-      setResults(recognizedResults);
+      let reviewed = (recoveryRef.current?.results || []) as RecognitionResult[];
+      if (!reviewed.length && resumeJobId) {
+        const raw = await AsyncStorage.getItem(`${activeKey}:review`);
+        if (raw) { try { const old = JSON.parse(raw); if (old.jobId === jobId) reviewed = old.results || []; } catch {} }
+      }
+      const preserved = mergeRecoveryResults(recognizedResults, reviewed, removedPhotos);
+      setResults(preserved);
+      await checkpoint({ results: preserved });
       setOriginalWorkbookUrl(
         completedJob.download_url ?? null
       );
@@ -1061,6 +1145,7 @@ export default function UploadScreen() {
         );
       }
     } catch (error) {
+      if (!uploadMounted.current) return;
       console.warn("Background upload error:", error);
 
       const isAbortError =
@@ -1077,6 +1162,7 @@ export default function UploadScreen() {
       Alert.alert("Analysis failed", message);
     } finally {
       setIsProcessing(false);
+      analysisBusy.current = false;
     }
   }
 
@@ -1085,6 +1171,17 @@ export default function UploadScreen() {
     setEditDraft({
       ...results[index],
     });
+  }
+
+  async function retryFailedPhotos() {
+    if (analysisBusy.current || !currentJobId) return;
+    try {
+      await checkpoint({ results });
+      const response = await apiFetch(`${API_BASE_URL}/api/jobs/${currentJobId}/retry-failed`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Retry could not start.");
+      await analyzePhotos();
+    } catch (error) { setErrorMessage(String(error)); }
   }
 
   function cancelEditing() {
@@ -1108,7 +1205,7 @@ export default function UploadScreen() {
       return;
     }
 
-    const sourcePhoto = photos[sourcePhotoIndex];
+    const sourcePhoto = (recoveryRef.current?.photos || photos)[sourcePhotoIndex];
 
     if (!sourcePhoto?.uri) {
       Alert.alert(
@@ -1197,6 +1294,7 @@ export default function UploadScreen() {
           text: "Remove Result",
           style: "destructive",
           onPress: () => {
+            setRemovedPhotos(current => [...current, resultKey(editDraft)]);
             setResults((currentResults) =>
               currentResults.filter(
                 (_result, index) =>
@@ -1230,17 +1328,13 @@ export default function UploadScreen() {
     });
   }
 
-  function saveEditedResult() {
+  function saveEditedResult(andNext = false) {
     if (editingIndex === null || !editDraft) {
       return;
     }
 
     const finalPartNumber =
-      cleanText(
-        editDraft.manufacturer_part_number
-      ) ||
-      cleanText(editDraft.part_number) ||
-      cleanText(editDraft.vendor_part_number);
+      cleanText(editDraft.part_number);
 
     const updatedResult: RecognitionResult = {
       ...editDraft,
@@ -1286,6 +1380,11 @@ export default function UploadScreen() {
     setEmailSent(false);
     setEmailedRecipient("");
 
+    if (andNext) {
+      const nextIndex = results.findIndex((result, index) => index > editingIndex && !result.is_confirmed && (result.review_needed || getReviewReasons(result).length > 0));
+      const wrapped = nextIndex >= 0 ? nextIndex : results.findIndex((result, index) => index !== editingIndex && !result.is_confirmed && (result.review_needed || getReviewReasons(result).length > 0));
+      if (wrapped >= 0) { beginEditing(wrapped); return; }
+    }
     cancelEditing();
   }
 
@@ -1475,10 +1574,12 @@ export default function UploadScreen() {
         : results;
 
       setResults(finalizedResults);
+      recoveryRef.current = null;
+      await clearRecovery();
 
-      setCorrectedWorkbookUrl(
-        data.download_url ?? null
-      );
+      setCorrectedWorkbookUrl(data.download_url ?? null);
+      await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
+      await writeDraft(photoDraftKey, null).catch(() => {});
 
       if (sendEmail && data.email_sent) {
         setEmailSent(true);
@@ -1558,7 +1659,8 @@ export default function UploadScreen() {
       setErrorMessage(message);
 
       Alert.alert(
-        "Finalization failed",
+        error instanceof Error && error.name === "FinalizationPendingError"
+          ? "Save status not confirmed" : "Finalization failed",
         message
       );
 
@@ -1639,6 +1741,10 @@ export default function UploadScreen() {
         );
       }
 
+      recoveryRef.current = null;
+      await clearRecovery();
+      await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
+      await writeDraft(photoDraftKey, null).catch(() => {});
       setResults([]);
       setCorrectedWorkbookUrl(null);
       setEmailSent(false);
@@ -2141,7 +2247,7 @@ export default function UploadScreen() {
                       </View>
 
                       <Text style={styles.completedTitle}>
-                        Recognition Complete
+                        Analysis finished · review required
                       </Text>
 
                       <Text style={styles.completedText}>
@@ -2154,6 +2260,19 @@ export default function UploadScreen() {
                       </Text>
                     </View>
 
+                    <View style={styles.reviewProgressCard}>
+                      <Text style={styles.reviewProgressTitle}>Photo accounting</Text>
+                      <Text style={styles.reviewProgressText}>{photoCount} submitted · {countOutcome("Ready to review")} ready · {countOutcome("Confirmed")} confirmed · {countOutcome("Needs retake / review")} need retake/review · {countOutcome("Failed / missing")} failed/missing · {countOutcome("Excluded after review")} excluded</Text>
+                      {(showPhotoDetails ? photoOutcomes : photoOutcomes.slice(0, 3)).map(({ photo, index, rows, status }) => {
+                        const failed = status === "Failed / missing";
+                        return <Pressable key={photo.id} accessibilityRole="button" onPress={() => rows[0] ? beginEditing(results.indexOf(rows[0])) : Alert.alert("Missing result", "Retry failed photos, or select this photo again.")}>
+                          <Text style={[styles.reviewProgressText, { color: failed ? "#FCA5A5" : "#CBD5E1", paddingVertical: 5 }]}>Photo {index + 1} · {status}</Text>
+                        </Pressable>;
+                      })}
+                      <Pressable accessibilityRole="button" onPress={() => setShowPhotoDetails(value => !value)}><Text style={{ color: "#60A5FA", paddingVertical: 8 }}>{showPhotoDetails ? "Collapse photo details" : "View every photo"}</Text></Pressable>
+                      <Pressable accessibilityRole="button" disabled={isProcessing} onPress={() => void retryFailedPhotos()}><Text style={{ color: "#60A5FA", paddingVertical: 12 }}>Retry failed photos only</Text></Pressable>
+                    </View>
+                    <Text selectable style={{ color: "#94A3B8", fontSize: 11, marginBottom: 12 }}>App {Constants.expoConfig?.version || "unknown"} · Release {backendDiagnostics.release || "unavailable"} · Backend {backendDiagnostics.backend_commit?.slice(0, 7) || "unknown"} · Reader {backendDiagnostics.reader || "unknown"}</Text>
                     <View style={styles.aiDisclaimerCard}>
                       <Text style={styles.aiDisclaimerIcon}>i</Text>
 
@@ -2337,8 +2456,9 @@ export default function UploadScreen() {
                       result.manufacturer_part_number ||
                       result.part_number;
 
-                    const reviewReasons =
-                      getReviewReasons(result);
+                    const reviewReasons = getReviewReasons(result);
+                    const part = cleanText(result.manufacturer_part_number || result.part_number || result.vendor_part_number).toUpperCase();
+                    if (part && results.some(other => other !== result && cleanText(other.manufacturer_part_number || other.part_number || other.vendor_part_number).toUpperCase() === part && cleanText(other.location).toUpperCase() === cleanText(result.location).toUpperCase())) reviewReasons.push("Possible repeated part in this area. Compare labels before removing a duplicate. Package size is not a stock count.");
 
                     return (
                       <View
@@ -2685,8 +2805,9 @@ export default function UploadScreen() {
                       result.manufacturer_part_number ||
                       result.part_number;
 
-                    const reviewReasons =
-                      getReviewReasons(result);
+                    const reviewReasons = getReviewReasons(result);
+                    const part = cleanText(result.manufacturer_part_number || result.part_number || result.vendor_part_number).toUpperCase();
+                    if (part && results.some(other => other !== result && cleanText(other.manufacturer_part_number || other.part_number || other.vendor_part_number).toUpperCase() === part && cleanText(other.location).toUpperCase() === cleanText(result.location).toUpperCase())) reviewReasons.push("Possible repeated part in this area. Compare labels before removing a duplicate. Package size is not a stock count.");
 
                     return (
                       <View
@@ -3533,6 +3654,11 @@ export default function UploadScreen() {
                     false
                   }
                 >
+                  {(() => {
+                    const index = getSourcePhotoIndex(editDraft.photo, photos.length);
+                    const photo = index !== null && index >= 0 ? photos[index] : undefined;
+                    return photo ? <View><Text style={{ color: "#a9c9ef", marginBottom: 8 }}>Source photo · pinch to zoom</Text><ScrollView style={{ height: 270 }} minimumZoomScale={1} maximumZoomScale={5} centerContent><Image source={{ uri: photo.uri }} style={{ width: "100%", height: 270 }} resizeMode="contain" /></ScrollView></View> : <Text style={{ color: "#f5d078" }}>Source photo unavailable. Verify against the original label.</Text>;
+                  })()}
                   <View
                     style={
                       styles.modalIntroCard
@@ -3597,6 +3723,13 @@ export default function UploadScreen() {
                     }
                   />
 
+                  <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
+                  {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
+                    return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
+                  <Text style={{ color: "#CBD5E1", marginBottom: 12 }}>Source text: {editDraft.label_text || "No readable label text"}</Text>
+                  <EditableField label="Observed part number (unclassified)" value={editDraft.part_number} onChangeText={value => updateDraft("part_number", value)} />
+                  <EditableField label="Customer part number" value={editDraft.customer_part_number} onChangeText={value => updateDraft("customer_part_number", value)} />
+                  <EditableField label="Fastenal item number" value={editDraft.fastenal_part_number} onChangeText={value => updateDraft("fastenal_part_number", value)} />
                   <EditableField
                     label="Manufacturer part number"
                     value={
@@ -3689,8 +3822,11 @@ export default function UploadScreen() {
                     multiline
                   />
 
+                  <Pressable accessibilityRole="button" onPress={() => saveEditedResult(true)} style={styles.saveChangesButton}>
+                    <Text style={styles.saveChangesButtonText}>Confirm and next</Text>
+                  </Pressable>
                   <Pressable
-                    onPress={saveEditedResult}
+                    onPress={() => saveEditedResult()}
                     style={({ pressed }) => [
                       styles.saveChangesButton,
                       pressed &&
@@ -3702,9 +3838,11 @@ export default function UploadScreen() {
                         styles.saveChangesButtonText
                       }
                     >
-                      Save Changes
+                      Confirm item
                     </Text>
                   </Pressable>
+
+
 
                   <Pressable
                     onPress={

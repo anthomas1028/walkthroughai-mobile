@@ -1,9 +1,10 @@
+import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import * as ExpoLinking from "expo-linking";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +20,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 
 export default function SignInScreen() {
+  const [notice, setNotice] = useState("");
+  function notify(title: string, message: string) {
+    setNotice(`${title}: ${message}`);
+    if (Platform.OS !== "web") Alert.alert(title, message);
+  }
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,21 +33,22 @@ export default function SignInScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit() {
+    setNotice("");
     const cleanedEmail = email.trim().toLowerCase();
     const cleanedWorkspaceName = workspaceName.trim();
 
     if (!cleanedEmail || !password) {
-      Alert.alert("Information required", "Enter your email and password.");
+      notify("Information required", "Enter your email and password.");
       return;
     }
 
     if (password.length < 8) {
-      Alert.alert("Password too short", "Use at least 8 characters.");
+      notify("Password too short", "Use at least 8 characters.");
       return;
     }
 
     if (isCreatingAccount && !cleanedWorkspaceName) {
-      Alert.alert(
+      notify(
         "Workspace name required",
         "Enter your company or team name. You can change it later."
       );
@@ -68,7 +75,7 @@ export default function SignInScreen() {
         }
 
         if (!data.session) {
-          Alert.alert(
+          notify(
             "Check your email",
             "Open the confirmation email from Walkthrough AI, then return here and sign in."
           );
@@ -85,7 +92,7 @@ export default function SignInScreen() {
         }
       }
     } catch (error) {
-      Alert.alert(
+      notify(
         isCreatingAccount ? "Unable to create account" : "Unable to sign in",
         error instanceof Error ? error.message : "Please try again."
       );
@@ -119,18 +126,19 @@ export default function SignInScreen() {
           </Text>
 
           <View style={styles.card}>
+            {notice ? <Text accessibilityRole="alert" style={{ color: "#BFDBFE", marginBottom: 12 }}>{notice}</Text> : null}
             {isCreatingAccount ? (
-              <TextInput
+              <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Company or workspace name</Text><TextInput accessibilityLabel="Company or workspace name"
                 autoCapitalize="words"
                 onChangeText={setWorkspaceName}
                 placeholder="Company or workspace name"
                 placeholderTextColor="#64748B"
                 style={styles.input}
                 value={workspaceName}
-              />
+              /></View>
             ) : null}
 
-            <TextInput
+            <View><Text style={{ color: "#b8c8db", fontSize: 13, fontWeight: "600", marginBottom: 6 }}>Email address</Text><TextInput accessibilityLabel="Email address"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
@@ -139,10 +147,10 @@ export default function SignInScreen() {
               placeholderTextColor="#64748B"
               style={styles.input}
               value={email}
-            />
+            /></View>
 
             <View style={styles.passwordInputRow}>
-              <TextInput
+              <TextInput accessibilityLabel="Password"
                 autoCapitalize="none"
                 autoCorrect={false}
                 onChangeText={setPassword}

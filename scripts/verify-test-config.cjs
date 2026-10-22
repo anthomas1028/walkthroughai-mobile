@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+const configure = require('../app.config');
+const original = require('../app.json').expo;
+delete process.env.APP_VARIANT;
+const production = configure();
+assert.deepEqual(production, original);
+process.env.APP_VARIANT = 'test';
+const testing = configure();
+assert.equal(testing.name, 'WalkthroughAI Test');
+assert.notEqual(testing.ios.bundleIdentifier, production.ios.bundleIdentifier);
+assert.notEqual(testing.scheme, production.scheme);
+assert.equal(testing.runtimeVersion.policy, 'fingerprint');
+assert.equal(testing.extra.eas.projectId, production.extra.eas.projectId);
+assert.equal(require('../eas.json').build.test.channel, 'testing');
+assert.equal(require('../eas.json').build.test.environment, 'preview');
+console.log('PASS: separate test identity, testing-only update channel, native compatibility policy, unchanged production config.');
