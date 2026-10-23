@@ -1,3 +1,4 @@
+import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
 import { SavedSourcing } from "../lib/sourcing";
@@ -215,7 +216,7 @@ export default function CustomerReportScreen() {
   const isReviewReport = reportType === "review";
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
-  const viewerHeight = Math.max(windowHeight - 120, 320);
+  const viewerHeight = Math.max(windowHeight - 164, 320);
 
   const [report, setReport] = useState<CustomerReport | null>(null);
   const [customerLogoUrl, setCustomerLogoUrl] = useState("");
@@ -1603,13 +1604,15 @@ export default function CustomerReportScreen() {
         <View style={styles.viewerSafeArea}>
           <View style={[styles.viewerHeader, { minHeight: 68 + safeAreaInsets.top, paddingTop: safeAreaInsets.top }]}>
             <Pressable onPress={closePhotoViewer} style={styles.viewerCloseButton}><Text style={styles.viewerCloseText}>Close</Text></Pressable>
-            <View style={styles.viewerTitleArea}><Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text><Text style={styles.viewerHint}>Pinch or double-tap to zoom</Text></View>
+            <View style={styles.viewerTitleArea}><Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text><Text style={styles.viewerHint}>Swipe photos · pinch to zoom</Text></View>
             <View style={styles.viewerSpacer} />
           </View>
           {photoViewer ? (
-            <ScrollView ref={photoViewerScrollRef} style={styles.viewerScroll} contentContainerStyle={styles.viewerContent} centerContent minimumZoomScale={1} maximumZoomScale={5} onScroll={(event) => { const zoomScale = event.nativeEvent.zoomScale; if (typeof zoomScale === "number") photoViewerIsZoomed.current = zoomScale > 1.1; }} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
+            <PhotoNavigation photos={(report?.records || []).filter(item => item.photo_url).map(item => ({ uri: item.photo_url!, label: `${item.description || item.photo || "Source Photo"}` }))} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
+<ScrollView key={photoViewer.uri} ref={photoViewerScrollRef} style={styles.viewerScroll} contentContainerStyle={styles.viewerContent} centerContent minimumZoomScale={1} maximumZoomScale={5} onScroll={(event) => { const zoomScale = event.nativeEvent.zoomScale; if (typeof zoomScale === "number") photoViewerIsZoomed.current = zoomScale > 1.1; }} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
               <Pressable onPress={handlePhotoViewerTap} style={{ width: windowWidth, height: viewerHeight }}><Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} /></Pressable>
             </ScrollView>
+</PhotoNavigation>
           ) : null}
         </View>
       </Modal>

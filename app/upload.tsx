@@ -1,3 +1,4 @@
+import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus } from "../lib/native-upload";
 import { completionAlertsSupported, setCompletionAlert, requestCompletionToken } from "../lib/completion-notifications";
@@ -541,7 +542,7 @@ export default function UploadScreen() {
     useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
   const photoViewerImageHeight = Math.max(
-    windowHeight - 120,
+    windowHeight - 164,
     320
   );
 
@@ -3671,7 +3672,7 @@ export default function UploadScreen() {
                     "Source Photo"}
                 </Text>
                 <Text style={styles.photoViewerHint}>
-                  Pinch to zoom
+                  Swipe photos · pinch to zoom
                 </Text>
               </View>
 
@@ -3683,7 +3684,8 @@ export default function UploadScreen() {
             </View>
 
             {sourcePhotoViewer && (
-              <ScrollView
+              <PhotoNavigation photos={(recoveryRef.current?.photos || photos).map((photo, index) => ({ uri: photo.uri, label: `Photo ${index + 1}` }))} current={sourcePhotoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setSourcePhotoViewer(photo); }}>
+<ScrollView key={sourcePhotoViewer.uri}
                 ref={photoViewerScrollRef}
                 style={styles.photoViewerScroll}
                 contentContainerStyle={
@@ -3724,6 +3726,7 @@ export default function UploadScreen() {
                   />
                 </Pressable>
               </ScrollView>
+</PhotoNavigation>
             )}
           </View>
         </Modal>

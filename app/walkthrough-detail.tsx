@@ -1,3 +1,4 @@
+import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
 import { SavedSourcing } from "../lib/sourcing";
@@ -873,7 +874,7 @@ export default function WalkthroughDetailScreen() {
             </Pressable>
             <View style={styles.viewerTitleArea}>
               <Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text>
-              <Text style={styles.viewerHint}>Pinch or double-tap to zoom</Text>
+              <Text style={styles.viewerHint}>Swipe photos · pinch to zoom</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Fit source photo to screen" style={styles.viewerCloseButton} onPress={() => {
               photoViewerScrollRef.current?.scrollResponderZoomTo({ x: 0, y: 0, width: viewerWidth, height: viewerHeight, animated: true });
@@ -881,7 +882,8 @@ export default function WalkthroughDetailScreen() {
             }}><Text style={styles.viewerCloseText}>Fit</Text></Pressable>
           </View>
           {photoViewer ? (
-            <ScrollView
+            <PhotoNavigation photos={(walkthrough?.items || []).filter(item => item.photo_url).map(item => ({ uri: item.photo_url!, label: `${item.location?.trim() || "Unassigned"} · ${item.photo || "Source Photo"}` }))} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
+<ScrollView
               ref={photoViewerScrollRef}
               key={photoViewer.uri}
               onLayout={({ nativeEvent: { layout } }) => {
@@ -903,6 +905,7 @@ export default function WalkthroughDetailScreen() {
                 <Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} />
               </Pressable>
             </ScrollView>
+</PhotoNavigation>
           ) : null}
         </View>
       </Modal>
