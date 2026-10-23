@@ -64,6 +64,7 @@ export function SourcingPanel({ saved, jobId, photo, existingFastenal, initialMa
     void Linking.openURL(url).catch(()=>setError('Could not open the product page.'));
   }
   const disabled=busy || blocked || !allowed;
+  if (!allowed) return null;
   return <View style={{borderWidth:1,borderColor:'#315474',borderRadius:12,padding:14,marginVertical:12}}>
     <Text style={{color:'#E2E8F0',fontSize:18,fontWeight:'700'}}>Find Fastenal alternatives · Test</Text>
     <Text style={{color:'#CBD5E1',marginTop:6}}>Search any manufacturer and part number against public Fastenal listings, or start from a Grainger item. Coverage depends on published evidence. Every selection needs employee review.</Text>
