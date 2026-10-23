@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
 import { SavedSourcing } from "../lib/sourcing";
 import { downloadInBrowser } from "../lib/download";
@@ -433,10 +434,10 @@ export default function WalkthroughDetailScreen() {
             onPress={handleBackPress}
             style={({ pressed }) => [styles.backButton, pressed && styles.buttonPressed]}
           >
-            <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
           <View style={styles.headerText}>
-            <Text numberOfLines={1} style={styles.title}>{screenTitle}</Text>
+            <Text numberOfLines={2} style={styles.title}>{screenTitle}</Text>
             <Text numberOfLines={1} style={styles.subtitle}>{headerSubtitle}</Text>
           </View>
         </View>
@@ -911,17 +912,17 @@ export default function WalkthroughDetailScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#091321" },
-  container: { width: "100%", maxWidth: 1180, alignSelf: "center", flex: 1, paddingHorizontal: 20, paddingTop: 10 },
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-  backButton: { width: 46, minHeight: 48, borderRadius: 14, backgroundColor: "#17243A", borderWidth: 1, borderColor: "#31547D", alignItems: "center", justifyContent: "center", marginRight: 13 },
+  container: { width: "100%", maxWidth: 1180, alignSelf: "center", flex: 1, paddingHorizontal: UI.screenPadding, paddingTop: 10 },
+  header: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  backButton: { width: UI.navigationSize, minHeight: 48, borderRadius: UI.cardRadius, backgroundColor: "#17243A", borderWidth: 1, borderColor: "#31547D", alignItems: "center", justifyContent: "center", marginRight: 13 },
   headerText: {minWidth: 0,  flex: 1 },
-  title: {flexShrink: 1,  color: "#FFFFFF", fontSize: 24, fontWeight: "800" },
+  title: {flexShrink: 1,  color: "#FFFFFF", fontSize: UI.pageTitle, fontWeight: "800" },
   subtitle: { color: "#94A3B8", fontSize: 14, marginTop: 3 },
   content: { paddingBottom: 72 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   loadingText: { color: "#94A3B8", marginTop: 12 },
   emptyText: { color: "#94A3B8" },
-  summaryCard: { backgroundColor: "#17283D", borderRadius: 20, borderWidth: 1, borderColor: "#31547D", padding: 17, marginBottom: 22 },
+  summaryCard: { backgroundColor: "#17283D", borderRadius: UI.cardRadius, borderWidth: 1, borderColor: "#31547D", padding: UI.cardPadding, marginBottom: 22 },
   summaryTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   summaryTitleWrap: { flex: 1, paddingRight: 12 },
   summaryTitle: { color: "#FFFFFF", fontSize: 20, fontWeight: "800" },
@@ -931,10 +932,10 @@ const styles = StyleSheet.create({
   summaryStats: { color: "#BFDBFE", fontSize: 14, fontWeight: "700", marginTop: 17 },
   emailStatusRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 8 },
   emailStatus: { color: "#94A3B8", fontSize: 12 },
-  shareButton: { minHeight: 50, borderRadius: 15, backgroundColor: "#2D6BF0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 14 },
+  shareButton: { minHeight: UI.controlHeight, borderRadius: UI.cardRadius, backgroundColor: "#2D6BF0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 14 },
   shareButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   sectionTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "800", marginBottom: 10 },
-  navigationCard: { minHeight: 76, flexDirection: "row", alignItems: "center", borderRadius: 18, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", paddingHorizontal: 14, marginBottom: 18 },
+  navigationCard: { minHeight: 76, flexDirection: "row", alignItems: "center", borderRadius: UI.cardRadius, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", paddingHorizontal: 14, marginBottom: 18 },
   navigationIconPrimary: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#2D6BF0", alignItems: "center", justifyContent: "center", marginRight: 12 },
   navigationText: { flex: 1 },
   navigationTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
@@ -947,7 +948,7 @@ const styles = StyleSheet.create({
   partsSummaryMeta: { color: "#BFDBFE", fontSize: 12, marginTop: 5 },
   partsList: { gap: 11 },
   partRow: { borderRadius: 17, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", overflow: "hidden" },
-  partMain: { minHeight: 92, flexDirection: "row", alignItems: "center", padding: 13 },
+  partMain: { minHeight: 68, flexDirection: "row", alignItems: "center", padding: 13 },
   partPressed: { opacity: 0.78 },
   partNumberBadge: { width: 36, height: 36, borderRadius: 11, backgroundColor: "#2D6BF0", alignItems: "center", justifyContent: "center", marginRight: 11 },
   partNumberBadgeText: { color: "#FFFFFF", fontWeight: "800" },
@@ -968,33 +969,33 @@ const styles = StyleSheet.create({
   modalTitle: { flex: 1, color: "#FFFFFF", fontSize: 17, fontWeight: "800", textAlign: "center" },
   headerSpacer: { width: 72 },
   modalContent: { padding: 20, paddingBottom: 40 },
-  itemDetailTitle: { color: "#FFFFFF", fontSize: 23, lineHeight: 30, fontWeight: "800" },
+  itemDetailTitle: { color: "#FFFFFF", fontSize: UI.pageTitle, lineHeight: 30, fontWeight: "800" },
   itemDetailPartNumber: { color: "#93C5FD", fontSize: 17, fontWeight: "700", marginTop: 7 },
   itemDetailStatusRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 16 },
   confidenceBadge: { borderRadius: 999, backgroundColor: "#10253A", paddingHorizontal: 11, paddingVertical: 7 },
   confidenceText: { color: "#A7F3D0", fontSize: 12, fontWeight: "800" },
   confirmedText: { color: "#86EFAC", fontSize: 12, fontWeight: "800" },
-  detailsCard: { borderRadius: 18, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", padding: 16 },
+  detailsCard: { borderRadius: UI.cardRadius, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", padding: UI.cardPadding },
   detailRow: { marginBottom: 14 },
   detailLabel: { color: "#94A8C0", fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 },
   detailValue: { color: "#D8E2F0", fontSize: 15, lineHeight: 21 },
-  viewPhotoButton: { minHeight: 54, borderRadius: 16, backgroundColor: "#2D6BF0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 15 },
+  viewPhotoButton: { minHeight: UI.controlHeight, borderRadius: UI.cardRadius, backgroundColor: "#2D6BF0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 15 },
   viewPhotoButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
-  reportHero: { backgroundColor: "#17283D", borderRadius: 20, borderWidth: 1, borderColor: "#31547D", padding: 16, marginBottom: 12 },
+  reportHero: { backgroundColor: "#17283D", borderRadius: UI.cardRadius, borderWidth: 1, borderColor: "#31547D", padding: UI.cardPadding, marginBottom: 12 },
   reportHeroTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   reportHeroText: { flex: 1, paddingRight: 12 },
   reportEyebrow: { color: "#7DA9D8", fontSize: 12, fontWeight: "900", letterSpacing: 1.1, marginBottom: 6 },
   reportCustomer: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
   reportMeta: { color: "#94A3B8", fontSize: 12, marginTop: 6, lineHeight: 17 },
-  statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20 },
-  statCard: { width: "48.5%", minHeight: 96, borderRadius: 17, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", padding: 14, justifyContent: "space-between" },
+  statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  statCard: { width: "48%", minHeight: 68, borderRadius: UI.cardRadius, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", padding: UI.cardPadding, justifyContent: "space-between" },
   statCardPressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
-  statCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  statValue: { color: "#FFFFFF", fontSize: 24, fontWeight: "900", marginTop: 6 },
+  statCardTop: { position: "absolute", top: 12, right: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  statValue: { color: "#FFFFFF", fontSize: UI.metricValue, lineHeight: 24, paddingRight: 40, fontWeight: "700", marginTop: 0 },
   statLabel: { color: "#94A3B8", fontSize: 12, fontWeight: "700", marginTop: 2 },
   sectionTitleSpaced: { marginTop: 20 },
   metricSummary: { flexDirection: "row", alignItems: "center", borderRadius: 18, backgroundColor: "#17283D", borderWidth: 1, borderColor: "#31547D", padding: 16, marginBottom: 14 },
-  metricSummaryValue: { minWidth: 54, color: "#FFFFFF", fontSize: 30, fontWeight: "900", marginRight: 14 },
+  metricSummaryValue: { minWidth: 54, color: "#FFFFFF", fontSize: UI.metricValue, fontWeight: "900", marginRight: 14 },
   metricSummaryText: { flex: 1 },
   metricSummaryTitle: { color: "#FFFFFF", fontSize: 17, fontWeight: "900" },
   metricSummaryMeta: { color: "#94A3B8", fontSize: 12, lineHeight: 17, marginTop: 4 },
@@ -1005,7 +1006,7 @@ const styles = StyleSheet.create({
   emptyMetricTitle: { color: "#D8E2F0", fontSize: 15, fontWeight: "800", marginTop: 10 },
   emptyMetricText: { color: "#8294AA", fontSize: 12, textAlign: "center", lineHeight: 18, marginTop: 5 },
 
-  exportCard: { borderRadius: 18, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", padding: 15, marginBottom: 4 },
+  exportCard: { borderRadius: UI.cardRadius, backgroundColor: "#122033", borderWidth: 1, borderColor: "#2B3E56", padding: UI.cardPadding, marginBottom: 4 },
   exportStatusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
   exportStatusText: { color: "#94A3B8", fontSize: 12, flex: 1 },
   viewerSafeArea: { flex: 1, backgroundColor: "#02070D" },

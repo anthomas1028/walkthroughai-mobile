@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { ResumeWalkthrough } from "../components/ResumeWalkthrough";
@@ -1114,7 +1115,7 @@ const styles = StyleSheet.create({
 
   container: { width: "100%", maxWidth: 1180, alignSelf: "center",
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 10,
     paddingBottom: 8,
   },
@@ -1122,7 +1123,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   logoContainer: {
@@ -1224,10 +1225,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#17283D",
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#31547D",
-    padding: 15,
+    padding: UI.cardPadding,
   },
 
   demoIcon: {
@@ -1358,7 +1359,7 @@ const styles = StyleSheet.create({
 
   searchButton: {
     minHeight: 48,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
@@ -1541,10 +1542,10 @@ const styles = StyleSheet.create({
 
   formCard: {
     backgroundColor: "#122033",
-    borderRadius: 20,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 16,
+    padding: UI.cardPadding,
   },
 
   formTitle: {
@@ -1592,8 +1593,8 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    minHeight: 52,
-    borderRadius: 15,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
@@ -1657,8 +1658,8 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
@@ -1679,8 +1680,8 @@ const styles = StyleSheet.create({
   },
 
   restoreButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#3B82F6",
     backgroundColor: "#17243A",
@@ -1724,7 +1725,7 @@ const styles = StyleSheet.create({
   noSelectionCard: {
     minHeight: 44,
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
     backgroundColor: "#101A2A",

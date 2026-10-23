@@ -1,6 +1,7 @@
 import {
     COLORS,
     FONT_SIZE,
+    UI,
     SPACING,
 } from '@/constants/design';
 import React from 'react';
@@ -32,12 +33,12 @@ export default function AppHeader({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: SPACING.xxl,
+    marginBottom: SPACING.lg,
   },
 
   title: {
     color: COLORS.text,
-    fontSize: FONT_SIZE.heading,
+    fontSize: UI.pageTitle,
     fontWeight: '700',
   },
 

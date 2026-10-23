@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -12,6 +13,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { API_BASE_URL, apiFetch } from "../lib/api";
@@ -83,6 +85,8 @@ function countLabel(count: number, singular: string) {
 }
 
 export default function CustomerDashboardScreen() {
+  const { width, fontScale } = useWindowDimensions();
+  const wideStat = width < 360 || fontScale > 1.2;
   const params = useLocalSearchParams<{
     customerId?: string;
     customerName?: string;
@@ -267,10 +271,10 @@ export default function CustomerDashboardScreen() {
             ListHeaderComponent={
               <>
                 {!isReadOnly ? <View style={{ marginBottom: 16, gap: 10 }}>
-                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/walkthrough", params: { customerId: String(customerId), customerName: name, customerEmail: dashboard.customer.email || "", contactName: dashboard.customer.contact_name || "" } })} style={{ backgroundColor: "#2D6BF0", padding: 16, borderRadius: 14 }}><Text style={{ color: "white", textAlign: "center", fontWeight: "700", fontSize: 17 }}>Start walkthrough</Text></Pressable>
-                  <View style={{ flexDirection: "row", gap: 12 }}>{[{ label: "History", route: "/history" }, { label: "Edit customer", route: "/customer-edit" }].map(action => <Pressable key={action.route} accessibilityRole="button" onPress={() => router.push({ pathname: action.route as any, params: { customerId: String(customerId), customerName: name } })} style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: "#1b2c43" }}><Text style={{ color: "#bfdbfe", textAlign: "center", fontWeight: "600" }}>{action.label}</Text></Pressable>)}</View>
+                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/walkthrough", params: { customerId: String(customerId), customerName: name, customerEmail: dashboard.customer.email || "", contactName: dashboard.customer.contact_name || "" } })} style={{ backgroundColor: "#2D6BF0", minHeight: UI.controlHeight, paddingVertical: 12, paddingHorizontal: 14, justifyContent: "center", borderRadius: UI.cardRadius }}><Text style={{ color: "white", textAlign: "center", fontWeight: "700", fontSize: 16 }}>Start walkthrough</Text></Pressable>
+                  <View style={{ flexDirection: "row", gap: 12 }}>{[{ label: "History", route: "/history" }, { label: "Edit customer", route: "/customer-edit" }].map(action => <Pressable key={action.route} accessibilityRole="button" onPress={() => router.push({ pathname: action.route as any, params: { customerId: String(customerId), customerName: name } })} style={{ flex: 1, minHeight: 44, paddingVertical: 10, paddingHorizontal: 12, justifyContent: "center", borderRadius: UI.cardRadius, backgroundColor: "#1b2c43" }}><Text style={{ color: "#bfdbfe", textAlign: "center", fontWeight: "600" }}>{action.label}</Text></Pressable>)}</View>
                 </View> : null}
-                <View style={s.customerCard}>
+                {(isReadOnly || dashboard.customer.logo_url || dashboard.customer.contact_name || dashboard.customer.email || dashboard.customer.notes) ? <View style={s.customerCard}>
                   {isReadOnly ? (
                     <Text style={s.demoLabel}>
                       DEMO CUSTOMER · READ ONLY
@@ -312,7 +316,7 @@ export default function CustomerDashboardScreen() {
                       {dashboard.customer.notes}
                     </Text>
                   ) : null}
-                </View>
+                </View> : null}
 
                 <View style={s.stats}>
                   {[
@@ -344,10 +348,12 @@ export default function CustomerDashboardScreen() {
                       accessibilityLabel={`${number} ${label}. Open report.`}
                       key={String(label)}
                       onPress={() => openReport(String(report))}
-                      style={s.stat}
+                      style={[s.stat, wideStat && s.statWide]}
                     >
-                      <Text style={s.statNum}>{String(number)}</Text>
-                      <Text style={s.statLabel}>{String(label)}</Text>
+                      <View style={s.statPanel}>
+                        <Text style={s.statNum}>{String(number)}</Text>
+                        <Text style={s.statLabel}>{String(label)}</Text>
+                      </View>
                     </Pressable>
                   ))}
                 </View>
@@ -486,18 +492,18 @@ const s = StyleSheet.create({
   },
   container: { width: "100%", maxWidth: 1180, alignSelf: "center",
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingHorizontal: UI.screenPadding,
+    paddingTop: 10,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 12,
   },
   back: {
     flexShrink: 0,
-    width: 46,
-    height: 46,
+    width: UI.navigationSize,
+    height: UI.navigationSize,
     borderRadius: 14,
     backgroundColor: "#17243A",
     borderWidth: 1,
@@ -522,7 +528,7 @@ const s = StyleSheet.create({
     flexShrink: 1,
     lineHeight: 28,
     color: "#FFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
   },
   readOnlyBadge: {
@@ -556,10 +562,10 @@ const s = StyleSheet.create({
   },
   customerCard: {
     backgroundColor: "#17283D",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#31547D",
-    padding: 16,
+    padding: UI.cardPadding,
     marginBottom: 12,
   },
   customerIdentityRow: {
@@ -606,48 +612,31 @@ const s = StyleSheet.create({
     marginHorizontal: -5,
   },
   stat: {
-    width: "50%",
+    width: "33.333%",
     paddingHorizontal: 5,
     marginBottom: 10,
   },
-  statNum: {
-    color: "#FFF",
-    fontSize: 26,
-    fontWeight: "700",
-    textAlign: "center",
+  statWide: { width: "50%" },
+  statPanel: {
+    flex: 1,
+    minHeight: 74,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#122033",
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
     borderWidth: 1,
-    borderBottomWidth: 0,
     borderColor: "#2B3E56",
-    paddingTop: 12,
-    paddingBottom: 4,
   },
-  statLabel: {
-    color: "#B8C8DB",
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "700",
-    textAlign: "center",
-    backgroundColor: "#122033",
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 14,
-    borderWidth: 1,
-    borderTopWidth: 0,
-    borderColor: "#2B3E56",
-    minHeight: 39,
-    paddingHorizontal: 5,
-    paddingBottom: 10,
-  },
-  statsHint: { color: "#AAB7CA", fontSize: 12, lineHeight: 18, marginBottom: 14 },
+  statNum: { color: "#FFFFFF", fontSize: UI.metricValue, lineHeight: 24, fontWeight: "700", textAlign: "center" },
+  statLabel: { color: "#B8C8DB", fontSize: 12, lineHeight: 16, minHeight: 32, fontWeight: "600", textAlign: "center", marginTop: 2 },
+  statsHint: { color: "#AAB7CA", fontSize: 12, lineHeight: 17, marginBottom: 12 },
   last: {
     backgroundColor: "#0C1524",
-    borderRadius: 15,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 15,
-    marginBottom: 19,
+    padding: UI.cardPadding,
+    marginBottom: 12,
   },
   eyebrow: {
     color: "#AAB7CA",
@@ -685,7 +674,7 @@ const s = StyleSheet.create({
   },
   listCard: {
     backgroundColor: "#122033",
-    borderRadius: 16,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
     paddingHorizontal: 14,
@@ -733,10 +722,10 @@ const s = StyleSheet.create({
   },
   walkCard: {
     backgroundColor: "#122033",
-    borderRadius: 16,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 15,
+    padding: UI.cardPadding,
     marginBottom: 10,
   },
   row: {

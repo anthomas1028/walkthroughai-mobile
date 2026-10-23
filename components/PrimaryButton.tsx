@@ -1,4 +1,4 @@
-import { COLORS, RADIUS, SHADOWS } from '@/constants/design';
+import { COLORS, UI, SHADOWS } from '@/constants/design';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
@@ -47,10 +47,10 @@ export default function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 52,
+    minHeight: UI.controlHeight,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: RADIUS.lg,
+    borderRadius: UI.cardRadius,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',

@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -296,20 +297,20 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 14,
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 12,
   },
 
   backButton: {
-    width: 46,
+    width: UI.navigationSize,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#17243A",
     borderWidth: 1,
     borderColor: "#31547D",
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
 
   backButtonText: {
     color: "#FFFFFF",
-    fontSize: 34,
+    fontSize: 16,
     lineHeight: 36,
     fontWeight: "400",
     marginTop: -3,
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
 
   title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
     letterSpacing: -0.4,
   },
@@ -361,10 +362,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#122033",
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 14,
+    padding: UI.cardPadding,
     marginBottom: 10,
   },
 
@@ -428,10 +429,10 @@ const styles = StyleSheet.create({
 
   messageCard: {
     backgroundColor: "#122033",
-    borderRadius: 19,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 16,
+    padding: UI.cardPadding,
     marginTop: 8,
   },
 
@@ -472,8 +473,8 @@ const styles = StyleSheet.create({
   },
 
   sendButton: {
-    minHeight: 52,
-    borderRadius: 15,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     flexDirection: "row",
     alignItems: "center",
@@ -500,10 +501,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     backgroundColor: "#101A2A",
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 14,
+    padding: UI.cardPadding,
     marginTop: 14,
   },
 

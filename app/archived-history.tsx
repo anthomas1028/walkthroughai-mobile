@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
 import { router, useLocalSearchParams } from "expo-router";
@@ -482,20 +483,20 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 14,
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 12,
   },
 
   backButton: {
-    width: 46,
+    width: UI.navigationSize,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#17243A",
     borderWidth: 1,
     borderColor: "#31547D",
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
 
   backButtonText: {
     color: "#FFFFFF",
-    fontSize: 34,
+    fontSize: 16,
     lineHeight: 36,
     fontWeight: "400",
     marginTop: -3,
@@ -518,7 +519,7 @@ const styles = StyleSheet.create({
 
   title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
     letterSpacing: -0.4,
   },
@@ -549,7 +550,7 @@ const styles = StyleSheet.create({
 
   searchButton: {
     minHeight: 48,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
@@ -568,10 +569,10 @@ const styles = StyleSheet.create({
 
   historyCard: {
     backgroundColor: "#122033",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#3F3F46",
-    padding: 16,
+    padding: UI.cardPadding,
     marginBottom: 12,
   },
 

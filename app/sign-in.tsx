@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
 import * as ExpoLinking from "expo-linking";
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
   },
   title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "900",
     textAlign: "center",
   },
@@ -259,9 +260,9 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "#101D31",
     borderColor: "#29415F",
-    borderRadius: 20,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
-    padding: 16,
+    padding: UI.cardPadding,
     gap: 10,
   },
   input: { minWidth: 0,
@@ -284,6 +285,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   passwordInput: {
+    minWidth: 0,
     color: "#FFFFFF",
     flex: 1,
     fontSize: 17,
@@ -300,12 +302,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: "center",
     backgroundColor: "#2F6FEB",
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     justifyContent: "center",
-    minHeight: 52,
+    minHeight: UI.controlHeight,
     marginTop: 2,
   },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
   secondaryButton: {minHeight: 44,  alignItems: "center", paddingHorizontal: 8, paddingVertical: 8 },
   secondaryButtonText: { color: "#83B9FF", fontSize: 15, fontWeight: "700", textAlign: "center" },
   differenceSection: {

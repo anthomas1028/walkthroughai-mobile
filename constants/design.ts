@@ -79,3 +79,13 @@ export const SHADOWS = {
     elevation: 7,
   },
 } as const;
+// Shared visual density for phone screens. Touch controls remain at least 44pt.
+export const UI = {
+  screenPadding: 16,
+  cardPadding: 12,
+  cardRadius: 12,
+  pageTitle: 22,
+  metricValue: 20,
+  controlHeight: 48,
+  navigationSize: 44,
+} as const;

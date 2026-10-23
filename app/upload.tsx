@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus } from "../lib/native-upload";
 import { completionAlertsSupported, setCompletionAlert, requestCompletionToken } from "../lib/completion-notifications";
 import { SourcingPanel } from "../components/SourcingPanel";
@@ -2374,8 +2375,9 @@ export default function UploadScreen() {
                         <Text style={styles.completedIconText}>✓</Text>
                       </View>
 
+                      <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={styles.completedTitle}>
-                        Analysis finished · review required
+                        Ready to review
                       </Text>
 
                       <Text style={styles.completedText}>
@@ -2386,19 +2388,20 @@ export default function UploadScreen() {
                         identified for{" "}
                         {completedCustomer || "Mobile Walkthrough"}.
                       </Text>
+                      </View>
                     </View>
 
                     <View style={styles.reviewProgressCard}>
                       <Text style={styles.reviewProgressTitle}>Photo accounting</Text>
                       <Text style={styles.reviewProgressText}>{photoCount} submitted · {countOutcome("Ready to review")} ready · {countOutcome("Confirmed")} confirmed · {countOutcome("Needs retake / review")} need retake/review · {countOutcome("Failed / missing")} failed/missing · {countOutcome("Excluded after review")} excluded</Text>
-                      {(showPhotoDetails ? photoOutcomes : photoOutcomes.slice(0, 3)).map(({ photo, index, rows, status }) => {
+                      {(showPhotoDetails ? photoOutcomes : []).map(({ photo, index, rows, status }) => {
                         const failed = status === "Failed / missing";
                         return <Pressable key={photo.id} accessibilityRole="button" onPress={() => rows[0] ? beginEditing(results.indexOf(rows[0])) : Alert.alert("Missing result", "Retry failed photos, or select this photo again.")}>
                           <Text style={[styles.reviewProgressText, { color: failed ? "#FCA5A5" : "#CBD5E1", paddingVertical: 5 }]}>Photo {index + 1} · {status}</Text>
                         </Pressable>;
                       })}
-                      <Pressable accessibilityRole="button" onPress={() => setShowPhotoDetails(value => !value)}><Text style={{ color: "#60A5FA", paddingVertical: 8 }}>{showPhotoDetails ? "Collapse photo details" : "View every photo"}</Text></Pressable>
-                      <Pressable accessibilityRole="button" disabled={isProcessing} onPress={() => void retryFailedPhotos()}><Text style={{ color: "#60A5FA", paddingVertical: 12 }}>Retry failed photos only</Text></Pressable>
+                      <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPhotoDetails }} style={{ minHeight: 44, justifyContent: "center" }} onPress={() => setShowPhotoDetails(value => !value)}><Text style={{ color: "#60A5FA", paddingVertical: 8 }}>{showPhotoDetails ? "Collapse photo details" : "View every photo"}</Text></Pressable>
+                      {countOutcome("Failed / missing") > 0 ? <Pressable accessibilityRole="button" style={{ minHeight: 44, justifyContent: "center" }} disabled={isProcessing} onPress={() => void retryFailedPhotos()}><Text style={{ color: "#60A5FA", paddingVertical: 12 }}>Retry failed photos only</Text></Pressable> : null}
                     </View>
                     <Text selectable style={{ color: "#94A3B8", fontSize: 12, marginBottom: 12 }}>App {Constants.expoConfig?.version || "unknown"} · Release {backendDiagnostics.release || "unavailable"} · Backend {backendDiagnostics.backend_commit?.slice(0, 7) || "unknown"} · Reader {backendDiagnostics.reader || "unknown"}</Text>
                     <View style={styles.aiDisclaimerCard}>
@@ -3764,7 +3767,7 @@ export default function UploadScreen() {
                 </Pressable>
 
                 <Text style={styles.modalTitle}>
-                  Edit Inventory Item
+                  Edit item
                 </Text>
 
                 <View
@@ -4044,24 +4047,24 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    minHeight: 100,
+    minHeight: 68,
     justifyContent: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
   },
 
   backButton: {
-    width: 132,
-    minHeight: 58,
+    width: 96,
+    minHeight: UI.controlHeight,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D74F4",
   },
 
   backArrow: {
     color: "#FFFFFF",
-    fontSize: 33,
+    fontSize: 24,
     marginRight: 8,
   },
 
@@ -4076,20 +4079,20 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 22,
     paddingBottom: 32,
   },
 
   uploadCard: {
-    minHeight: 330,
+    minHeight: 200,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "#34577E",
     backgroundColor: "#0D1B2E",
-    padding: 28,
+    padding: 20,
   },
 
   uploadIconContainer: {
@@ -4100,19 +4103,19 @@ const styles = StyleSheet.create({
   },
 
   uploadIcon: {
-    fontSize: 72,
+    fontSize: 48,
   },
 
   uploadArrow: {
     position: "absolute",
     color: "#65B8FF",
-    fontSize: 54,
+    fontSize: 32,
     top: 31,
   },
 
   title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
     textAlign: "center",
     marginTop: 18,
@@ -4238,19 +4241,19 @@ const styles = StyleSheet.create({
   },
 
   processingCard: {
-    minHeight: 340,
+    minHeight: 200,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "#34577E",
     backgroundColor: "#0D1B2E",
-    padding: 30,
+    padding: 20,
   },
 
   processingTitle: {
     color: "#FFFFFF",
-    fontSize: 28,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
     textAlign: "center",
     marginTop: 24,
@@ -4319,11 +4322,11 @@ const styles = StyleSheet.create({
 
   errorCard: {
     flexDirection: "row",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#7D3B4D",
     backgroundColor: "#311A24",
-    padding: 18,
+    padding: UI.cardPadding,
   },
 
   errorIcon: {
@@ -4362,7 +4365,7 @@ const styles = StyleSheet.create({
   readySummaryCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2A6B57",
     backgroundColor: "#102A24",
@@ -4403,20 +4406,22 @@ const styles = StyleSheet.create({
   },
 
   completedCard: {
+    flexDirection: "row",
+    gap: 12,
     alignItems: "center",
-    borderRadius: 20,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#286A58",
     backgroundColor: "#102B29",
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    marginBottom: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 12,
   },
 
   completedIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#3BD08B",
@@ -4424,30 +4429,17 @@ const styles = StyleSheet.create({
 
   completedIconText: {
     color: "#06251B",
-    fontSize: 29,
+    fontSize: 20,
     fontWeight: "900",
   },
 
-  completedTitle: {
-    color: "#FFFFFF",
-    fontSize: 23,
-    fontWeight: "800",
-    textAlign: "center",
-    marginTop: 12,
-  },
-
-  completedText: {
-    color: "#A6C3BC",
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: "center",
-    marginTop: 9,
-  },
+  completedTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  completedText: { color: "#A6C3BC", fontSize: 13, lineHeight: 18, marginTop: 4 },
 
   aiDisclaimerCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#35506E",
     backgroundColor: "#102033",
@@ -4479,11 +4471,11 @@ const styles = StyleSheet.create({
 
   emailSuccessCard: {
     flexDirection: "row",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#27705A",
     backgroundColor: "#11362D",
-    padding: 18,
+    padding: UI.cardPadding,
     marginBottom: 18,
   },
 
@@ -4510,11 +4502,11 @@ const styles = StyleSheet.create({
   },
 
   reviewProgressCard: {
-    borderRadius: 20,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2E4868",
     backgroundColor: "#101E31",
-    padding: 18,
+    padding: UI.cardPadding,
     marginBottom: 22,
   },
 
@@ -4575,7 +4567,7 @@ const styles = StyleSheet.create({
 
   jumpButton: {
     minHeight: 45,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -4590,7 +4582,7 @@ const styles = StyleSheet.create({
 
   confirmAllButton: {
     minHeight: 45,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#1D4F44",
@@ -4734,11 +4726,11 @@ const styles = StyleSheet.create({
   },
 
   resultCard: {
-    borderRadius: 22,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2E4562",
     backgroundColor: "#111E31",
-    padding: 19,
+    padding: UI.cardPadding,
     marginBottom: 16,
   },
 
@@ -4837,11 +4829,11 @@ const styles = StyleSheet.create({
   },
 
   reviewReasonCard: {
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#76502D",
     backgroundColor: "#2B2118",
-    padding: 14,
+    padding: UI.cardPadding,
     marginTop: 16,
     marginBottom: 4,
   },
@@ -4934,7 +4926,7 @@ const styles = StyleSheet.create({
   photoButton: {
     flex: 0.8,
     minHeight: 46,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -4952,7 +4944,7 @@ const styles = StyleSheet.create({
   editButton: {
     flex: 0.8,
     minHeight: 46,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#2C67E5",
@@ -4968,7 +4960,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     flex: 1.4,
     minHeight: 46,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -5034,7 +5026,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 20,
     elevation: 20,
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#26384E",
@@ -5042,7 +5034,7 @@ const styles = StyleSheet.create({
   },
 
   finalizeCard: {
-    borderRadius: 16,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#29445F",
     backgroundColor: "#122033",
@@ -5171,11 +5163,11 @@ const styles = StyleSheet.create({
   },
 
   completionActionsCard: {
-    borderRadius: 20,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#285D4B",
     backgroundColor: "#102A24",
-    padding: 16,
+    padding: UI.cardPadding,
   },
 
   completionActionsHeader: {
@@ -5220,7 +5212,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#176347",
   },
 
@@ -5254,7 +5246,7 @@ const styles = StyleSheet.create({
     minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6DEB",
     paddingHorizontal: 14,
   },
@@ -5269,7 +5261,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#466D63",
     backgroundColor: "#17342D",
@@ -5283,10 +5275,10 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    minHeight: 52,
+    minHeight: UI.controlHeight,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6DEB",
   },
 
@@ -5321,7 +5313,7 @@ const styles = StyleSheet.create({
     minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#176347",
     marginTop: 11,
   },
@@ -5336,7 +5328,7 @@ const styles = StyleSheet.create({
     minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#38516F",
     backgroundColor: "#132238",
@@ -5358,8 +5350,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   finishWithReviewButton: {
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#31547D",
     backgroundColor: "#17283D",
@@ -5466,7 +5458,7 @@ const styles = StyleSheet.create({
   },
 
   modalHeader: {
-    minHeight: 72,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -5477,7 +5469,7 @@ const styles = StyleSheet.create({
 
   modalCancelButton: {
     minWidth: 70,
-    minHeight: 42,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
@@ -5490,6 +5482,9 @@ const styles = StyleSheet.create({
   },
 
   modalTitle: {
+    flex: 1,
+    textAlign: "center",
+    marginHorizontal: 8,
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "800",
@@ -5510,11 +5505,11 @@ const styles = StyleSheet.create({
   },
 
   modalIntroCard: {
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2F4969",
     backgroundColor: "#102039",
-    padding: 18,
+    padding: UI.cardPadding,
     marginBottom: 20,
   },
 
@@ -5560,25 +5555,25 @@ const styles = StyleSheet.create({
   },
 
   saveChangesButton: {
-    minHeight: 60,
+    minHeight: UI.controlHeight,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6DEB",
     marginTop: 6,
   },
 
   saveChangesButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
   },
 
   removeResultButton: {
-    minHeight: 52,
+    minHeight: UI.controlHeight,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 15,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#8A4141",
     backgroundColor: "#2B171A",

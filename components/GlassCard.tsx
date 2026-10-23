@@ -1,8 +1,7 @@
 import {
     COLORS,
-    RADIUS,
+    UI,
     SHADOWS,
-    SPACING,
 } from '@/constants/design';
 import React, { ReactNode } from 'react';
 import {
@@ -33,8 +32,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.glass,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.xl,
+    borderRadius: UI.cardRadius,
+    padding: UI.cardPadding,
 
     ...SHADOWS.card,
   },

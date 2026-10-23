@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { TestUpdates } from "../components/TestUpdates";
 import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
@@ -788,20 +789,20 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 14,
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 12,
   },
 
   backButton: {
-    width: 46,
+    width: UI.navigationSize,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#17243A",
     borderWidth: 1,
     borderColor: "#31547D",
@@ -812,7 +813,7 @@ const styles = StyleSheet.create({
 
   backButtonText: {
     color: "#FFFFFF",
-    fontSize: 34,
+    fontSize: 16,
     lineHeight: 36,
     fontWeight: "400",
     marginTop: -3,
@@ -824,7 +825,7 @@ const styles = StyleSheet.create({
 
   title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
     letterSpacing: -0.4,
   },
@@ -842,10 +843,10 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: "#122033",
-    borderRadius: 19,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 16,
+    padding: UI.cardPadding,
     marginBottom: 14,
   },
 
@@ -926,6 +927,7 @@ const styles = StyleSheet.create({
   },
 
   passwordInput: {
+    minWidth: 0,
     color: "#FFFFFF",
     flex: 1,
     fontSize: 15,
@@ -942,8 +944,8 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
@@ -956,8 +958,8 @@ const styles = StyleSheet.create({
   },
 
   secondaryButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#172B4D",
     borderWidth: 1,
     borderColor: "#3B82F6",
@@ -972,8 +974,8 @@ const styles = StyleSheet.create({
   },
 
   feedbackButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     flexDirection: "row",
     alignItems: "center",
@@ -988,8 +990,8 @@ const styles = StyleSheet.create({
   },
 
   inboxButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#172B4D",
     borderWidth: 1,
     borderColor: "#3B82F6",
@@ -1007,8 +1009,8 @@ const styles = StyleSheet.create({
   },
 
   signOutButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#7F1D1D",
     backgroundColor: "#2B151A",
@@ -1023,8 +1025,8 @@ const styles = StyleSheet.create({
   },
 
   deleteButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#B91C1C",
     borderWidth: 1,
     borderColor: "#EF4444",

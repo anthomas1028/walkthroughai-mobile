@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
 import * as ImagePicker from "expo-image-picker";
@@ -927,7 +928,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 14,
     paddingBottom: 16,
   },
@@ -935,13 +936,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 12,
   },
 
   backButton: {
-    width: 46,
+    width: UI.navigationSize,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#17243A",
     borderWidth: 1,
     borderColor: "#31547D",
@@ -952,7 +953,7 @@ const styles = StyleSheet.create({
 
   backButtonText: {
     color: "#FFFFFF",
-    fontSize: 34,
+    fontSize: 16,
     lineHeight: 36,
     fontWeight: "400",
     marginTop: -3,
@@ -964,7 +965,7 @@ const styles = StyleSheet.create({
 
   title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
     letterSpacing: -0.4,
   },
@@ -982,18 +983,18 @@ const styles = StyleSheet.create({
 
   formCard: {
     backgroundColor: "#122033",
-    borderRadius: 19,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 16,
+    padding: UI.cardPadding,
   },
 
   managementCard: {
     backgroundColor: "#122033",
-    borderRadius: 19,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 16,
+    padding: UI.cardPadding,
     marginTop: 14,
   },
 
@@ -1012,8 +1013,8 @@ const styles = StyleSheet.create({
   },
 
   archiveButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#F59E0B",
     backgroundColor: "#2A2113",
@@ -1028,8 +1029,8 @@ const styles = StyleSheet.create({
   },
 
   restoreButton: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#3B82F6",
     backgroundColor: "#172B4D",
@@ -1065,7 +1066,7 @@ const styles = StyleSheet.create({
 
   showDeleteButton: {
     minHeight: 48,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#7F1D1D",
     backgroundColor: "#2B151A",
@@ -1080,11 +1081,11 @@ const styles = StyleSheet.create({
   },
 
   deleteConfirmationCard: {
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#7F1D1D",
     backgroundColor: "#160E12",
-    padding: 13,
+    padding: UI.cardPadding,
   },
 
   deleteInstruction: {
@@ -1155,7 +1156,7 @@ const styles = StyleSheet.create({
   logoCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 15,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
     backgroundColor: "#0C1524",
@@ -1287,8 +1288,8 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
-    minHeight: 56,
-    borderRadius: 17,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
@@ -1297,7 +1298,7 @@ const styles = StyleSheet.create({
 
   saveButtonText: {
     color: "#FFFFFF",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
   },
 

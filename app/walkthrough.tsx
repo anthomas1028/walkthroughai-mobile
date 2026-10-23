@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { useAuth } from "../contexts/AuthContext";
 import { draftKey, restoreGroups, storeGroups, writeDraft } from "../lib/drafts";
 import { Alert } from "../lib/alerts";
@@ -880,18 +881,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#091321",
   },
   header: {
-    minHeight: 88,
+    minHeight: 80,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#26384E",
   },
   backButton: {
-    width: 44,
+    width: UI.navigationSize,
     minHeight: 48,
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#122034",
@@ -904,7 +905,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: UI.pageTitle,
     fontWeight: "800",
   },
   customerName: {
@@ -922,7 +923,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 18,
     paddingBottom: 24,
   },
@@ -963,12 +964,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   emptyState: {
-    minHeight: 290,
+    minHeight: 200,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 22,
     backgroundColor: "#0D1A2B",
-    padding: 28,
+    padding: 20,
   },
   emptyIconWrap: {
     width: 66,
@@ -992,11 +993,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   addFirstAreaButton: {
-    minHeight: 50,
+    minHeight: UI.controlHeight,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 15,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     paddingHorizontal: 20,
     marginTop: 22,
@@ -1008,11 +1009,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   unassignedAreaButton: {
-    minHeight: 50,
+    minHeight: UI.controlHeight,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 15,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#14263D",
     borderWidth: 1,
     borderColor: "#2B4A6A",
@@ -1029,9 +1030,9 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   areaCard: {
-    borderRadius: 20,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#122033",
-    padding: 16,
+    padding: UI.cardPadding,
   },
   areaHeader: {
     flexDirection: "row",
@@ -1053,7 +1054,7 @@ const styles = StyleSheet.create({
   moreButton: {
     width: 44,
     minHeight: 48,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#16263A",
@@ -1065,7 +1066,7 @@ const styles = StyleSheet.create({
   thumbnailCard: {
     width: 108,
     height: 108,
-    borderRadius: 15,
+    borderRadius: UI.cardRadius,
     overflow: "hidden",
     backgroundColor: "#15243A",
   },
@@ -1125,7 +1126,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     gap: 7,
   },
   takePhotoButton: {
@@ -1153,9 +1154,9 @@ const styles = StyleSheet.create({
   summaryCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#0F2824",
-    padding: 14,
+    padding: UI.cardPadding,
     marginTop: 18,
   },
   summaryIconWrap: {
@@ -1176,7 +1177,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   footer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: UI.screenPadding,
     paddingTop: 10,
     paddingBottom: 12,
     backgroundColor: "#091321",
@@ -1184,10 +1185,10 @@ const styles = StyleSheet.create({
     borderTopColor: "#26384E",
   },
   continueButton: {
-    minHeight: 54,
+    minHeight: UI.controlHeight,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
   },
   continueButtonDisabled: {
@@ -1195,7 +1196,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     color: "#FFFFFF",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
   },
   continueButtonTextDisabled: {
@@ -1276,10 +1277,10 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   modalSaveButton: {
-    minHeight: 56,
+    minHeight: UI.controlHeight,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     marginTop: 14,
   },

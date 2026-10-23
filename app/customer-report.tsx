@@ -1,3 +1,4 @@
+import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
 import { SavedSourcing } from "../lib/sourcing";
 import { downloadInBrowser } from "../lib/download";
@@ -1619,11 +1620,11 @@ export default function CustomerReportScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#091321" },
   container: { width: "100%", maxWidth: 1180, alignSelf: "center", flex: 1, paddingHorizontal: 18, paddingTop: 12 },
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
+  header: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   backButton: {
-    width: 46,
+    width: UI.navigationSize,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#31547D",
     backgroundColor: "#17243A",
@@ -1651,11 +1652,11 @@ const styles = StyleSheet.create({
   title: {flexShrink: 1,  color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
   subtitle: { color: "#94A3B8", fontSize: 13, marginTop: 3 },
   inventoryHero: {
-    borderRadius: 19,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#31547D",
     backgroundColor: "#17283D",
-    padding: 16,
+    padding: UI.cardPadding,
     marginBottom: 12,
   },
   inventoryHeroHeader: {
@@ -1742,7 +1743,7 @@ const styles = StyleSheet.create({
   },
   searchButton: {minHeight: 44,
     minWidth: 82,
-    borderRadius: 13,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
@@ -1793,11 +1794,11 @@ const styles = StyleSheet.create({
   loadingText: { color: "#94A3B8", fontSize: 13, marginTop: 10 },
   listContent: { paddingTop: 4, paddingBottom: 56 },
   recordCard: {
-    borderRadius: 16,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#283C57",
     backgroundColor: "#122033",
-    padding: 14,
+    padding: UI.cardPadding,
     marginBottom: 9,
   },
   recordHeader: { flexDirection: "row", alignItems: "center" },
@@ -1841,7 +1842,7 @@ const styles = StyleSheet.create({
   inventoryFilterButtonTextActive: { color: "#FFFFFF" },
   clearFiltersButton: { minHeight: 40, paddingHorizontal: 15, borderRadius: 12, backgroundColor: "#17263A", alignItems: "center", justifyContent: "center", marginLeft: 8 },
   clearFiltersText: { color: "#93C5FD", fontSize: 12, fontWeight: "800" },
-  uniquePartCard: { borderRadius: 16, borderWidth: 1, borderColor: "#283C57", backgroundColor: "#122033", marginBottom: 9, overflow: "hidden" },
+  uniquePartCard: { borderRadius: UI.cardRadius, borderWidth: 1, borderColor: "#283C57", backgroundColor: "#122033", marginBottom: 9, overflow: "hidden" },
   uniquePartMain: { flexDirection: "row", alignItems: "center", padding: 14 },
   uniquePartText: { flex: 1, paddingRight: 10 },
   uniquePartTitle: { color: "#FFFFFF", fontSize: 15, lineHeight: 20, fontWeight: "900" },
@@ -1864,18 +1865,18 @@ const styles = StyleSheet.create({
   filterSectionTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "800", marginTop: 8, marginBottom: 10 },
   filterOption: { minHeight: 52, borderBottomWidth: 1, borderBottomColor: "#2B3E56", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   filterOptionText: { color: "#D8E2F0", fontSize: 15 },
-  resetModalFiltersButton: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: "#31547D", alignItems: "center", justifyContent: "center", marginTop: 24 },
+  resetModalFiltersButton: { minHeight: 48, borderRadius: UI.cardRadius, borderWidth: 1, borderColor: "#31547D", alignItems: "center", justifyContent: "center", marginTop: 24 },
   resetModalFiltersText: { color: "#93C5FD", fontSize: 14, fontWeight: "800" },
   partDetailContent: { padding: 20, paddingBottom: 40 },
   partDetailTitle: { color: "#FFFFFF", fontSize: 22, lineHeight: 29, fontWeight: "800" },
   partDetailNumber: { color: "#93C5FD", fontSize: 16, fontWeight: "700", marginTop: 7 },
-  partDetailCard: { borderRadius: 18, borderWidth: 1, borderColor: "#2B3E56", backgroundColor: "#122033", padding: 16, marginTop: 18 },
+  partDetailCard: { borderRadius: UI.cardRadius, borderWidth: 1, borderColor: "#2B3E56", backgroundColor: "#122033", padding: UI.cardPadding, marginTop: 18 },
   partDetailLabel: { color: "#94A8C0", fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 12 },
   partDetailValue: { color: "#D8E2F0", fontSize: 14, lineHeight: 20, marginTop: 4 },
-  viewPhotoButton: { minHeight: 54, borderRadius: 16, backgroundColor: "#2D6BF0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 },
+  viewPhotoButton: { minHeight: UI.controlHeight, borderRadius: UI.cardRadius, backgroundColor: "#2D6BF0", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 },
   viewPhotoButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   reviewCard: {
-    borderRadius: 16,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#3B4659",
     backgroundColor: "#122033",
@@ -1975,11 +1976,11 @@ const styles = StyleSheet.create({
   reviewDetailContent: { padding: 20, paddingBottom: 48 },
   reviewDetailHero: {
     flexDirection: "row",
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#384A64",
     backgroundColor: "#121F32",
-    padding: 16,
+    padding: UI.cardPadding,
   },
   reviewDetailHeroText: { flex: 1, paddingRight: 12 },
   reviewDetailEyebrow: {
@@ -2021,8 +2022,8 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   reviewSourcePhotoButton: {
-    minHeight: 52,
-    borderRadius: 15,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     flexDirection: "row",
     alignItems: "center",
@@ -2036,11 +2037,11 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   reviewEditCard: {
-    borderRadius: 18,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2B3E56",
     backgroundColor: "#122033",
-    padding: 16,
+    padding: UI.cardPadding,
     marginTop: 14,
   },
   reviewEditHeading: {
@@ -2080,8 +2081,8 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   reviewSaveButton: {
-    minHeight: 54,
-    borderRadius: 16,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     backgroundColor: "#2D6BF0",
     flexDirection: "row",
     alignItems: "center",
@@ -2095,8 +2096,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   reviewConfirmButton: {
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: UI.controlHeight,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#2E745D",
     backgroundColor: "#123428",
@@ -2113,7 +2114,7 @@ const styles = StyleSheet.create({
   },
   reviewRemoveButton: {
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: UI.cardRadius,
     borderWidth: 1,
     borderColor: "#60343D",
     backgroundColor: "#2B171D",
