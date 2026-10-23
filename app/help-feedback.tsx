@@ -152,7 +152,7 @@ export default function HelpFeedbackScreen() {
                 pressed && styles.buttonPressed,
               ]}
             >
-              <Text style={styles.backButtonText}>‹</Text>
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </Pressable>
 
             <View style={styles.headerText}>
@@ -232,7 +232,7 @@ export default function HelpFeedbackScreen() {
                 multiline
                 onChangeText={setMessage}
                 placeholder="Type your message here..."
-                placeholderTextColor="#64748B"
+                placeholderTextColor="#94A8C0"
                 scrollEnabled
                 style={styles.messageInput}
                 textAlignVertical="top"
@@ -287,7 +287,7 @@ export default function HelpFeedbackScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
 
   keyboardView: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
 
   backButton: {
     width: 46,
-    height: 46,
+    minHeight: 48,
     borderRadius: 14,
     backgroundColor: "#17243A",
     borderWidth: 1,
@@ -326,11 +326,11 @@ const styles = StyleSheet.create({
     marginTop: -3,
   },
 
-  headerText: {
+  headerText: {minWidth: 0,
     flex: 1,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 24,
     fontWeight: "800",
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
 
   sectionLabel: {
     color: "#60A5FA",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
     marginBottom: 10,
@@ -360,16 +360,16 @@ const styles = StyleSheet.create({
     minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 14,
     marginBottom: 10,
   },
 
   optionCardSelected: {
-    backgroundColor: "#14243A",
+    backgroundColor: "#17283D",
     borderColor: "#3B82F6",
   },
 
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   },
 
   optionIconSelected: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
   },
 
   optionTextArea: {
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: "#64748B",
+    borderColor: "#94A8C0",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -427,17 +427,17 @@ const styles = StyleSheet.create({
   },
 
   messageCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 16,
     marginTop: 8,
   },
 
   cardLabel: {
     color: "#60A5FA",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: "#0C1524",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     color: "#FFFFFF",
     fontSize: 15,
     lineHeight: 21,
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   sendButton: {
     minHeight: 52,
     borderRadius: 15,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -489,8 +489,8 @@ const styles = StyleSheet.create({
   },
 
   emailNote: {
-    color: "#64748B",
-    fontSize: 11,
+    color: "#94A8C0",
+    fontSize: 12,
     lineHeight: 16,
     textAlign: "center",
     marginTop: 10,
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#101A2A",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 14,
     marginTop: 14,
   },
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
 
   versionText: {
     color: "#52647A",
-    fontSize: 11,
+    fontSize: 12,
     textAlign: "center",
     marginTop: 16,
   },

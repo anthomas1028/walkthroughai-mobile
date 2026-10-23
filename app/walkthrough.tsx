@@ -873,24 +873,24 @@ export default function WalkthroughPhotoScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#071421",
+    backgroundColor: "#091321",
   },
   screen: {
     flex: 1,
-    backgroundColor: "#071421",
+    backgroundColor: "#091321",
   },
   header: {
-    minHeight: 106,
+    minHeight: 88,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "#1C2D43",
+    borderBottomColor: "#26384E",
   },
   backButton: {
-    width: 52,
-    height: 52,
+    width: 44,
+    minHeight: 48,
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
@@ -898,13 +898,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2B3E59",
   },
-  headerTextContainer: {
+  headerTextContainer: {minWidth: 0,
     flex: 1,
     marginLeft: 16,
   },
-  headerTitle: {
+  headerTitle: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 25,
+    fontSize: 24,
     fontWeight: "800",
   },
   customerName: {
@@ -923,8 +923,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 122,
+    paddingTop: 18,
+    paddingBottom: 24,
   },
   toolbar: {
     flexDirection: "row",
@@ -932,13 +932,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  toolbarText: {
+  toolbarText: {minWidth: 0,
     flex: 1,
     paddingRight: 12,
   },
   toolbarTitle: {
     color: "#FFFFFF",
-    fontSize: 23,
+    fontSize: 20,
     fontWeight: "800",
   },
   toolbarSubtitle: {
@@ -948,12 +948,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addAreaButton: {
-    minHeight: 38,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: "#2D68EB",
+    backgroundColor: "#2D6BF0",
     paddingHorizontal: 12,
     gap: 5,
   },
@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 15,
-    backgroundColor: "#2D68EB",
+    backgroundColor: "#2D6BF0",
     paddingHorizontal: 20,
     marginTop: 22,
     gap: 8,
@@ -1030,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   areaCard: {
     borderRadius: 20,
-    backgroundColor: "#0F1D2E",
+    backgroundColor: "#122033",
     padding: 16,
   },
   areaHeader: {
@@ -1046,13 +1046,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   areaMeta: {
-    color: "#8093AA",
+    color: "#9BAFC5",
     fontSize: 12,
     marginTop: 4,
   },
   moreButton: {
-    width: 42,
-    height: 42,
+    width: 44,
+    minHeight: 48,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
@@ -1094,7 +1094,7 @@ const styles = StyleSheet.create({
   },
   photoIndexText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
   },
   removePhotoButton: {
@@ -1118,6 +1118,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   photoActionButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 12,
     flex: 1,
     minHeight: 48,
     flexDirection: "row",
@@ -1127,7 +1129,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   takePhotoButton: {
-    backgroundColor: "#2D68EB",
+    backgroundColor: "#2D6BF0",
   },
   choosePhotosButton: {
     backgroundColor: "#14263D",
@@ -1135,11 +1137,15 @@ const styles = StyleSheet.create({
     borderColor: "#24405F",
   },
   takePhotoButtonText: {
+    flexShrink: 1,
+    textAlign: "center",
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
   },
   choosePhotosButtonText: {
+    flexShrink: 1,
+    textAlign: "center",
     color: "#BFDBFE",
     fontSize: 13,
     fontWeight: "800",
@@ -1153,8 +1159,8 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   summaryIconWrap: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
@@ -1173,16 +1179,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 12,
-    backgroundColor: "#071421",
+    backgroundColor: "#091321",
     borderTopWidth: 1,
-    borderTopColor: "#1C2D43",
+    borderTopColor: "#26384E",
   },
   continueButton: {
     minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 18,
-    backgroundColor: "#2D68EB",
+    backgroundColor: "#2D6BF0",
   },
   continueButtonDisabled: {
     backgroundColor: "#1A2A40",
@@ -1193,11 +1199,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   continueButtonTextDisabled: {
-    color: "#71839C",
+    color: "#9BAFC5",
   },
   modalSafeArea: {
     flex: 1,
-    backgroundColor: "#071421",
+    backgroundColor: "#091321",
   },
   modalKeyboardView: {
     flex: 1,
@@ -1207,7 +1213,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#1C2D43",
+    borderBottomColor: "#26384E",
     paddingHorizontal: 16,
   },
   modalCancelButton: {
@@ -1274,7 +1280,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 17,
-    backgroundColor: "#2D68EB",
+    backgroundColor: "#2D6BF0",
     marginTop: 14,
   },
   modalSaveButtonText: {
@@ -1291,7 +1297,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#1C2D43",
+    borderBottomColor: "#26384E",
     paddingHorizontal: 14,
   },
   photoViewerCloseButton: {
@@ -1319,7 +1325,7 @@ const styles = StyleSheet.create({
   },
   photoViewerHint: {
     color: "#71849D",
-    fontSize: 10,
+    fontSize: 12,
     marginTop: 2,
   },
   photoViewerHeaderSpacer: {

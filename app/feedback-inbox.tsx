@@ -175,7 +175,7 @@ export default function FeedbackInboxScreen() {
               pressed && styles.buttonPressed,
             ]}
           >
-            <Text style={styles.backButtonText}>‹</Text>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
 
           <View style={styles.headerText}>
@@ -214,14 +214,14 @@ export default function FeedbackInboxScreen() {
 
           <View style={styles.searchCard}>
             <View style={styles.searchRow}>
-              <Ionicons color="#64748B" name="search-outline" size={20} />
+              <Ionicons color="#94A8C0" name="search-outline" size={20} />
               <TextInput
                 autoCapitalize="none"
                 autoCorrect={false}
                 onChangeText={setSearchText}
                 onSubmitEditing={submitSearch}
                 placeholder="Search email, workspace, or message"
-                placeholderTextColor="#64748B"
+                placeholderTextColor="#94A8C0"
                 returnKeyType="search"
                 style={styles.searchInput}
                 value={searchText}
@@ -290,7 +290,7 @@ export default function FeedbackInboxScreen() {
           ) : records.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons
-                color="#64748B"
+                color="#94A8C0"
                 name="mail-open-outline"
                 size={42}
               />
@@ -370,7 +370,7 @@ function FeedbackCard({
         </View>
 
         <Ionicons
-          color="#64748B"
+          color="#94A8C0"
           name={isExpanded ? "chevron-up" : "chevron-down"}
           size={20}
         />
@@ -516,7 +516,7 @@ function formatDate(value: string) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
 
   container: {
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
 
   backButton: {
     width: 46,
-    height: 46,
+    minHeight: 48,
     borderRadius: 14,
     backgroundColor: "#17243A",
     borderWidth: 1,
@@ -551,11 +551,11 @@ const styles = StyleSheet.create({
     marginTop: -3,
   },
 
-  headerText: {
+  headerText: {minWidth: 0,
     flex: 1,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 24,
     fontWeight: "800",
@@ -583,9 +583,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 82,
     borderRadius: 16,
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -596,18 +596,18 @@ const styles = StyleSheet.create({
   },
 
   summaryLabel: {
-    color: "#64748B",
-    fontSize: 10,
+    color: "#94A8C0",
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
     marginTop: 4,
   },
 
   searchCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 12,
     marginBottom: 12,
   },
@@ -617,13 +617,13 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: "#0C1524",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 13,
   },
 
-  searchInput: {
+  searchInput: { minWidth: 0,
     flex: 1,
     color: "#FFFFFF",
     fontSize: 14,
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
   searchButton: {
     minHeight: 45,
     borderRadius: 13,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 10,
@@ -655,15 +655,15 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 15,
     borderRadius: 999,
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     alignItems: "center",
     justifyContent: "center",
   },
 
   filterChipSelected: {
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#2D6BF0",
     borderColor: "#60A5FA",
   },
 
@@ -693,10 +693,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 60,
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
   },
 
   emptyTitle: {
@@ -713,10 +713,10 @@ const styles = StyleSheet.create({
   },
 
   feedbackCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 15,
     marginBottom: 12,
   },
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   },
 
   cardMeta: {
-    color: "#64748B",
+    color: "#94A8C0",
     fontSize: 12,
     marginTop: 3,
   },
@@ -785,7 +785,7 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
   },
 
@@ -800,13 +800,13 @@ const styles = StyleSheet.create({
 
   typeBadgeText: {
     color: "#CBD5E1",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
   },
 
   details: {
     borderTopWidth: 1,
-    borderTopColor: "#26364F",
+    borderTopColor: "#2B3E56",
     marginTop: 14,
     paddingTop: 12,
     gap: 10,
@@ -817,8 +817,8 @@ const styles = StyleSheet.create({
   },
 
   detailLabel: {
-    color: "#64748B",
-    fontSize: 10,
+    color: "#94A8C0",
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.6,
     textTransform: "uppercase",

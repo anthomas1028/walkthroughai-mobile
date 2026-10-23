@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
@@ -199,12 +200,12 @@ export default function CustomerDashboardScreen() {
       <View style={s.container}>
         <View style={s.header}>
           <Pressable onPress={() => router.back()} style={s.back}>
-            <Text style={s.backText}>‹</Text>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
 
           <View style={{ flex: 1 }}>
             <View style={s.titleRow}>
-              <Text style={s.title}>Customer Dashboard</Text>
+              <Text style={s.title}>Customer overview</Text>
 
               {isReadOnly ? (
                 <View style={s.readOnlyBadge}>
@@ -266,7 +267,7 @@ export default function CustomerDashboardScreen() {
             ListHeaderComponent={
               <>
                 {!isReadOnly ? <View style={{ marginBottom: 16, gap: 10 }}>
-                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/walkthrough", params: { customerId: String(customerId), customerName: name, customerEmail: dashboard.customer.email || "", contactName: dashboard.customer.contact_name || "" } })} style={{ backgroundColor: "#2563eb", padding: 16, borderRadius: 14 }}><Text style={{ color: "white", textAlign: "center", fontWeight: "700", fontSize: 17 }}>Start walkthrough</Text></Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/walkthrough", params: { customerId: String(customerId), customerName: name, customerEmail: dashboard.customer.email || "", contactName: dashboard.customer.contact_name || "" } })} style={{ backgroundColor: "#2D6BF0", padding: 16, borderRadius: 14 }}><Text style={{ color: "white", textAlign: "center", fontWeight: "700", fontSize: 17 }}>Start walkthrough</Text></Pressable>
                   <View style={{ flexDirection: "row", gap: 12 }}>{[{ label: "History", route: "/history" }, { label: "Edit customer", route: "/customer-edit" }].map(action => <Pressable key={action.route} accessibilityRole="button" onPress={() => router.push({ pathname: action.route as any, params: { customerId: String(customerId), customerName: name } })} style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: "#1b2c43" }}><Text style={{ color: "#bfdbfe", textAlign: "center", fontWeight: "600" }}>{action.label}</Text></Pressable>)}</View>
                 </View> : null}
                 <View style={s.customerCard}>
@@ -317,7 +318,7 @@ export default function CustomerDashboardScreen() {
                   {[
                     [
                       dashboard.total_walkthroughs,
-                      "Total Walkthroughs",
+                      "Walkthroughs",
                       "walkthroughs",
                     ],
                     [
@@ -481,7 +482,7 @@ export default function CustomerDashboardScreen() {
 const s = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
   container: { width: "100%", maxWidth: 1180, alignSelf: "center",
     flex: 1,
@@ -494,6 +495,7 @@ const s = StyleSheet.create({
     marginBottom: 18,
   },
   back: {
+    flexShrink: 0,
     width: 46,
     height: 46,
     borderRadius: 14,
@@ -517,6 +519,8 @@ const s = StyleSheet.create({
     gap: 8,
   },
   title: {
+    flexShrink: 1,
+    lineHeight: 28,
     color: "#FFF",
     fontSize: 24,
     fontWeight: "800",
@@ -531,7 +535,7 @@ const s = StyleSheet.create({
   },
   readOnlyBadgeText: {
     color: "#86EFAC",
-    fontSize: 8,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -545,13 +549,13 @@ const s = StyleSheet.create({
   },
   demoLabel: {
     color: "#86EFAC",
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.7,
     marginBottom: 8,
   },
   customerCard: {
-    backgroundColor: "#14243A",
+    backgroundColor: "#17283D",
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#31547D",
@@ -577,7 +581,7 @@ const s = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  customerText: {
+  customerText: {minWidth: 0,
     flex: 1,
   },
   customerName: {
@@ -602,36 +606,36 @@ const s = StyleSheet.create({
     marginHorizontal: -5,
   },
   stat: {
-    width: "33.333%",
+    width: "50%",
     paddingHorizontal: 5,
     marginBottom: 10,
   },
   statNum: {
     color: "#FFF",
-    fontSize: 24,
-    fontWeight: "800",
+    fontSize: 26,
+    fontWeight: "700",
     textAlign: "center",
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     paddingTop: 12,
     paddingBottom: 4,
   },
   statLabel: {
     color: "#B8C8DB",
     fontSize: 12,
-    lineHeight: 14,
+    lineHeight: 18,
     fontWeight: "700",
     textAlign: "center",
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderBottomLeftRadius: 14,
     borderBottomRightRadius: 14,
     borderWidth: 1,
     borderTopWidth: 0,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     minHeight: 39,
     paddingHorizontal: 5,
     paddingBottom: 10,
@@ -641,13 +645,13 @@ const s = StyleSheet.create({
     backgroundColor: "#0C1524",
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 15,
     marginBottom: 19,
   },
   eyebrow: {
     color: "#AAB7CA",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0.7,
   },
@@ -659,7 +663,7 @@ const s = StyleSheet.create({
   },
   hint: {
     color: "#93C5FD",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
     marginTop: 7,
   },
@@ -680,10 +684,10 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   listCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     paddingHorizontal: 14,
     marginBottom: 18,
   },
@@ -692,7 +696,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: "#26364F",
+    borderBottomColor: "#2B3E56",
   },
   lastRow: {
     borderBottomWidth: 0,
@@ -704,7 +708,7 @@ const s = StyleSheet.create({
   },
   muted: {
     color: "#AAB7CA",
-    fontSize: 10.5,
+    fontSize: 12,
     lineHeight: 15,
     marginTop: 3,
   },
@@ -712,7 +716,7 @@ const s = StyleSheet.create({
     minWidth: 34,
     height: 28,
     borderRadius: 9,
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -728,10 +732,10 @@ const s = StyleSheet.create({
     marginLeft: 8,
   },
   walkCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 15,
     marginBottom: 10,
   },

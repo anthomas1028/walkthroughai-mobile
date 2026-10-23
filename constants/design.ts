@@ -1,17 +1,17 @@
 export const COLORS = {
-  background: '#041221',
+  background: '#091321',
   backgroundDeep: '#020B16',
-  surface: '#08182C',
+  surface: '#122033',
   surfaceLight: '#10233D',
   surfaceMuted: '#0C1B2F',
 
-  primary: '#2478FF',
+  primary: '#2D6BF0',
   primaryDark: '#155FD4',
   primaryLight: '#67B8FF',
 
   text: '#F5F9FF',
   textMuted: '#91A0B7',
-  textSoft: '#71839D',
+  textSoft: '#94A8C0',
 
   success: '#42F39B',
   warning: '#FFB84D',
@@ -52,8 +52,8 @@ export const FONT_SIZE = {
   body: 16,
   bodyLarge: 18,
   title: 24,
-  heading: 32,
-  hero: 48,
+  heading: 26,
+  hero: 36,
 } as const;
 
 export const SHADOWS = {

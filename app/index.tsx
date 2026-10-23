@@ -1,3 +1,5 @@
+import Constants from "expo-constants";
+import { Ionicons } from "@expo/vector-icons";
 import { ResumeWalkthrough } from "../components/ResumeWalkthrough";
 import { Alert } from "../lib/alerts";
 import { router, useFocusEffect } from "expo-router";
@@ -601,13 +603,14 @@ export default function HomeScreen() {
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Account and settings"
               onPress={() => router.push("/account")}
               style={({ pressed }) => [
                 styles.accountButton,
                 pressed && styles.buttonPressed,
               ]}
             >
-              <Text style={styles.accountButtonText}>Account</Text>
+              <Ionicons name="person-outline" size={20} color="#BFDBFE" />
             </Pressable>
           </View>
 
@@ -681,7 +684,7 @@ export default function HomeScreen() {
                   autoCapitalize="words"
                   onChangeText={setCompanyName}
                   placeholder="Company name *"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A8C0"
                   returnKeyType="next"
 
                   onSubmitEditing={() => contactRef.current?.focus()}
@@ -696,7 +699,7 @@ export default function HomeScreen() {
                   autoCapitalize="words"
                   onChangeText={setContactName}
                   placeholder="Contact name"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A8C0"
                   returnKeyType="next"
                   style={styles.input}
                   value={contactName}
@@ -711,7 +714,7 @@ export default function HomeScreen() {
                   keyboardType="email-address"
                   onChangeText={setEmail}
                   placeholder="Email address"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A8C0"
                   returnKeyType="next"
                   style={styles.input}
                   value={email}
@@ -724,7 +727,7 @@ export default function HomeScreen() {
                   keyboardType="phone-pad"
                   onChangeText={setPhone}
                   placeholder="Phone number"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A8C0"
                   returnKeyType="done"
                   style={styles.input}
                   value={phone}
@@ -736,7 +739,7 @@ export default function HomeScreen() {
                     autoCapitalize="words"
                     onChangeText={setCity}
                     placeholder="City"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={[
                       styles.input,
                       styles.cityInput,
@@ -750,7 +753,7 @@ export default function HomeScreen() {
                     maxLength={2}
                     onChangeText={setState}
                     placeholder="State"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={[
                       styles.input,
                       styles.stateInput,
@@ -764,7 +767,7 @@ export default function HomeScreen() {
                     maxLength={10}
                     onChangeText={setPostalCode}
                     placeholder="ZIP"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={[
                       styles.input,
                       styles.postalCodeInput,
@@ -779,7 +782,7 @@ export default function HomeScreen() {
                   multiline
                   onChangeText={setNotes}
                   placeholder="Customer notes"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A8C0"
                   scrollEnabled
                   style={[
                     styles.input,
@@ -869,7 +872,7 @@ export default function HomeScreen() {
                     loadCustomers()
                   }
                   placeholder="Search customers"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A8C0"
                   returnKeyType="search"
                   style={styles.searchInput}
                   value={searchText}
@@ -1083,12 +1086,12 @@ export default function HomeScreen() {
                   pressed && styles.buttonPressed,
                 ]}
               >
-                <Text style={styles.feedbackButtonIcon}>💬</Text>
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color="#BFDBFE" />
                 <Text style={styles.feedbackButtonText}>Help & Feedback</Text>
               </Pressable>
 
               <Text style={styles.versionText}>
-                Version 2.0.0
+                Version {Constants.expoConfig?.version || "2.0.1"}
               </Text>
             </View>
           ) : null}
@@ -1102,7 +1105,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
 
   keyboardView: {
@@ -1128,7 +1131,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     marginRight: 12,
   },
 
@@ -1139,14 +1142,16 @@ const styles = StyleSheet.create({
   },
 
   headerText: {
+    minWidth: 0,
     flex: 1,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 27,
-    fontWeight: "800",
-    letterSpacing: -0.6,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "700",
+    letterSpacing: -0.4,
   },
 
   subtitle: {
@@ -1157,12 +1162,16 @@ const styles = StyleSheet.create({
   },
 
   accountEmail: {
-    color: "#64748B",
-    fontSize: 11,
+    color: "#94A8C0",
+    fontSize: 12,
     marginTop: 2,
   },
 
   accountButton: {
+    width: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
     borderColor: "#334E70",
     borderRadius: 10,
     borderWidth: 1,
@@ -1205,7 +1214,7 @@ const styles = StyleSheet.create({
 
   demoBadgeText: {
     color: "#86EFAC",
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.7,
   },
@@ -1214,7 +1223,7 @@ const styles = StyleSheet.create({
     minHeight: 96,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#14243A",
+    backgroundColor: "#17283D",
     borderRadius: 17,
     borderWidth: 1,
     borderColor: "#31547D",
@@ -1225,7 +1234,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 13,
@@ -1250,7 +1259,7 @@ const styles = StyleSheet.create({
 
   demoDescription: {
     color: "#94A3B8",
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16,
     marginTop: 4,
   },
@@ -1276,7 +1285,7 @@ const styles = StyleSheet.create({
 
   addCustomerButton: {
     minWidth: 74,
-    height: 38,
+    minHeight: 44,
     borderRadius: 12,
     backgroundColor: "#1E3A5F",
     borderWidth: 1,
@@ -1304,12 +1313,12 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: "#101A2A",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
   },
 
   customerViewTab: {
     flex: 1,
-    minHeight: 32,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 9,
@@ -1325,7 +1334,7 @@ const styles = StyleSheet.create({
   },
 
   customerViewTabText: {
-    color: "#718096",
+    color: "#94A8C0",
     fontSize: 13,
     fontWeight: "800",
   },
@@ -1334,13 +1343,13 @@ const styles = StyleSheet.create({
     color: "#BFDBFE",
   },
 
-  searchInput: {
+  searchInput: { minWidth: 0,
     flex: 1,
-    height: 42,
+    minHeight: 48,
     borderRadius: 13,
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     color: "#FFFFFF",
     fontSize: 15,
     paddingHorizontal: 15,
@@ -1348,9 +1357,9 @@ const styles = StyleSheet.create({
   },
 
   searchButton: {
-    height: 42,
+    minHeight: 48,
     borderRadius: 13,
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 17,
@@ -1367,17 +1376,17 @@ const styles = StyleSheet.create({
   },
 
   customerCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#22314A",
+    borderColor: "#2B3E56",
     padding: 16,
     marginBottom: 10,
   },
 
   customerCardSelected: {
     borderColor: "#3B82F6",
-    backgroundColor: "#14243A",
+    backgroundColor: "#17283D",
   },
 
   customerCardPressed: {
@@ -1424,6 +1433,7 @@ const styles = StyleSheet.create({
   },
 
   customerSelectionBadge: {
+    display: "none",
     position: "absolute",
     right: -4,
     bottom: -4,
@@ -1431,15 +1441,15 @@ const styles = StyleSheet.create({
     height: 19,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: "#64748B",
-    backgroundColor: "#121C2D",
+    borderColor: "#94A8C0",
+    backgroundColor: "#122033",
     alignItems: "center",
     justifyContent: "center",
   },
 
   customerSelectionBadgeSelected: {
     borderColor: "#3B82F6",
-    backgroundColor: "#14243A",
+    backgroundColor: "#17283D",
   },
 
   customerSelectionBadgeInner: {
@@ -1449,7 +1459,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B82F6",
   },
 
-  customerInformation: {
+  customerInformation: {minWidth: 0,
     flex: 1,
   },
 
@@ -1467,7 +1477,7 @@ const styles = StyleSheet.create({
   },
 
   customerLocation: {
-    color: "#718096",
+    color: "#94A8C0",
     fontSize: 12,
     marginTop: 4,
   },
@@ -1475,7 +1485,7 @@ const styles = StyleSheet.create({
   archivedBadge: {
     alignSelf: "flex-start",
     color: "#FBBF24",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "900",
     marginTop: 7,
     textTransform: "uppercase",
@@ -1528,10 +1538,10 @@ const styles = StyleSheet.create({
   },
 
   formCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 16,
   },
 
@@ -1542,12 +1552,12 @@ const styles = StyleSheet.create({
     marginBottom: 13,
   },
 
-  input: {
+  input: { minWidth: 0,
     minHeight: 48,
     borderRadius: 13,
     backgroundColor: "#0C1524",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     color: "#FFFFFF",
     fontSize: 15,
     paddingHorizontal: 14,
@@ -1558,18 +1568,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
 
-  cityInput: {
+  cityInput: { minWidth: 0,minHeight: 44,
     flex: 1,
     marginRight: 8,
   },
 
-  stateInput: {
+  stateInput: {minHeight: 44,
     width: 70,
     marginRight: 8,
     textAlign: "center",
   },
 
-  postalCodeInput: {
+  postalCodeInput: {minHeight: 44,
     width: 90,
   },
 
@@ -1582,7 +1592,7 @@ const styles = StyleSheet.create({
   saveButton: {
     minHeight: 52,
     borderRadius: 15,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 3,
@@ -1597,7 +1607,7 @@ const styles = StyleSheet.create({
   bottomArea: {
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "#22314A",
+    borderTopColor: "#2B3E56",
     paddingTop: 6,
   },
 
@@ -1615,7 +1625,7 @@ const styles = StyleSheet.create({
 
   selectedCustomerLabel: {
     color: "#6F8CAD",
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
   },
@@ -1647,7 +1657,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 50,
     borderRadius: 14,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000000",
@@ -1714,7 +1724,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     backgroundColor: "#101A2A",
     paddingHorizontal: 15,
   },
@@ -1726,8 +1736,8 @@ const styles = StyleSheet.create({
   },
 
   noSelectionText: {
-    color: "#718096",
-    fontSize: 11,
+    color: "#94A8C0",
+    fontSize: 12,
     marginTop: 3,
   },
 
@@ -1756,7 +1766,7 @@ const styles = StyleSheet.create({
 
   versionText: {
     color: "#52647A",
-    fontSize: 10,
+    fontSize: 12,
     textAlign: "center",
     marginTop: 5,
   },

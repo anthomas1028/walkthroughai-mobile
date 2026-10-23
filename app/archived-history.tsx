@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -378,7 +379,7 @@ export default function ArchivedHistoryScreen() {
               pressed && styles.buttonPressed,
             ]}
           >
-            <Text style={styles.backButtonText}>‹</Text>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
 
           <View style={styles.headerText}>
@@ -402,7 +403,7 @@ export default function ArchivedHistoryScreen() {
             onChangeText={setSearchText}
             onSubmitEditing={() => loadArchived()}
             placeholder="Search archived walkthroughs"
-            placeholderTextColor="#64748B"
+            placeholderTextColor="#94A8C0"
             returnKeyType="search"
             style={styles.searchInput}
             value={searchText}
@@ -476,7 +477,7 @@ export default function ArchivedHistoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
 
   container: {
@@ -493,7 +494,7 @@ const styles = StyleSheet.create({
 
   backButton: {
     width: 46,
-    height: 46,
+    minHeight: 48,
     borderRadius: 14,
     backgroundColor: "#17243A",
     borderWidth: 1,
@@ -511,11 +512,11 @@ const styles = StyleSheet.create({
     marginTop: -3,
   },
 
-  headerText: {
+  headerText: {minWidth: 0,
     flex: 1,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 24,
     fontWeight: "800",
@@ -533,13 +534,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  searchInput: {
+  searchInput: { minWidth: 0,
     flex: 1,
-    height: 46,
+    minHeight: 48,
     borderRadius: 13,
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     color: "#FFFFFF",
     fontSize: 14,
     paddingHorizontal: 14,
@@ -547,9 +548,9 @@ const styles = StyleSheet.create({
   },
 
   searchButton: {
-    height: 46,
+    minHeight: 48,
     borderRadius: 13,
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 15,
@@ -566,7 +567,7 @@ const styles = StyleSheet.create({
   },
 
   historyCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#3F3F46",
@@ -604,7 +605,7 @@ const styles = StyleSheet.create({
 
   archivedDate: {
     color: "#A1A1AA",
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 3,
   },
 
@@ -619,7 +620,7 @@ const styles = StyleSheet.create({
 
   archivedBadgeText: {
     color: "#D6D3D1",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
   },
 
@@ -645,8 +646,8 @@ const styles = StyleSheet.create({
   },
 
   statLabel: {
-    color: "#718096",
-    fontSize: 11,
+    color: "#94A8C0",
+    fontSize: 12,
     marginTop: 3,
   },
 
@@ -669,7 +670,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#26364F",
+    borderTopColor: "#2B3E56",
   },
 
   restoreButton: {

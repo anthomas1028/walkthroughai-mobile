@@ -450,7 +450,7 @@ export default function AccountScreen() {
                 pressed && styles.buttonPressed,
               ]}
             >
-              <Text style={styles.backButtonText}>‹</Text>
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </Pressable>
 
             <View style={styles.headerText}>
@@ -481,7 +481,7 @@ export default function AccountScreen() {
                 maxLength={120}
                 onChangeText={setWorkspaceName}
                 placeholder="Your name"
-                placeholderTextColor="#64748B"
+                placeholderTextColor="#94A8C0"
                 style={styles.input}
                 value={workspaceName}
               /></View>
@@ -522,7 +522,7 @@ export default function AccountScreen() {
                 keyboardType="email-address"
                 onChangeText={setEmailAddress}
                 placeholder="New email address"
-                placeholderTextColor="#64748B"
+                placeholderTextColor="#94A8C0"
                 style={styles.input}
                 value={emailAddress}
               /></View>
@@ -750,7 +750,7 @@ function PasswordInput({
         autoCorrect={false}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#64748B"
+        placeholderTextColor="#94A8C0"
         secureTextEntry={!isVisible}
         style={styles.passwordInput}
         textContentType={textContentType}
@@ -779,7 +779,7 @@ function PasswordInput({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
 
   keyboardView: {
@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
 
   backButton: {
     width: 46,
-    height: 46,
+    minHeight: 48,
     borderRadius: 14,
     backgroundColor: "#17243A",
     borderWidth: 1,
@@ -818,11 +818,11 @@ const styles = StyleSheet.create({
     marginTop: -3,
   },
 
-  headerText: {
+  headerText: {minWidth: 0,
     flex: 1,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 24,
     fontWeight: "800",
@@ -841,10 +841,10 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 16,
     marginBottom: 14,
   },
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
 
   cardLabel: {
     color: "#60A5FA",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
 
   dangerLabel: {
     color: "#F87171",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -898,26 +898,26 @@ const styles = StyleSheet.create({
     marginBottom: 13,
   },
 
-  input: {
+  input: { minWidth: 0,
     minHeight: 49,
     borderRadius: 13,
     backgroundColor: "#0C1524",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     color: "#FFFFFF",
     fontSize: 15,
     paddingHorizontal: 14,
     marginBottom: 11,
   },
 
-  dangerInput: {
+  dangerInput: {minHeight: 44,
     borderColor: "#7F1D1D",
   },
 
   passwordInputRow: {
     alignItems: "center",
     backgroundColor: "#0C1524",
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     borderRadius: 13,
     borderWidth: 1,
     flexDirection: "row",
@@ -944,7 +944,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 50,
     borderRadius: 14,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -974,7 +974,7 @@ const styles = StyleSheet.create({
   feedbackButton: {
     minHeight: 50,
     borderRadius: 14,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

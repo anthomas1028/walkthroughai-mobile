@@ -47,7 +47,9 @@ export default function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    height: 58,
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: RADIUS.lg,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
@@ -66,6 +68,8 @@ const styles = StyleSheet.create({
   text: {
     color: COLORS.white,
     fontWeight: '700',
-    fontSize: 17,
+    fontSize: 16,
+    flexShrink: 1,
+    textAlign: "center",
   },
 });

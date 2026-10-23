@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -667,7 +668,7 @@ export default function HistoryScreen() {
               pressed && styles.buttonPressed,
             ]}
           >
-            <Text style={styles.backButtonText}>‹</Text>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
 
           <View style={styles.headerText}>
@@ -835,7 +836,7 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
 
   container: {
@@ -852,7 +853,7 @@ const styles = StyleSheet.create({
 
   backButton: {
     width: 46,
-    height: 46,
+    minHeight: 48,
     borderRadius: 14,
     backgroundColor: "#17243A",
     borderWidth: 1,
@@ -870,11 +871,11 @@ const styles = StyleSheet.create({
     marginTop: -3,
   },
 
-  headerText: {
+  headerText: {minWidth: 0,
     flex: 1,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 24,
     fontWeight: "800",
@@ -904,7 +905,7 @@ const styles = StyleSheet.create({
   },
 
   filterButtonSelected: {
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#2D6BF0",
   },
 
   filterButtonText: {
@@ -924,7 +925,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     backgroundColor: "#101A2A",
     paddingHorizontal: 12,
     marginBottom: 12,
@@ -943,7 +944,7 @@ const styles = StyleSheet.create({
 
   bulkActionCount: {
     color: "#AAB7CA",
-    fontSize: 10,
+    fontSize: 12,
     marginTop: 2,
   },
 
@@ -959,14 +960,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
 
-  bulkDeleteButton: {
+  bulkDeleteButton: {minHeight: 44,
     borderColor: "#7F1D1D",
     backgroundColor: "#3A1720",
   },
 
   bulkActionButtonText: {
     color: "#FDE68A",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
   },
 
@@ -979,10 +980,10 @@ const styles = StyleSheet.create({
   },
 
   historyCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 16,
     marginBottom: 12,
   },
@@ -1026,7 +1027,7 @@ const styles = StyleSheet.create({
 
   statusBadgeText: {
     color: "#86EFAC",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
   },
 
@@ -1053,7 +1054,7 @@ const styles = StyleSheet.create({
 
   statLabel: {
     color: "#AAB7CA",
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 3,
   },
 
@@ -1083,7 +1084,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#26364F",
+    borderTopColor: "#2B3E56",
   },
 
   leftActions: {
@@ -1103,7 +1104,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
 
-  restoreButton: {
+  restoreButton: {minHeight: 44,
     backgroundColor: "#173A2B",
     borderColor: "#2E7D57",
   },

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
 import * as ImagePicker from "expo-image-picker";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -541,7 +542,7 @@ export default function CustomerEditScreen() {
                 pressed && styles.buttonPressed,
               ]}
             >
-              <Text style={styles.backButtonText}>‹</Text>
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </Pressable>
 
             <View style={styles.headerText}>
@@ -643,7 +644,7 @@ export default function CustomerEditScreen() {
                     autoCapitalize="words"
                     onChangeText={setCompanyName}
                     placeholder="Company name *"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={styles.input}
                     value={companyName}
                   /></View>
@@ -652,7 +653,7 @@ export default function CustomerEditScreen() {
                     autoCapitalize="words"
                     onChangeText={setContactName}
                     placeholder="Contact name"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={styles.input}
                     value={contactName}
                   /></View>
@@ -667,7 +668,7 @@ export default function CustomerEditScreen() {
                     keyboardType="email-address"
                     onChangeText={setEmail}
                     placeholder="Email address"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={styles.input}
                     value={email}
                   /></View>
@@ -676,7 +677,7 @@ export default function CustomerEditScreen() {
                     keyboardType="phone-pad"
                     onChangeText={setPhone}
                     placeholder="Phone number"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={styles.input}
                     value={phone}
                   /></View>
@@ -689,7 +690,7 @@ export default function CustomerEditScreen() {
                     autoCapitalize="words"
                     onChangeText={setAddressLine1}
                     placeholder="Address line 1"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={styles.input}
                     value={addressLine1}
                   /></View>
@@ -698,7 +699,7 @@ export default function CustomerEditScreen() {
                     autoCapitalize="words"
                     onChangeText={setAddressLine2}
                     placeholder="Address line 2"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={styles.input}
                     value={addressLine2}
                   /></View>
@@ -708,7 +709,7 @@ export default function CustomerEditScreen() {
                       autoCapitalize="words"
                       onChangeText={setCity}
                       placeholder="City"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor="#94A8C0"
                       style={[
                         styles.input,
                         styles.cityInput,
@@ -721,7 +722,7 @@ export default function CustomerEditScreen() {
                       maxLength={2}
                       onChangeText={setState}
                       placeholder="State"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor="#94A8C0"
                       style={[
                         styles.input,
                         styles.stateInput,
@@ -734,7 +735,7 @@ export default function CustomerEditScreen() {
                       maxLength={10}
                       onChangeText={setPostalCode}
                       placeholder="ZIP"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor="#94A8C0"
                       style={[
                         styles.input,
                         styles.postalCodeInput,
@@ -751,7 +752,7 @@ export default function CustomerEditScreen() {
                     multiline
                     onChangeText={setNotes}
                     placeholder="Customer notes"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#94A8C0"
                     style={[
                       styles.input,
                       styles.notesInput,
@@ -805,7 +806,7 @@ export default function CustomerEditScreen() {
                             autoCorrect={false}
                             onChangeText={setDeleteConfirmation}
                             placeholder="Type company name"
-                            placeholderTextColor="#64748B"
+                            placeholderTextColor="#94A8C0"
                             style={styles.deleteInput}
                             value={deleteConfirmation}
                           /></View>
@@ -917,7 +918,7 @@ export default function CustomerEditScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
   },
 
   keyboardView: {
@@ -939,7 +940,7 @@ const styles = StyleSheet.create({
 
   backButton: {
     width: 46,
-    height: 46,
+    minHeight: 48,
     borderRadius: 14,
     backgroundColor: "#17243A",
     borderWidth: 1,
@@ -957,11 +958,11 @@ const styles = StyleSheet.create({
     marginTop: -3,
   },
 
-  headerText: {
+  headerText: {minWidth: 0,
     flex: 1,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 24,
     fontWeight: "800",
@@ -980,18 +981,18 @@ const styles = StyleSheet.create({
   },
 
   formCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 16,
   },
 
   managementCard: {
-    backgroundColor: "#121C2D",
+    backgroundColor: "#122033",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     padding: 16,
     marginTop: 14,
   },
@@ -1156,7 +1157,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     backgroundColor: "#0C1524",
     padding: 12,
     marginBottom: 14,
@@ -1249,12 +1250,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  input: {
+  input: { minWidth: 0,
     minHeight: 49,
     borderRadius: 13,
     backgroundColor: "#0C1524",
     borderWidth: 1,
-    borderColor: "#26364F",
+    borderColor: "#2B3E56",
     color: "#FFFFFF",
     fontSize: 15,
     paddingHorizontal: 14,
@@ -1265,18 +1266,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
 
-  cityInput: {
+  cityInput: { minWidth: 0,minHeight: 44,
     flex: 1,
     marginRight: 8,
   },
 
-  stateInput: {
+  stateInput: {minHeight: 44,
     width: 70,
     marginRight: 8,
     textAlign: "center",
   },
 
-  postalCodeInput: {
+  postalCodeInput: {minHeight: 44,
     width: 90,
   },
 
@@ -1288,7 +1289,7 @@ const styles = StyleSheet.create({
   saveButton: {
     minHeight: 56,
     borderRadius: 17,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2D6BF0",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 12,

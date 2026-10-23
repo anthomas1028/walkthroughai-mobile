@@ -18,6 +18,7 @@ export function AlertHost() {
   useEffect(() => { const fn = () => update(x => x + 1); listeners.add(fn); fn(); return () => { listeners.delete(fn); }; }, []);
   const notice = queue[0];
   function choose(button: Button) { queue.shift(); emit(); button.onPress?.(); }
+  if (Platform.OS !== "web" || !notice) return null;
   return <Modal transparent visible={Boolean(notice)} animationType="fade" onRequestClose={() => { const cancel = notice?.buttons.find(b => b.style === "cancel"); if (cancel) choose(cancel); }}>
     <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,.7)", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <View accessibilityViewIsModal accessibilityRole="alert" style={{ width: "100%", maxWidth: 460, backgroundColor: "#142238", borderWidth: 1, borderColor: "#395373", borderRadius: 20, padding: 24 }}>

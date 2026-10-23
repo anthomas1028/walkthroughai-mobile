@@ -2400,7 +2400,7 @@ export default function UploadScreen() {
                       <Pressable accessibilityRole="button" onPress={() => setShowPhotoDetails(value => !value)}><Text style={{ color: "#60A5FA", paddingVertical: 8 }}>{showPhotoDetails ? "Collapse photo details" : "View every photo"}</Text></Pressable>
                       <Pressable accessibilityRole="button" disabled={isProcessing} onPress={() => void retryFailedPhotos()}><Text style={{ color: "#60A5FA", paddingVertical: 12 }}>Retry failed photos only</Text></Pressable>
                     </View>
-                    <Text selectable style={{ color: "#94A3B8", fontSize: 11, marginBottom: 12 }}>App {Constants.expoConfig?.version || "unknown"} · Release {backendDiagnostics.release || "unavailable"} · Backend {backendDiagnostics.backend_commit?.slice(0, 7) || "unknown"} · Reader {backendDiagnostics.reader || "unknown"}</Text>
+                    <Text selectable style={{ color: "#94A3B8", fontSize: 12, marginBottom: 12 }}>App {Constants.expoConfig?.version || "unknown"} · Release {backendDiagnostics.release || "unavailable"} · Backend {backendDiagnostics.backend_commit?.slice(0, 7) || "unknown"} · Reader {backendDiagnostics.reader || "unknown"}</Text>
                     <View style={styles.aiDisclaimerCard}>
                       <Text style={styles.aiDisclaimerIcon}>i</Text>
 
@@ -4031,7 +4031,7 @@ export default function UploadScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#071421",
+    backgroundColor: "#091321",
   },
 
   keyboardAvoidingView: {
@@ -4040,7 +4040,7 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: "#071421",
+    backgroundColor: "#091321",
   },
 
   header: {
@@ -4110,9 +4110,9 @@ const styles = StyleSheet.create({
     top: 31,
   },
 
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: "800",
     textAlign: "center",
     marginTop: 18,
@@ -4305,7 +4305,7 @@ const styles = StyleSheet.create({
 
   processingProgressLabel: {
     color: "#7188A4",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
   },
 
@@ -4805,7 +4805,7 @@ const styles = StyleSheet.create({
 
   editedBadgeText: {
     color: "#72BAFF",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "900",
   },
 
@@ -4824,7 +4824,7 @@ const styles = StyleSheet.create({
   },
 
   reviewBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
   },
 
@@ -4978,11 +4978,11 @@ const styles = StyleSheet.create({
 
   confirmButtonText: {
     color: "#70DEAD",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
   },
 
-  unconfirmButton: {
+  unconfirmButton: {minHeight: 44,
     borderColor: "#6B4B32",
     backgroundColor: "#32261D",
   },
@@ -5009,7 +5009,7 @@ const styles = StyleSheet.create({
 
   compactReviewCount: {
     color: "#94A8C0",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700",
   },
 
@@ -5037,15 +5037,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#1C2D43",
-    backgroundColor: "#071421",
+    borderTopColor: "#26384E",
+    backgroundColor: "#091321",
   },
 
   finalizeCard: {
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#29445F",
-    backgroundColor: "#0F1D2E",
+    backgroundColor: "#122033",
     padding: 12,
   },
 
@@ -5069,7 +5069,7 @@ const styles = StyleSheet.create({
 
   finalizeSubtitle: {
     color: "#8296AE",
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
   },
 
@@ -5084,7 +5084,7 @@ const styles = StyleSheet.create({
 
   readyBadgeText: {
     color: "#7DE2B3",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "900",
   },
 
@@ -5117,7 +5117,7 @@ const styles = StyleSheet.create({
 
   reportChoiceText: {
     color: "#8296AE",
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: "900",
     marginHorizontal: 9,
   },
@@ -5142,7 +5142,7 @@ const styles = StyleSheet.create({
 
   reportRecipientLabel: {
     color: "#6F86A2",
-    fontSize: 8,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.6,
   },
@@ -5362,7 +5362,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#31547D",
-    backgroundColor: "#14243A",
+    backgroundColor: "#17283D",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
@@ -5400,7 +5400,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#1C2D43",
+    borderBottomColor: "#26384E",
     paddingHorizontal: 14,
   },
 
@@ -5433,7 +5433,7 @@ const styles = StyleSheet.create({
 
   photoViewerHint: {
     color: "#71849D",
-    fontSize: 10,
+    fontSize: 12,
     marginTop: 2,
   },
 
@@ -5458,7 +5458,7 @@ const styles = StyleSheet.create({
 
   modalSafeArea: {
     flex: 1,
-    backgroundColor: "#071421",
+    backgroundColor: "#091321",
   },
 
   modalScreen: {

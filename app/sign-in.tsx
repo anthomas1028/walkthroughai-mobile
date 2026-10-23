@@ -132,7 +132,7 @@ export default function SignInScreen() {
                 autoCapitalize="words"
                 onChangeText={setWorkspaceName}
                 placeholder="Company or workspace name"
-                placeholderTextColor="#64748B"
+                placeholderTextColor="#94A8C0"
                 style={styles.input}
                 value={workspaceName}
               /></View>
@@ -144,7 +144,7 @@ export default function SignInScreen() {
               keyboardType="email-address"
               onChangeText={setEmail}
               placeholder="Email address"
-              placeholderTextColor="#64748B"
+              placeholderTextColor="#94A8C0"
               style={styles.input}
               value={email}
             /></View>
@@ -156,7 +156,7 @@ export default function SignInScreen() {
                 onChangeText={setPassword}
                 onSubmitEditing={submit}
                 placeholder="Password"
-                placeholderTextColor="#64748B"
+                placeholderTextColor="#94A8C0"
                 secureTextEntry={!isPasswordVisible}
                 style={styles.passwordInput}
                 value={password}
@@ -242,9 +242,9 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 14,
   },
-  title: {
+  title: {flexShrink: 1,
     color: "#FFFFFF",
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: "900",
     textAlign: "center",
   },
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
-  input: {
+  input: { minWidth: 0,
     backgroundColor: "#0B1628",
     borderColor: "#334E70",
     borderRadius: 14,
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   primaryButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
-  secondaryButton: { alignItems: "center", paddingHorizontal: 8, paddingVertical: 8 },
+  secondaryButton: {minHeight: 44,  alignItems: "center", paddingHorizontal: 8, paddingVertical: 8 },
   secondaryButtonText: { color: "#83B9FF", fontSize: 15, fontWeight: "700", textAlign: "center" },
   differenceSection: {
     marginTop: 16,

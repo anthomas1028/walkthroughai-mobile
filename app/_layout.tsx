@@ -40,13 +40,13 @@ function AuthenticatedStack() {
   }
 
   return (
-    <View style={{ flex: 1 }}><RecoveryBanner />
+    <View style={{ flex: 1, backgroundColor: "#091321" }}><RecoveryBanner />
     {workspaceError ? <View style={{ backgroundColor: "#442331", padding: 16 }}><Text style={{ color: "white" }}>Workspace unavailable: {workspaceError}</Text><Pressable accessibilityRole="button" onPress={() => refreshWorkspace().catch(() => {})} style={{ paddingVertical: 12 }}><Text style={{ color: "#bfdbfe", fontWeight: "700" }}>Retry connection</Text></Pressable></View> : null}
     <Stack
       screenOptions={{
         headerShown: false,
         contentStyle: {
-          backgroundColor: "#0B1220",
+          backgroundColor: "#091321",
         },
       }}
     /></View>
@@ -69,7 +69,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   loadingScreen: {
     alignItems: "center",
-    backgroundColor: "#0B1220",
+    backgroundColor: "#091321",
     flex: 1,
     justifyContent: "center",
   },
