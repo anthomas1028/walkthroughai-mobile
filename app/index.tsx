@@ -1377,11 +1377,12 @@ const styles = StyleSheet.create({
 
   customerCard: {
     backgroundColor: "#122033",
-    borderRadius: 17,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#2B3E56",
-    padding: 16,
-    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
   },
 
   customerCardSelected: {
@@ -1399,17 +1400,17 @@ const styles = StyleSheet.create({
   },
 
   customerLogoWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    marginRight: 13,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginRight: 12,
     position: "relative",
   },
 
   customerLogoImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 14,
+    borderRadius: 10,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#334155",
@@ -1418,7 +1419,7 @@ const styles = StyleSheet.create({
   customerLogoPlaceholder: {
     width: "100%",
     height: "100%",
-    borderRadius: 14,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#17243A",
@@ -1428,7 +1429,7 @@ const styles = StyleSheet.create({
 
   customerLogoPlaceholderText: {
     color: "#BFDBFE",
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "900",
   },
 
@@ -1465,9 +1466,10 @@ const styles = StyleSheet.create({
 
   customerCompany: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 3,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "700",
+    marginBottom: 0,
   },
 
   customerDetail: {
