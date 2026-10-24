@@ -1,3 +1,6 @@
+import { saveCaptureDraft } from "../lib/capture-drafts";
+import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
+import { useConnection } from "../hooks/use-connection";
 import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus } from "../lib/native-upload";
@@ -71,6 +74,7 @@ type SelectedPhoto = {
 };
 
 type RecognitionResult = {
+  barcode_evidence?: BarcodeEvidence | null;
   photo: string;
   location: string;
   vendor: string;
@@ -622,6 +626,10 @@ export default function UploadScreen() {
     useState(false);
 
   const [nativeUploadQueued, setNativeUploadQueued] = useState(false);
+  const connection = useConnection();
+  const [waitingForConnection, setWaitingForConnection] = useState(false);
+  const [receivedPhotos, setReceivedPhotos] = useState(0);
+  const [deviceSavedPhotos, setDeviceSavedPhotos] = useState(0);
   const [completionAlertToken, setCompletionAlertToken] = useState("");
   const notificationOptOut = useRef(false);
   const [notificationIssue, setNotificationIssue] = useState("");
@@ -773,7 +781,7 @@ export default function UploadScreen() {
 
   useEffect(() => {
     let active = true;
-    loadRecovery().then(async saved => {
+    loadRecovery(session?.user.id).then(async saved => {
       if (!active) return;
       if (saved && params.resume === "1" && saved.customerId === customerId) {
         if (Platform.OS === "web") {
@@ -783,6 +791,9 @@ export default function UploadScreen() {
         }
         setPhotos(saved.photos);
         recoveryRef.current = saved;
+        setWaitingForConnection(saved.uploadRequested === true && !saved.results.length);
+        setDeviceSavedPhotos(saved.photos.length);
+        setReceivedPhotos(saved.jobId ? saved.photos.length : saved.uploaded.length);
         pendingUpload.current = { key: JSON.stringify([saved.customerName, saved.customerId, saved.photos]), prepared: saved.prepared, uploadId: saved.uploadId, uploaded: new Set(saved.uploaded) };
         setCurrentJobId(saved.jobId);
         setCompletionAlertToken(saved.completionAlertToken || "");
@@ -802,7 +813,7 @@ export default function UploadScreen() {
     if (!recoveryReady || !recoveryRef.current || isProcessing || isFinalizing) return;
     const draft = { ...recoveryRef.current, results, removedPhotos, editingIndex, editDraft };
     recoveryRef.current = draft;
-    void saveRecovery(draft).catch(error => setErrorMessage(`Review progress could not be saved: ${String(error)}`));
+    void saveRecovery(draft, session?.user.id).catch(error => setErrorMessage(`Review progress could not be saved: ${String(error)}`));
   }, [results, removedPhotos, editingIndex, editDraft, recoveryReady, isProcessing, isFinalizing]);
 
   async function checkpoint(overrides: Partial<RecoveryDraft> = {}) {
@@ -812,7 +823,9 @@ export default function UploadScreen() {
       uploaded: Array.from(pending?.uploaded || []), jobId: recoveryRef.current?.jobId || currentJobId,
       results: recoveryRef.current?.results || results, updatedAt: new Date().toISOString(), ...overrides };
     recoveryRef.current = draft;
-    await saveRecovery(draft);
+    await saveRecovery(draft, session?.user.id);
+    setDeviceSavedPhotos(draft.photos.length);
+    setReceivedPhotos(draft.jobId ? draft.photos.length : draft.uploaded.length);
   }
 
   const photoCount = photos.length;
@@ -894,6 +907,12 @@ export default function UploadScreen() {
     void analyzePhotos();
   }, [resumeJobId, session?.user.id, recoveryReady]);
 
+  useEffect(() => {
+    if (waitingForConnection && connection.connection === 'online' && recoveryReady && !isProcessing && !results.length && session) {
+      void analyzePhotos();
+    }
+  }, [waitingForConnection, connection.connection, recoveryReady, isProcessing, results.length, session?.user.id]);
+
   function returnToPhotos() {
     if (
       isProcessing ||
@@ -915,13 +934,13 @@ export default function UploadScreen() {
     analysisBusy.current = true;
     if (!recoveryRef.current && !resumeJobId && params.resume !== "1") {
       try {
-        const saved = await loadRecovery();
+        const saved = await loadRecovery(session?.user.id);
         if (saved) {
           analysisBusy.current = false;
           Alert.alert("Unfinished walkthrough", "Resume your saved walkthrough, or replace its local recovery draft. Saved reports in History are kept.", [
             { text: "Cancel", style: "cancel" },
             { text: "Resume saved", onPress: () => router.replace({ pathname: "/upload", params: { resume: "1", customerId: saved.customerId, customerName: saved.customerName, contactName: saved.contactName, photos: JSON.stringify(saved.photos) } }) },
-            { text: "Replace draft", style: "destructive", onPress: () => { void clearRecovery().then(() => analyzePhotos()); } },
+            { text: "Replace draft", style: "destructive", onPress: () => { void clearRecovery(session?.user.id).then(() => analyzePhotos()); } },
           ]);
           return;
         }
@@ -989,7 +1008,9 @@ export default function UploadScreen() {
           const remote = await serverBatchStatus(id);
           if (remote?.result?.job_id) return { response: { ok: true } as Response, data: remote.result };
           if (local.error) throw new Error(local.error);
-          const count = remote?.uploaded_slots?.length ?? local.uploaded?.filter(v => v !== 'metadata').length ?? 0;
+          const count = remote?.uploaded_slots?.length ?? 0;
+          // Only server acknowledgements count as received, never queued tasks.
+          setReceivedPhotos(count);
           setJobStatusMessage(`${count} of ${preparedPhotos.length} photos received. You can switch apps or lock your phone.`);
         }
         await new Promise(resolve => setTimeout(resolve, 2500));
@@ -1146,6 +1167,16 @@ export default function UploadScreen() {
       setEmailSent(false);
       setEmailedRecipient("");
 
+      if (!(await connection.refresh())) {
+        const originals = recoveryRef.current?.photos || await retainPhotos(photos, `source-${Date.now()}`);
+        await checkpoint({ photos: originals, uploadRequested: true });
+        setWaitingForConnection(true);
+        setJobStatusMessage('Saved on this device. Waiting for a connection to upload.');
+        return;
+      }
+      setWaitingForConnection(false);
+      await checkpoint({ uploadRequested: false });
+
       if (completionAlertsSupported && !notificationOptOut.current && !notificationToken && !recoveryRef.current?.nativeBatchId && !recoveryRef.current?.jobId && !resumeJobId) {
         try {
           notificationToken = await requestCompletionToken();
@@ -1159,10 +1190,10 @@ export default function UploadScreen() {
       if (!(recoveryRef.current?.jobId || resumeJobId) && (!pendingUpload.current || pendingUpload.current.key !== uploadKey || !pendingUpload.current.prepared.length)) {
         const priorUpload = recoveryRef.current?.uploadId || "";
         const originals = await retainPhotos(photos, `source-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
-        await saveRecovery(recoveryRef.current);
+        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
+        await saveRecovery(recoveryRef.current, session?.user.id);
         preparedPhotos = nativeUploadSupported ? originals : await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
+        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, uploadRequested: false, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
         pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: priorUpload, uploaded: new Set() };
       } else {
         preparedPhotos = pendingUpload.current?.prepared || [];
@@ -1263,8 +1294,18 @@ export default function UploadScreen() {
         ? error.message
         : "Walkthrough AI could not analyze the photos.";
 
-      setErrorMessage(message);
-      Alert.alert("Analysis failed", message);
+      const transportFailure = error instanceof TypeError || isAbortError || /connection|network|timed out/i.test(message);
+      if (transportFailure && recoveryRef.current && !(await connection.refresh())) {
+        try { await checkpoint({ uploadRequested: true }); }
+        catch { setErrorMessage('Device storage could not save this queue. Keep the app open and retry.'); return; }
+        setWaitingForConnection(true);
+        setErrorMessage('Connection unavailable. Your photos and received uploads are saved. Upload resumes here when connected.');
+      } else {
+        setWaitingForConnection(false);
+        try { await checkpoint({ uploadRequested: false }); } catch { /* Keep the original error visible; local recovery remains available. */ }
+        setErrorMessage(message);
+        Alert.alert("Analysis needs attention", message);
+      }
     } finally {
       setIsProcessing(false);
       analysisBusy.current = false;
@@ -1694,11 +1735,12 @@ export default function UploadScreen() {
 
       setResults(finalizedResults);
       recoveryRef.current = null;
-      await clearRecovery();
+      await clearRecovery(session?.user.id);
 
       setCorrectedWorkbookUrl(data.download_url ?? null);
       await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
       await writeDraft(photoDraftKey, null).catch(() => {});
+      if (session) await saveCaptureDraft(session.user.id, { customerId, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 }).catch(() => {});
 
       if (sendEmail && data.email_sent) {
         setEmailSent(true);
@@ -1861,9 +1903,10 @@ export default function UploadScreen() {
       }
 
       recoveryRef.current = null;
-      await clearRecovery();
+      await clearRecovery(session?.user.id);
       await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
       await writeDraft(photoDraftKey, null).catch(() => {});
+      if (session) await saveCaptureDraft(session.user.id, { customerId, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 }).catch(() => {});
       setResults([]);
       setCorrectedWorkbookUrl(null);
       setEmailSent(false);
@@ -2056,6 +2099,13 @@ export default function UploadScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {!hasResults && <View style={{ backgroundColor: '#14243A', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+            <Text accessibilityLiveRegion="polite" style={{ color: '#CBD5E1', fontSize: 13 }}>
+              {deviceSavedPhotos || (params.savedDraft === 'true' ? photoCount : 0)} saved on device · {receivedPhotos} received by server
+            </Text>
+            <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>{waitingForConnection ? 'Waiting for connection. Upload resumes while this screen is open; reopen Resume walkthrough after closing the app.' : connection.connection === 'offline' ? 'Connection unavailable. You can save and queue these photos.' : 'Photos stay on this device until you finish or discard this walkthrough.'}</Text>
+            {waitingForConnection && <Pressable accessibilityRole="button" onPress={() => { setWaitingForConnection(false); void checkpoint({ uploadRequested: false }); }} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: '#BFDBFE' }}>Pause queued upload</Text></Pressable>}
+          </View>}
           {!hasResults && !isProcessing && (
             <>
               <View style={styles.uploadCard}>
@@ -3342,7 +3392,7 @@ export default function UploadScreen() {
                 >
                   {photoCount === 0
                     ? "Return and Add Photos"
-                    : `Analyze ${photoCount} ${
+                    : waitingForConnection ? "Waiting for connection…" : connection.connection === "offline" ? "Save and upload when connected" : `Analyze ${photoCount} ${
                         photoCount === 1
                           ? "Photo"
                           : "Photos"
@@ -3862,6 +3912,7 @@ export default function UploadScreen() {
                     }
                   />
 
+                  <BarcodeSummary evidence={editDraft.barcode_evidence} />
                   <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
                   {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
                     return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
@@ -3871,6 +3922,13 @@ export default function UploadScreen() {
                     blocked={reviewTask === "sourcing"}
                     onBusy={value => { retakeBusy.current = value; setReviewTask(value ? "retake" : null); }}
                     onAttempt={value => persistReviewPatch({ retake_attempt: value })}
+                    onAttach={async index => {
+                      const current = editDraftLatest.current;
+                      if (!current?.retake_attempt?.jobId) return;
+                      const reference = { job_id: current.retake_attempt.jobId, candidate_index: index };
+                      const references = (current.retake_references || []).filter(ref => ref.job_id !== reference.job_id);
+                      await persistReviewPatch({ retake_references: [...references, reference], is_confirmed: false, review_needed: true });
+                    }}
                     onApply={(candidate, index) => setEditDraft(current => {
                       if (!current?.retake_attempt?.jobId) return current;
                       const reference = { job_id: current.retake_attempt.jobId, candidate_index: index };

@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 export function draftKey(userId: string, customerId: string) { return `walkthrough:${userId}:${customerId}`; }
 const revisions = new Map<string, number>();
+const saves = new Map<string, Promise<any>>();
 async function db(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => { const req = indexedDB.open("walkthrough-drafts", 1); req.onupgradeneeded = () => req.result.createObjectStore("drafts"); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
 }
@@ -22,6 +23,8 @@ export async function writeDraft(key: string, value: any) {
 export async function storeGroups(key: string, groups: any[]) {
   const revision = (revisions.get(key) || 0) + 1;
   revisions.set(key, revision);
+  const operation = (saves.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
+  if (revisions.get(key) !== revision) return null;
   if (Platform.OS !== "web") {
     const fs = await import("expo-file-system/legacy");
     const directory = `${fs.documentDirectory}walkthrough-drafts/${encodeURIComponent(key)}/`;
@@ -32,11 +35,15 @@ export async function storeGroups(key: string, groups: any[]) {
       if (!(await fs.getInfoAsync(uri)).exists) await fs.copyAsync({ from: photo.uri, to: uri });
       return { ...photo, uri };
     })) })));
-    if (revisions.get(key) === revision) await writeDraft(key, saved);
-    return;
+    if (revisions.get(key) === revision) { await writeDraft(key, saved); return saved; }
+    return null;
   }
   const saved = await Promise.all(groups.map(async group => ({ ...group, photos: await Promise.all(group.photos.map(async (photo: any) => ({ ...photo, blob: await (await fetch(photo.uri)).blob() }))) })));
-  if (revisions.get(key) === revision) await writeDraft(key, saved);
+  if (revisions.get(key) === revision) { await writeDraft(key, saved); return saved; }
+  return null;
+  });
+  saves.set(key, operation);
+  return operation;
 }
 export async function restoreGroups(key: string): Promise<any[] | null> {
   const saved = await readDraft(key);

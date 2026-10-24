@@ -7,9 +7,10 @@ import { retainPhotos } from '../lib/recovery';
 import { RetakeAttempt, RetakeCandidate, retakeChanges } from '../lib/label-retake';
 
 const button = { minHeight: 46, padding: 12, backgroundColor: '#23476A', borderRadius: 10, marginTop: 8 };
-export function LabelRetakePanel({ original, attempt, customer, customerId, location, onAttempt, onApply, onBusy, blocked = false }: {
+export function LabelRetakePanel({ original, attempt, customer, customerId, location, onAttempt, onApply, onAttach, onBusy, blocked = false }: {
   blocked?: boolean; original: RetakeCandidate; attempt?: RetakeAttempt; customer: string; customerId?: string; location: string;
   onAttempt: (value: RetakeAttempt) => Promise<void>; onApply: (candidate: RetakeCandidate, index: number) => void; onBusy: (busy: boolean) => void;
+  onAttach: (index: number) => Promise<void>;
 }) {
   const [allowed, setAllowed] = useState(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
@@ -113,14 +114,15 @@ export function LabelRetakePanel({ original, attempt, customer, customerId, loca
     finally { picking.current = false; if (active.current) { setBusy(false); onBusy(false); } }
   }
   return <View style={{ borderWidth: 1, borderColor: '#315474', borderRadius: 12, padding: 14, marginVertical: 12 }}>
-    <Text style={{ color: '#E2E8F0', fontSize: 18, fontWeight: '700' }}>Read this label again · Test</Text>
-    <Text style={{ color: '#CBD5E1', marginTop: 6 }}>Photograph only this label. Keep every edge visible, hold steady, and change angle if light covers the text.</Text>
+    <Text style={{ color: '#E2E8F0', fontSize: 16, fontWeight: '700' }}>Add a label close-up</Text>
+    <Text style={{ color: '#CBD5E1', marginTop: 6 }}>Keep the original photo for context. Attach a readable close-up to this same item; no extra inventory item is created.</Text>
     {attempt?.uri && <Image source={{ uri: attempt.uri }} resizeMode="contain" style={{ width: '100%', height: 180, marginTop: 10 }} />}
     {attempt?.qualityWarnings?.map((warning, index) => <Text key={index} style={{ color: '#FBBF24', marginTop: 6 }}>{warning}</Text>)}
     {busy ? <View><ActivityIndicator /><Text accessibilityLiveRegion="polite" style={{ color: '#CBD5E1' }}>{message}</Text></View> : <>
       <Pressable disabled={!allowed || blocked} accessibilityRole="button" style={[button, (!allowed || blocked) && { opacity: .45 }]} onPress={() => void pick(true)}><Text style={{ color: 'white' }}>Take label close-up</Text></Pressable>
       <Pressable disabled={!allowed || blocked} accessibilityRole="button" style={[button, (!allowed || blocked) && { opacity: .45 }]} onPress={() => void pick(false)}><Text style={{ color: 'white' }}>Choose close-up from Photos</Text></Pressable>
       {attempt && !attempt.candidates && <Pressable disabled={!allowed || blocked} accessibilityRole="button" style={[button, (!allowed || blocked) && { opacity: .45 }]} onPress={() => void process(attempt)}><Text style={{ color: 'white' }}>{attempt.jobId || attempt.uploadId ? 'Resume this close-up' : 'Read this close-up'}</Text></Pressable>}
+      {attempt?.jobId && !!attempt.candidates?.length && <Pressable disabled={!allowed || blocked} accessibilityRole="button" style={button} onPress={() => { void onAttach(0).then(() => setMessage('Close-up linked to this item. Save the item, then finish the walkthrough to retain both photos.')).catch(() => setMessage('The attachment could not be saved on this device. Keep this screen open and retry.')); }}><Text style={{ color: 'white', fontWeight: '700' }}>Attach photo only · keep current fields</Text></Pressable>}
       <Text accessibilityLiveRegion="polite" style={{ color: attempt?.error ? '#FCA5A5' : '#CBD5E1', marginTop: 8 }}>{attempt?.error || message}</Text>
       {attempt?.candidates?.map((candidate, index) => {
         const changes = retakeChanges(original, candidate), blanks = changes.filter(change => !change.before);

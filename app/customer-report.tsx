@@ -1,3 +1,5 @@
+import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
+import { sourcePhotos } from "../lib/source-photos";
 import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
@@ -36,6 +38,8 @@ type Customer = {
 };
 
 type ReportRecord = {
+  barcode_evidence?: BarcodeEvidence | null;
+  retake_evidence?: { photo: string; photo_url?: string | null }[];
   id?: number;
   walkthrough_id?: number;
   item_number?: number;
@@ -1477,6 +1481,7 @@ export default function CustomerReportScreen() {
               </Pressable>
 
               <SourcingSummary record={selectedReviewItem.sourcing_recommendation} />
+              <BarcodeSummary evidence={selectedReviewItem.barcode_evidence} />
               <View style={styles.reviewEditCard}>
                 <Text style={styles.reviewEditHeading}>Inventory details</Text>
                 <Text style={styles.reviewEditHelp}>
@@ -1608,7 +1613,7 @@ export default function CustomerReportScreen() {
             <View style={styles.viewerSpacer} />
           </View>
           {photoViewer ? (
-            <PhotoNavigation photos={(report?.records || []).filter(item => item.photo_url).map(item => ({ uri: item.photo_url!, label: `${item.description || item.photo || "Source Photo"}` }))} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
+            <PhotoNavigation photos={sourcePhotos(report?.records || [])} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
 <ScrollView key={photoViewer.uri} ref={photoViewerScrollRef} style={styles.viewerScroll} contentContainerStyle={styles.viewerContent} centerContent minimumZoomScale={1} maximumZoomScale={5} onScroll={(event) => { const zoomScale = event.nativeEvent.zoomScale; if (typeof zoomScale === "number") photoViewerIsZoomed.current = zoomScale > 1.1; }} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
               <Pressable onPress={handlePhotoViewerTap} style={{ width: windowWidth, height: viewerHeight }}><Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} /></Pressable>
             </ScrollView>

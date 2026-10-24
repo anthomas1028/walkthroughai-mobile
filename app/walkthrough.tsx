@@ -1,4 +1,6 @@
+import { saveCaptureDraft } from "../lib/capture-drafts";
 import { UI } from "../constants/design";
+import { useConnection } from "../hooks/use-connection";
 import { useAuth } from "../contexts/AuthContext";
 import { draftKey, restoreGroups, storeGroups, writeDraft } from "../lib/drafts";
 import { Alert } from "../lib/alerts";
@@ -84,6 +86,8 @@ export default function WalkthroughPhotoScreen() {
   const key = draftKey(session?.user.id || "", String(customerId || ""));
   const [draftReady, setDraftReady] = useState(false);
   const [groups, setGroups] = useState<LocationGroup[]>([]);
+  const { connection } = useConnection();
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
   useEffect(() => {
     if (!session) return;
     let alive = true;
@@ -98,8 +102,12 @@ export default function WalkthroughPhotoScreen() {
   }, [key]);
   useEffect(() => {
     if (!draftReady || !session) return;
-    const timer = setTimeout(() => { storeGroups(key, groups).catch(() => Alert.alert("Draft could not be saved", "Device storage is full or unavailable. Keep the app open until you finish.")); }, 700);
-    return () => clearTimeout(timer);
+    let active = true;
+    setSaveStatus('saving');
+    storeGroups(key, groups).then(async saved => { if (active && saved) { await saveCaptureDraft(session.user.id, { customerId: String(customerId || ''), customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: saved.reduce((count: number, group: LocationGroup) => count + group.photos.length, 0) }); if (active) setSaveStatus('saved'); } }).catch(() => {
+      if (active) { setSaveStatus('error'); Alert.alert("Draft could not be saved", "Device storage is full or unavailable. Keep the app open until you finish."); }
+    });
+    return () => { active = false; };
   }, [groups, key, draftReady]);
   useEffect(() => {
     if (Platform.OS !== "web" || !groups.some(group => group.photos.length)) return;
@@ -263,14 +271,15 @@ export default function WalkthroughPhotoScreen() {
     ]);
   }
 
-  function addAssetsToGroup(
+  async function addAssetsToGroup(
     groupId: string,
     assets: ImagePicker.ImagePickerAsset[]
   ) {
     if (assets.some(asset => asset.width > 0 && asset.height > 0 && Math.min(asset.width, asset.height) < 700)) {
       Alert.alert("Check photo detail", "A photo has a short edge below 700 pixels. Zoom in to check that part numbers are readable; remove it and retake closer if needed. This checks resolution, not blur or lighting.");
     }
-    setGroups((currentGroups) => {
+    {
+      const currentGroups = groups;
       const currentCount = currentGroups.reduce(
         (total, group) => total + group.photos.length,
         0
@@ -282,11 +291,11 @@ export default function WalkthroughPhotoScreen() {
           "100-photo limit reached",
           "Remove a photo before adding another one."
         );
-        return currentGroups;
+        return;
       }
 
       const targetGroup = currentGroups.find((group) => group.id === groupId);
-      if (!targetGroup) return currentGroups;
+      if (!targetGroup) return;
 
       const existingUris = new Set(
         currentGroups.flatMap((group) => group.photos.map((photo) => photo.uri))
@@ -314,12 +323,17 @@ export default function WalkthroughPhotoScreen() {
         fileSize: asset.fileSize ?? 0,
       }));
 
-      return currentGroups.map((group) =>
+      const next = currentGroups.map((group) =>
         group.id === groupId
           ? { ...group, photos: [...group.photos, ...newPhotos] }
           : group
       );
-    });
+      // Save original bytes and metadata before reporting a successful capture.
+      setGroups(next);
+      setSaveStatus('saving');
+      try { await storeGroups(key, next); }
+      catch { setSaveStatus('error'); Alert.alert('Photo save needs attention', 'The photo is visible, but could not be saved on this device. Keep the app open and free some storage.'); }
+    }
   }
 
   async function takePhoto(groupId: string) {
@@ -342,7 +356,7 @@ export default function WalkthroughPhotoScreen() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        addAssetsToGroup(groupId, result.assets);
+        await addAssetsToGroup(groupId, result.assets);
       }
     } catch (error) {
       console.error("Camera error:", error);
@@ -376,7 +390,7 @@ export default function WalkthroughPhotoScreen() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        addAssetsToGroup(groupId, result.assets);
+        await addAssetsToGroup(groupId, result.assets);
       }
     } catch (error) {
       console.error("Photo-library error:", error);
@@ -700,9 +714,15 @@ export default function WalkthroughPhotoScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
+          <Text accessibilityLiveRegion="polite" style={{ color: saveStatus === 'error' ? '#FCA5A5' : '#A9C9EF', fontSize: 12, textAlign: 'center', marginBottom: 8 }}>
+            {saveStatus === 'saving' ? 'Saving photos on this device…' : saveStatus === 'error' ? 'Device save failed · keep the app open' : `${photos.length} photos saved on this device · not uploaded`}
+            {connection === 'offline' ? '\nConnection unavailable · keep taking photos. Upload when connected.' : ''}
+            {Platform.OS === 'web' ? '\nBrowser storage can be cleared by your browser.' : ''}
+          </Text>
           <Pressable
             accessibilityRole="button"
             onPress={continueToUpload}
+            disabled={!draftReady || isOpeningPicker || saveStatus === 'saving' || photos.length === 0}
             style={({ pressed }) => [
               styles.continueButton,
               photos.length === 0 && styles.continueButtonDisabled,

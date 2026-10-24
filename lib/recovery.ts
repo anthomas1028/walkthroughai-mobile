@@ -9,32 +9,36 @@ export type RecoveryDraft = {
   photos: RecoveryPhoto[]; prepared: RecoveryPhoto[]; uploadId: string;
   completionAlertToken?: string;
   nativeBatchId?: string;
+  uploadRequested?: boolean;
   removedPhotos?: string[];
   editingIndex?: number | null; editDraft?: unknown;
   uploaded: number[]; jobId: string; results: unknown[]; updatedAt: string;
 };
 let writes = Promise.resolve();
-async function key() {
+async function key(userId?: string) {
+  // Local storage scope only. Server requests still validate the access token.
+  // The app passes its active AuthContext identity so offline saves never refresh a token.
+  if (userId) return `walkthrough-recovery-v1:${userId}`;
   const { data } = await supabase.auth.getSession();
   if (!data.session?.user.id) throw new Error('Sign in to recover your walkthrough.');
   return `walkthrough-recovery-v1:${data.session.user.id}`;
 }
-export async function loadRecovery(): Promise<RecoveryDraft | null> {
+export async function loadRecovery(userId?: string): Promise<RecoveryDraft | null> {
   await writes;
-  const raw = await AsyncStorage.getItem(await key());
+  const raw = await AsyncStorage.getItem(await key(userId));
   if (!raw) return null;
   const draft = JSON.parse(raw);
   return draft.version === 1 ? draft : null;
 }
-export async function saveRecovery(draft: RecoveryDraft) {
-  const storageKey = await key();
+export async function saveRecovery(draft: RecoveryDraft, userId?: string) {
+  const storageKey = await key(userId);
   const value = JSON.stringify({ ...draft, updatedAt: new Date().toISOString() });
   const next = writes.catch(() => {}).then(() => AsyncStorage.setItem(storageKey, value));
   writes = next;
   await next;
 }
-export async function clearRecovery() {
-  const storageKey = await key();
+export async function clearRecovery(userId?: string) {
+  const storageKey = await key(userId);
   const next = writes.catch(() => {}).then(async () => {
     const raw = await AsyncStorage.getItem(storageKey);
     await AsyncStorage.removeItem(storageKey);

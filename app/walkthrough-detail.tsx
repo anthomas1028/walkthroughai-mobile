@@ -1,3 +1,5 @@
+import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
+import { sourcePhotos } from "../lib/source-photos";
 import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
@@ -27,6 +29,8 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { API_BASE_URL, apiFetch } from "../lib/api";
 
 type WalkthroughItem = {
+  barcode_evidence?: BarcodeEvidence | null;
+  retake_evidence?: { photo: string; photo_url?: string | null }[];
   customer_part_number?: string | null;
   fastenal_part_number?: string | null;
   sourcing_recommendation?: SavedSourcing | null;
@@ -831,6 +835,8 @@ export default function WalkthroughDetailScreen() {
                 <Text style={styles.confirmedText}>{selectedItem.is_confirmed ? "✓ Confirmed" : "Not confirmed"}</Text>
               </View>
               <SourcingSummary record={selectedItem.sourcing_recommendation} />
+              <BarcodeSummary evidence={selectedItem.barcode_evidence} />
+              {selectedItem.retake_evidence?.map((evidence, index) => evidence.photo_url ? <Pressable key={evidence.photo} accessibilityRole="button" onPress={() => openSourcePhoto({ ...selectedItem, photo_url: evidence.photo_url, photo: `Label close-up ${index + 1}` })} style={styles.viewPhotoButton}><Text style={styles.viewPhotoButtonText}>View attached label close-up {index + 1}</Text></Pressable> : null)}
               <View style={styles.detailsCard}>
                 <DetailRow label="Location" value={selectedItem.location || "Unassigned"} />
                 <DetailRow label="Vendor" value={selectedItem.vendor} />
@@ -882,7 +888,7 @@ export default function WalkthroughDetailScreen() {
             }}><Text style={styles.viewerCloseText}>Fit</Text></Pressable>
           </View>
           {photoViewer ? (
-            <PhotoNavigation photos={(walkthrough?.items || []).filter(item => item.photo_url).map(item => ({ uri: item.photo_url!, label: `${item.location?.trim() || "Unassigned"} · ${item.photo || "Source Photo"}` }))} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
+            <PhotoNavigation photos={sourcePhotos(walkthrough?.items || [])} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
 <ScrollView
               ref={photoViewerScrollRef}
               key={photoViewer.uri}

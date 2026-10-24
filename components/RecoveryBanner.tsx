@@ -6,15 +6,19 @@ import { serverBatchStatus } from '../lib/native-upload';
 import { API_BASE_URL, apiFetch } from '../lib/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
+import { captureDrafts, type CaptureDraft } from '../lib/capture-drafts';
 
 export function RecoveryBanner() {
   const { session } = useAuth();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<RecoveryDraft | null>(null);
+  const [draftOwner, setDraftOwner] = useState('');
   const [status, setStatus] = useState('Resume walkthrough');
   const [detail, setDetail] = useState('Your review progress is saved.');
   const [jobId, setJobId] = useState('');
+  const [capture, setCapture] = useState<CaptureDraft | null>(null);
+  const [captureOwner, setCaptureOwner] = useState('');
   useEffect(() => {
     let active = true;
     let busy = false;
@@ -22,14 +26,21 @@ export function RecoveryBanner() {
       if (busy || !session || pathname === '/upload' || AppState.currentState !== 'active') return;
       busy = true;
       try {
-        const value = await loadRecovery();
+        const captures = await captureDrafts(session!.user.id);
+        if (active) { setCapture(captures[0] || null); setCaptureOwner(session!.user.id); }
+        const value = await loadRecovery(session!.user.id);
         if (!active) return;
         setDraft(value);
+        setDraftOwner(session!.user.id);
         setJobId(value?.jobId || '');
         if (!value) return;
         let id = value.jobId;
         let title = value.results.length ? 'Review results' : 'Resume walkthrough';
         let message = 'Your review progress is saved.';
+        if (value.uploadRequested && !id) {
+          if (active) { setStatus('Upload queued'); setDetail(`${value.photos.length} photos saved on this device. Tap to resume when connected.`); }
+          return;
+        }
         if (!id && value.nativeBatchId) {
           const batch = await serverBatchStatus(value.nativeBatchId);
           id = batch?.result?.job_id || '';
@@ -52,14 +63,20 @@ export function RecoveryBanner() {
     const sub = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
     return () => { active = false; clearInterval(timer); sub.remove(); };
   }, [pathname, session?.user.id]);
-  if (!draft || pathname === '/upload' || !session) return null;
+  if (!session || pathname === '/upload' || pathname === '/walkthrough') return null;
+  const visibleDraft = draftOwner === session.user.id ? draft : null;
+  if (!visibleDraft && capture && captureOwner === session.user.id) return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/walkthrough', params: { customerId: capture.customerId, customerName: capture.customerName, contactName: capture.contactName } })}>
+    <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Continue saved photos · {capture.customerName}</Text>
+    <Text style={{ color: '#CBD5E1', marginTop: 3 }}>{capture.photoCount} saved on this device · not uploaded. Available offline.</Text>
+  </Pressable></View>;
+  if (!visibleDraft) return null;
   return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}>
     <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/upload', params: {
-      resume: '1', ...(jobId && !draft.results.length ? { resumeJobId: jobId } : {}),
-      customerId: draft.customerId, customerName: draft.customerName,
-      contactName: draft.contactName, photos: JSON.stringify(draft.photos),
+      resume: '1', ...(jobId && !visibleDraft.results.length ? { resumeJobId: jobId } : {}),
+      customerId: visibleDraft.customerId, customerName: visibleDraft.customerName,
+      contactName: visibleDraft.contactName, photos: JSON.stringify(visibleDraft.photos),
     } })}>
-      <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>{status} · {draft.customerName}</Text>
+      <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>{status} · {visibleDraft.customerName}</Text>
       <Text style={{ color: '#CBD5E1', marginTop: 3 }}>{detail}</Text>
     </Pressable>
   </View>;
