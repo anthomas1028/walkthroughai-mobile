@@ -127,6 +127,9 @@ export default function WalkthroughPhotoScreen() {
   const [areaNameDraft, setAreaNameDraft] = useState("");
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
   const [scanningArea, setScanningArea] = useState<string | null>(null);
+  const [scannerEpoch, setScannerEpoch] = useState(0);
+  const [isContinuing, setIsContinuing] = useState(false);
+  const continueLock = useRef(false);
   const [photoViewer, setPhotoViewer] = useState<PhotoViewer | null>(null);
 
   const areaInputRef = useRef<TextInput>(null);
@@ -489,30 +492,53 @@ export default function WalkthroughPhotoScreen() {
   }
 
   async function continueToUpload() {
-    if (!draftReady) return;
-    {
-      try { await storeGroups(key, groups); } catch { Alert.alert("Unable to save draft", "Keep the app open and try again. Device storage may be full."); return; }
-    }
-    if (photos.length === 0 && scanCount === 0) {
-      Alert.alert(
-        "Add a photo or scan",
-        "Add inventory photos or scan a barcode before continuing."
-      );
+    if (!draftReady || continueLock.current) return;
+    if (scanningArea !== null) {
+      Alert.alert("Finish scanning?", "Continue with the photos and scans already saved. If a code is still waiting for Save & next, keep scanning and save it first.", [
+        { text: "Keep scanning", style: "cancel" },
+        { text: "Continue with saved items", onPress: () => void saveAndContinue() },
+      ]);
       return;
     }
+    await saveAndContinue();
+  }
 
-    router.push({
-      pathname: "/upload",
-      params: {
-        photos: "",
-        savedDraft: "true",
-        customerId: typeof customerId === "string" ? customerId : "",
-        customerName: selectedCustomerName,
-        customerEmail:
-          typeof customerEmail === "string" ? customerEmail : "",
-        contactName: typeof contactName === "string" ? contactName : "",
-      },
-    });
+  async function saveAndContinue() {
+    if (continueLock.current) return;
+    continueLock.current = true;
+    setIsContinuing(true);
+    try {
+      const saved = await storeGroups(key, groups);
+      if (!saved) throw new Error("Draft changed while saving");
+      // Unmount the camera before opening review, including on the back stack.
+      setScanningArea(null);
+      setScannerEpoch(value => value + 1);
+      if (photos.length === 0 && scanCount === 0) {
+        Alert.alert(
+          "Add a photo or scan",
+          "Add inventory photos or scan a barcode before continuing."
+        );
+        return;
+      }
+
+      router.push({
+        pathname: "/upload",
+        params: {
+          photos: "",
+          savedDraft: "true",
+          customerId: typeof customerId === "string" ? customerId : "",
+          customerName: selectedCustomerName,
+          customerEmail:
+            typeof customerEmail === "string" ? customerEmail : "",
+          contactName: typeof contactName === "string" ? contactName : "",
+        },
+      });
+    } catch {
+      Alert.alert("Unable to save draft", "Keep the app open and try again. Device storage may be full.");
+    } finally {
+      continueLock.current = false;
+      setIsContinuing(false);
+    }
   }
 
   const locationSummary = `${groups.length} ${
@@ -724,8 +750,8 @@ export default function WalkthroughPhotoScreen() {
                       <Text style={styles.choosePhotosButtonText}>Choose Photos</Text>
                     </Pressable>
                   </View>
-                  <BarcodeScanner continuous allowLabelPhoto existing={group.scans || []} otherScans={groups.filter(other => other.id !== group.id).flatMap(other => other.scans || [])}
-                    blocked={!draftReady || isOpeningPicker || (scanningArea !== null && scanningArea !== group.id)}
+                  <BarcodeScanner key={`${group.id}-${scannerEpoch}`} continuous allowLabelPhoto existing={group.scans || []} otherScans={groups.filter(other => other.id !== group.id).flatMap(other => other.scans || [])}
+                    blocked={!draftReady || isContinuing || isOpeningPicker || (scanningArea !== null && scanningArea !== group.id)}
                     title={`Scan in ${group.name}`} attachLabel="Save scan in this area" contextText="Scan, set quantity, and optionally photograph the same label. Save & next continues scanning. Works offline."
                     onBusy={busy => setScanningArea(busy ? group.id : null)} onAttach={(scan, photo) => captureBarcode(group.id, scan, photo)} />
                   <ScannedBarcodes scans={group.scans} onRemove={scanningArea === null ? scan => setGroups(current => current.map(area => area.id === group.id ? { ...area, scans: (area.scans || []).filter(value => scanKey(value) !== scanKey(scan)) } : area)) : undefined} />
@@ -755,10 +781,10 @@ export default function WalkthroughPhotoScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={continueToUpload}
-            disabled={!draftReady || isOpeningPicker || saveStatus === 'saving' || scanningArea !== null || (photos.length === 0 && scanCount === 0)}
+            disabled={!draftReady || isContinuing || isOpeningPicker || saveStatus === 'saving' || (photos.length === 0 && scanCount === 0)}
             style={({ pressed }) => [
               styles.continueButton,
-              (photos.length === 0 && scanCount === 0) && styles.continueButtonDisabled,
+              (!draftReady || isContinuing || isOpeningPicker || saveStatus === 'saving' || (photos.length === 0 && scanCount === 0)) && styles.continueButtonDisabled,
               pressed && (photos.length > 0 || scanCount > 0) && styles.buttonPressed,
             ]}
           >
@@ -768,7 +794,7 @@ export default function WalkthroughPhotoScreen() {
                 (photos.length === 0 && scanCount === 0) && styles.continueButtonTextDisabled,
               ]}
             >
-              {photos.length === 0 && scanCount === 0 ? "Add Photos or Scan a Barcode" : `Continue · ${photos.length} photos · ${scanCount} scans`}
+              {isContinuing ? "Opening review…" : photos.length === 0 && scanCount === 0 ? "Add Photos or Scan a Barcode" : `Continue · ${photos.length} photos · ${scanCount} scans`}
             </Text>
           </Pressable>
         </View>

@@ -10,7 +10,7 @@ assert.equal(rows[0].photo, 'scan_stable-1'); assert.equal(rows[0].scanned_barco
 assert.equal(rows[0].part_number, ''); assert.equal(rows[0].manufacturer_part_number, ''); assert.equal(rows[0].fastenal_part_number, '');
 assert.equal(capture.captureScanRows([JSON.parse(JSON.stringify(group))])[0].photo, rows[0].photo);
 
-const states = [], refs = []; let si = 0, ri = 0, pushed;
+const states = [], refs = []; let si = 0, ri = 0, pushed, alert;
 const exported = {}, design = {};
 vm.runInNewContext(compile('constants/design.ts'), { exports: design });
 const jsx = (type, props) => typeof type === 'function' ? type(props) : ({ type, props });
@@ -22,7 +22,7 @@ const stubs = {
   '../constants/design': design, '../hooks/use-connection': { useConnection: () => ({ connection: 'offline' }) },
   '../contexts/AuthContext': { useAuth: () => ({ session: { user: { id: 'user-a' } } }) },
   '../lib/drafts': { draftKey: () => 'fixture-key', storeGroups: async (_, groups) => groups, writeDraft: async () => {}, restoreGroups: async () => [] },
-  '../lib/alerts': { Alert: { alert: () => { throw Error('Unexpected alert'); } } },
+  '../lib/alerts': { Alert: { alert: (...args) => { alert = args; } } },
   '@expo/vector-icons': { Ionicons: 'Icon' }, 'expo-image-picker': {},
   'expo-router': { router: { push: value => { pushed = value; } }, useLocalSearchParams: () => ({ customerId: '7', customerName: 'TAT Limco' }) },
   react: { useState: initial => { const i = si++; if (!(i in states)) states[i] = i === 0 ? true : i === 1 ? [{ id: 'area', name: 'Unassigned', photos: [] }] : initial; return [states[i], value => { states[i] = typeof value === 'function' ? value(states[i]) : value; }]; }, useRef: value => refs[ri++] ||= { current: value }, useMemo: fn => fn(), useEffect: () => {} },
@@ -46,5 +46,19 @@ function find(tree, type) { const values = []; const walk = node => { if (!node 
   const continueButton = find(tree, 'Button').find(button => button.props.onPress?.name === 'continueToUpload');
   assert(continueButton); assert.equal(continueButton.props.disabled, false, 'Scan-only capture must be able to continue');
   await continueButton.props.onPress(); assert.equal(pushed.pathname, '/upload'); assert.equal(pushed.params.savedDraft, 'true');
+  // Reproduce the reported state: three saved scans, zero photos, scanner open.
+  states[1] = [{ id: 'area', name: 'Unassigned', photos: [], scans: [
+    { ...scan, id: '1' }, { ...scan, value: 'SECOND', id: '2' }, { ...scan, value: 'THIRD', id: '3' },
+  ] }];
+  tree = render(); find(tree, 'AreaScanner')[0].props.onBusy(true); tree = render();
+  pushed = undefined;
+  const openContinue = find(tree, 'Button').find(button => button.props.onPress?.name === 'continueToUpload');
+  assert.equal(openContinue.props.disabled, false, 'An open idle scanner must not disable Continue');
+  await openContinue.props.onPress();
+  assert.equal(pushed, undefined, 'Ask before leaving an unsaved scan');
+  assert.equal(alert[0], 'Finish scanning?');
+  assert.equal(alert[2][0].text, 'Keep scanning');
+  alert[2][1].onPress(); await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(pushed.pathname, '/upload'); assert.equal(states[1][0].scans.length, 3);
   console.log('PASS: visible area scanner at zero photos, offline scan save, stable scan identity, no invented part numbers and scan-only continuation.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
