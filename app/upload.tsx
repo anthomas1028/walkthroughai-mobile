@@ -1,4 +1,7 @@
 import { saveCaptureDraft } from "../lib/capture-drafts";
+import { BarcodeScanner } from "../components/BarcodeScanner";
+import { ScannedBarcodes } from "../components/ScannedBarcodes";
+import { attachBarcode, removeBarcode, type BarcodeScan } from "../lib/barcode-scans";
 import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
 import { useConnection } from "../hooks/use-connection";
 import { PhotoNavigation } from "../components/PhotoNavigation";
@@ -74,6 +77,7 @@ type SelectedPhoto = {
 };
 
 type RecognitionResult = {
+  scanned_barcodes?: BarcodeScan[];
   barcode_evidence?: BarcodeEvidence | null;
   photo: string;
   location: string;
@@ -3913,13 +3917,26 @@ export default function UploadScreen() {
                   />
 
                   <BarcodeSummary evidence={editDraft.barcode_evidence} />
+                  {!correctedWorkbookUrl && <BarcodeScanner key={`scanner-${editingIndex}`} existing={editDraft.scanned_barcodes || []}
+                    otherScans={results.flatMap((item, index) => index === editingIndex ? [] : [...(item.scanned_barcodes || []), ...(item.barcode_evidence?.codes || []).map(code => ({ value: code.value, type: code.format.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^upca$/, 'upc_a').replace(/^upce$/, 'upc_e'), captured_at: '' }))])}
+                    blocked={reviewTask !== null && reviewTask !== 'barcode'}
+                    onBusy={busy => setReviewTask(busy ? 'barcode' : null)}
+                    onAttach={async scan => {
+                      const current = editDraftLatest.current;
+                      if (!current) throw new Error('Open an inventory item before attaching a barcode.');
+                      await persistReviewPatch(attachBarcode(current, scan));
+                    }} />}
+                  <ScannedBarcodes scans={editDraft.scanned_barcodes} onRemove={!correctedWorkbookUrl && !reviewTask ? scan => {
+                    const current = editDraftLatest.current;
+                    if (current) void persistReviewPatch(removeBarcode(current, scan)).catch(() => Alert.alert('Scan not saved', 'Keep this item open and retry saving the scan change.'));
+                  } : undefined} />
                   <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
                   {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
                     return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
                   {LABEL_RETAKES_ENABLED && !correctedWorkbookUrl && <LabelRetakePanel key={editingIndex}
                     original={editDraft} attempt={editDraft.retake_attempt} customer={completedCustomer || selectedCustomerName}
                     customerId={customerId} location={editDraft.location}
-                    blocked={reviewTask === "sourcing"}
+                    blocked={reviewTask !== null && reviewTask !== "retake"}
                     onBusy={value => { retakeBusy.current = value; setReviewTask(value ? "retake" : null); }}
                     onAttempt={value => persistReviewPatch({ retake_attempt: value })}
                     onAttach={async index => {
@@ -3937,7 +3954,7 @@ export default function UploadScreen() {
                     })} />}
                   {SOURCING_ENABLED && !correctedWorkbookUrl && <SourcingPanel initialManufacturer={editDraft.manufacturer} initialManufacturerPartNumber={editDraft.manufacturer_part_number} key={`sourcing-${editingIndex}`}
                     saved={editDraft.sourcing_state} jobId={currentJobId} photo={editDraft.photo}
-                    existingFastenal={editDraft.fastenal_part_number} blocked={reviewTask === "retake"}
+                    existingFastenal={editDraft.fastenal_part_number} blocked={reviewTask !== null && reviewTask !== "sourcing"}
                     onBusy={value => setReviewTask(value ? "sourcing" : null)}
                     onState={value => persistReviewPatch({ sourcing_state: value, sourcing_lookup_id: value.proposalId, sourcing_lookup_token: value.targetToken })}
                     onClear={() => persistReviewPatch({ fastenal_part_number: editDraftLatest.current?.sourcing_selection_id ? (editDraftLatest.current?.sourcing_previous_fastenal || "") : (editDraftLatest.current?.fastenal_part_number || ""), sourcing_lookup_id: undefined, sourcing_lookup_token: undefined, sourcing_selection_id: undefined, sourcing_target_token: undefined, sourcing_previous_fastenal: undefined, sourcing_state: undefined, is_confirmed: false, review_needed: true })}

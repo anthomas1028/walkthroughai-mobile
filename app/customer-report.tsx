@@ -1,3 +1,5 @@
+import { ScannedBarcodes } from "../components/ScannedBarcodes";
+import type { BarcodeScan } from "../lib/barcode-scans";
 import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
 import { sourcePhotos } from "../lib/source-photos";
 import { PhotoNavigation } from "../components/PhotoNavigation";
@@ -38,6 +40,7 @@ type Customer = {
 };
 
 type ReportRecord = {
+  scanned_barcodes?: BarcodeScan[];
   barcode_evidence?: BarcodeEvidence | null;
   retake_evidence?: { photo: string; photo_url?: string | null }[];
   id?: number;
@@ -1482,6 +1485,7 @@ export default function CustomerReportScreen() {
 
               <SourcingSummary record={selectedReviewItem.sourcing_recommendation} />
               <BarcodeSummary evidence={selectedReviewItem.barcode_evidence} />
+              <ScannedBarcodes scans={selectedReviewItem.scanned_barcodes} />
               <View style={styles.reviewEditCard}>
                 <Text style={styles.reviewEditHeading}>Inventory details</Text>
                 <Text style={styles.reviewEditHelp}>

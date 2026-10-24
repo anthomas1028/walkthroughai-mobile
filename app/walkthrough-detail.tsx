@@ -1,3 +1,5 @@
+import { ScannedBarcodes } from "../components/ScannedBarcodes";
+import type { BarcodeScan } from "../lib/barcode-scans";
 import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
 import { sourcePhotos } from "../lib/source-photos";
 import { PhotoNavigation } from "../components/PhotoNavigation";
@@ -29,6 +31,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { API_BASE_URL, apiFetch } from "../lib/api";
 
 type WalkthroughItem = {
+  scanned_barcodes?: BarcodeScan[];
   barcode_evidence?: BarcodeEvidence | null;
   retake_evidence?: { photo: string; photo_url?: string | null }[];
   customer_part_number?: string | null;
@@ -836,6 +839,7 @@ export default function WalkthroughDetailScreen() {
               </View>
               <SourcingSummary record={selectedItem.sourcing_recommendation} />
               <BarcodeSummary evidence={selectedItem.barcode_evidence} />
+              <ScannedBarcodes scans={selectedItem.scanned_barcodes} />
               {selectedItem.retake_evidence?.map((evidence, index) => evidence.photo_url ? <Pressable key={evidence.photo} accessibilityRole="button" onPress={() => openSourcePhoto({ ...selectedItem, photo_url: evidence.photo_url, photo: `Label close-up ${index + 1}` })} style={styles.viewPhotoButton}><Text style={styles.viewPhotoButtonText}>View attached label close-up {index + 1}</Text></Pressable> : null)}
               <View style={styles.detailsCard}>
                 <DetailRow label="Location" value={selectedItem.location || "Unassigned"} />
