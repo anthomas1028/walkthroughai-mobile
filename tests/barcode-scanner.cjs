@@ -57,6 +57,7 @@ function fixture(existing = [], options = {}) {
   await continuous.nodes(tree, 'Button').find(b => b.props.children?.props?.children === 'Add label photo (optional)').props.onPress(); tree = continuous.render();
   assert.equal(continuous.nodes(tree, 'Image').length, 1);
   await continuous.nodes(tree, 'Button').find(b => b.props.children?.props?.children === 'Save & next').props.onPress(); tree = continuous.render();
+  assert(JSON.stringify(tree).includes('Last saved'), 'Successful save shows last saved receipt');
   assert.equal(continuous.attachments[0].quantity, 2); assert.equal(continuous.pictures[0].uri, 'file:///label.jpg');
   assert(continuous.nodes(tree, 'Camera')[0].props.onBarcodeScanned, 'Ready for next scan without reopening');
   assert.equal(continuous.events.at(-1), true, 'Capture screen stays locked until scanner closes');

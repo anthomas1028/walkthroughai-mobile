@@ -1,3 +1,4 @@
+import { InventoryItemSummary } from "../components/InventoryItemSummary";
 import { captureScanRows, mergeCaptureScans, isScanReference } from "../lib/capture-scans";
 import { saveCaptureDraft } from "../lib/capture-drafts";
 import { BarcodeScanner } from "../components/BarcodeScanner";
@@ -2685,98 +2686,16 @@ export default function UploadScreen() {
                             styles.resultCardConfirmed,
                         ]}
                       >
-                        <View
-                          style={
-                            styles.resultCardHeader
-                          }
+                        <InventoryItemSummary
+                          title={result.description || 'Inventory item'}
+                          identifier={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number || result.scanned_barcodes?.[0]?.value || ''}
+                          identifierLabel={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number ? 'Part number' : 'Scanned code'}
+                          photoUri={isScanReference(result.photo) ? undefined : photos[getSourcePhotoIndex(result.photo, photos.length) ?? -1]?.uri}
+                          quantity={result.scanned_barcodes?.length === 1 ? result.scanned_barcodes[0].quantity : undefined}
+                          location={result.location}
+                          status={correctedWorkbookUrl ? 'Saved' : result.is_confirmed ? 'Ready' : 'Needs details'}
+                          onPhoto={() => viewSourcePhoto(result)}
                         >
-                          <View
-                            style={
-                              styles.resultNumber
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.resultNumberText
-                              }
-                            >
-                              {index + 1}
-                            </Text>
-                          </View>
-
-                          <View
-                            style={
-                              styles.resultHeaderTextContainer
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.resultCardTitle
-                              }
-                            >
-                              {result.description ||
-                                displayedPartNumber ||
-                                result.vendor ||
-                                "Inventory item"}
-                            </Text>
-
-                            <Text
-                              style={
-                                styles.resultPhotoName
-                              }
-                            >
-                              {result.photo ||
-                                `Photo ${
-                                  index + 1
-                                }`}
-                            </Text>
-                          </View>
-
-                          <View
-                            style={
-                              styles.badgeColumn
-                            }
-                          >
-                            {result.was_edited && (
-                              <View
-                                style={
-                                  styles.editedBadge
-                                }
-                              >
-                                <Text
-                                  style={
-                                    styles.editedBadgeText
-                                  }
-                                >
-                                  Edited
-                                </Text>
-                              </View>
-                            )}
-
-                            <View
-                              style={[
-                                styles.reviewBadge,
-                                result.is_confirmed
-                                  ? styles.reviewBadgeReady
-                                  : styles.reviewBadgeNeeded,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.reviewBadgeText,
-                                  result.is_confirmed
-                                    ? styles.reviewBadgeTextReady
-                                    : styles.reviewBadgeTextNeeded,
-                                ]}
-                              >
-                                {result.is_confirmed
-                                  ? "Confirmed"
-                                  : "Review"}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
                         {!result.is_confirmed &&
                           reviewReasons.length > 0 && (
                             <View
@@ -2915,6 +2834,8 @@ export default function UploadScreen() {
                             />
                           </View>
                         </View>
+
+                        </InventoryItemSummary>
 
                         <View
                           style={
@@ -3034,98 +2955,16 @@ export default function UploadScreen() {
                             styles.resultCardConfirmed,
                         ]}
                       >
-                        <View
-                          style={
-                            styles.resultCardHeader
-                          }
+                        <InventoryItemSummary
+                          title={result.description || 'Inventory item'}
+                          identifier={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number || result.scanned_barcodes?.[0]?.value || ''}
+                          identifierLabel={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number ? 'Part number' : 'Scanned code'}
+                          photoUri={isScanReference(result.photo) ? undefined : photos[getSourcePhotoIndex(result.photo, photos.length) ?? -1]?.uri}
+                          quantity={result.scanned_barcodes?.length === 1 ? result.scanned_barcodes[0].quantity : undefined}
+                          location={result.location}
+                          status={correctedWorkbookUrl ? 'Saved' : result.is_confirmed ? 'Ready' : 'Needs details'}
+                          onPhoto={() => viewSourcePhoto(result)}
                         >
-                          <View
-                            style={
-                              styles.resultNumber
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.resultNumberText
-                              }
-                            >
-                              {index + 1}
-                            </Text>
-                          </View>
-
-                          <View
-                            style={
-                              styles.resultHeaderTextContainer
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.resultCardTitle
-                              }
-                            >
-                              {result.description ||
-                                displayedPartNumber ||
-                                result.vendor ||
-                                "Inventory item"}
-                            </Text>
-
-                            <Text
-                              style={
-                                styles.resultPhotoName
-                              }
-                            >
-                              {result.photo ||
-                                `Photo ${
-                                  index + 1
-                                }`}
-                            </Text>
-                          </View>
-
-                          <View
-                            style={
-                              styles.badgeColumn
-                            }
-                          >
-                            {result.was_edited && (
-                              <View
-                                style={
-                                  styles.editedBadge
-                                }
-                              >
-                                <Text
-                                  style={
-                                    styles.editedBadgeText
-                                  }
-                                >
-                                  Edited
-                                </Text>
-                              </View>
-                            )}
-
-                            <View
-                              style={[
-                                styles.reviewBadge,
-                                result.is_confirmed
-                                  ? styles.reviewBadgeReady
-                                  : styles.reviewBadgeNeeded,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.reviewBadgeText,
-                                  result.is_confirmed
-                                    ? styles.reviewBadgeTextReady
-                                    : styles.reviewBadgeTextNeeded,
-                                ]}
-                              >
-                                {result.is_confirmed
-                                  ? "Confirmed"
-                                  : "Review"}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
                         {!result.is_confirmed &&
                           reviewReasons.length > 0 && (
                             <View
@@ -3264,6 +3103,8 @@ export default function UploadScreen() {
                             />
                           </View>
                         </View>
+
+                        </InventoryItemSummary>
 
                         <View
                           style={
