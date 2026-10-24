@@ -10,6 +10,8 @@ export type RecoveryDraft = {
   completionAlertToken?: string;
   nativeBatchId?: string;
   uploadRequested?: boolean;
+  captureScans?: unknown[];
+  localCaptureReview?: boolean;
   removedPhotos?: string[];
   editingIndex?: number | null; editDraft?: unknown;
   uploaded: number[]; jobId: string; results: unknown[]; updatedAt: string;

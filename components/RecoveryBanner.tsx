@@ -66,8 +66,8 @@ export function RecoveryBanner() {
   if (!session || pathname === '/upload' || pathname === '/walkthrough') return null;
   const visibleDraft = draftOwner === session.user.id ? draft : null;
   if (!visibleDraft && capture && captureOwner === session.user.id) return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/walkthrough', params: { customerId: capture.customerId, customerName: capture.customerName, contactName: capture.contactName } })}>
-    <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Continue saved photos · {capture.customerName}</Text>
-    <Text style={{ color: '#CBD5E1', marginTop: 3 }}>{capture.photoCount} saved on this device · not uploaded. Available offline.</Text>
+    <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Continue walkthrough · {capture.customerName}</Text>
+    <Text style={{ color: '#CBD5E1', marginTop: 3 }}>{capture.photoCount} photos · {capture.scanCount || 0} scans saved on this device. Available offline.</Text>
   </Pressable></View>;
   if (!visibleDraft) return null;
   return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}>

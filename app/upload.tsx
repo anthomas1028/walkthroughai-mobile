@@ -1,3 +1,4 @@
+import { captureScanRows, isScanReference } from "../lib/capture-scans";
 import { saveCaptureDraft } from "../lib/capture-drafts";
 import { BarcodeScanner } from "../components/BarcodeScanner";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
@@ -583,9 +584,13 @@ export default function UploadScreen() {
   const photoDraftKey = draftKey(session?.user.id || "", customerId);
   const resumeJobId = typeof params.resumeJobId === "string" ? params.resumeJobId : "";
   const [photos, setPhotos] = useState<SelectedPhoto[]>(() => parsePhotos(params.photos));
+  const [capturedScans, setCapturedScans] = useState<RecognitionResult[]>([]);
   useEffect(() => {
     if (params.savedDraft !== "true" || !session) return;
-    restoreGroups(photoDraftKey).then(groups => setPhotos((groups || []).flatMap(group => group.photos.map((photo: any) => ({ ...photo, location: group.name }))))).catch(() => Alert.alert("Photos unavailable", "Return to photos and select them again."));
+    restoreGroups(photoDraftKey).then(groups => {
+      setPhotos((groups || []).flatMap(group => group.photos.map((photo: any) => ({ ...photo, location: group.name }))));
+      setCapturedScans(captureScanRows(groups || []).map(normalizeResult));
+    }).catch(() => Alert.alert("Photos unavailable", "Return to photos and select them again."));
   }, [photoDraftKey, params.savedDraft]);
 
   const [walkthroughName, setWalkthroughName] =
@@ -794,6 +799,7 @@ export default function UploadScreen() {
           saved.prepared = [];
         }
         setPhotos(saved.photos);
+        setCapturedScans((saved.captureScans || []).map(row => normalizeResult(row as RecognitionResult)));
         recoveryRef.current = saved;
         setWaitingForConnection(saved.uploadRequested === true && !saved.results.length);
         setDeviceSavedPhotos(saved.photos.length);
@@ -823,7 +829,7 @@ export default function UploadScreen() {
   async function checkpoint(overrides: Partial<RecoveryDraft> = {}) {
     const pending = pendingUpload.current;
     const draft: RecoveryDraft = { ...recoveryRef.current, version: 1, customerId, customerName: walkthroughName, contactName: selectedContactName,
-      photos: recoveryRef.current?.photos || photos, prepared: pending?.prepared || [], uploadId: pending?.uploadId || "",
+      photos: recoveryRef.current?.photos || photos, captureScans: capturedScans, prepared: pending?.prepared || [], uploadId: pending?.uploadId || "",
       uploaded: Array.from(pending?.uploaded || []), jobId: recoveryRef.current?.jobId || currentJobId,
       results: recoveryRef.current?.results || results, updatedAt: new Date().toISOString(), ...overrides };
     recoveryRef.current = draft;
@@ -953,12 +959,21 @@ export default function UploadScreen() {
     const customer =
       walkthroughName.trim() || "Mobile Walkthrough";
 
-    if (photoCount === 0 && !resumeJobId) {
+    if (photoCount === 0 && capturedScans.length === 0 && !resumeJobId) {
       Alert.alert(
         "No photos received",
         "Return to the previous screen and select at least one inventory photo."
       );
       analysisBusy.current = false;
+      return;
+    }
+
+    if (photoCount === 0 && capturedScans.length && !resumeJobId) {
+      try {
+        await checkpoint({ photos: [], results: capturedScans, captureScans: capturedScans, uploadRequested: false, localCaptureReview: true });
+        setResults(capturedScans); setCompletedCustomer(customer); setCurrentJobId(''); setErrorMessage('');
+      } catch { setErrorMessage('The scan review could not be saved on this device. Keep this screen open and retry.'); }
+      finally { analysisBusy.current = false; }
       return;
     }
 
@@ -1194,10 +1209,10 @@ export default function UploadScreen() {
       if (!(recoveryRef.current?.jobId || resumeJobId) && (!pendingUpload.current || pendingUpload.current.key !== uploadKey || !pendingUpload.current.prepared.length)) {
         const priorUpload = recoveryRef.current?.uploadId || "";
         const originals = await retainPhotos(photos, `source-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
+        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
         await saveRecovery(recoveryRef.current, session?.user.id);
         preparedPhotos = nativeUploadSupported ? originals : await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, uploadRequested: false, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
+        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
         pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: priorUpload, uploaded: new Set() };
       } else {
         preparedPhotos = pendingUpload.current?.prepared || [];
@@ -1263,7 +1278,8 @@ export default function UploadScreen() {
         const raw = await AsyncStorage.getItem(`${activeKey}:review`);
         if (raw) { try { const old = JSON.parse(raw); if (old.jobId === jobId) reviewed = old.results || []; } catch {} }
       }
-      const preserved = mergeRecoveryResults(recognizedResults, reviewed, removedPhotos);
+      const scanRows = (recoveryRef.current?.captureScans || capturedScans).map(row => normalizeResult(row as RecognitionResult)).filter(row => !removedPhotos.some(key => { try { return JSON.parse(key)[0] === row.photo; } catch { return false; } }));
+      const preserved = mergeRecoveryResults([...recognizedResults, ...scanRows], reviewed, removedPhotos);
       setResults(preserved);
       await checkpoint({ results: preserved });
       setOriginalWorkbookUrl(
@@ -1279,7 +1295,7 @@ export default function UploadScreen() {
       );
       setErrorMessage("");
 
-      if (recognizedResults.length === 0) {
+      if (recognizedResults.length === 0 && scanRows.length === 0) {
         setErrorMessage(
           "The upload completed, but no inventory products were identified. Try a clearer label photo."
         );
@@ -1354,6 +1370,7 @@ export default function UploadScreen() {
   function viewSourcePhoto(
     result: RecognitionResult
   ) {
+    if (isScanReference(result.photo)) { Alert.alert('Barcode-only item', 'This item was captured with the barcode scanner. No source photo was taken.'); return; }
     const sourcePhotoIndex = getSourcePhotoIndex(
       result.photo,
       photos.length
@@ -1865,6 +1882,12 @@ export default function UploadScreen() {
   }
 
   async function discardWalkthrough() {
+    if (!currentJobId && recoveryRef.current?.localCaptureReview) {
+      await clearRecovery(session?.user.id);
+      await writeDraft(photoDraftKey, null);
+      if (session) await saveCaptureDraft(session.user.id, { customerId, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 });
+      recoveryRef.current = null; setResults([]); router.replace('/'); return;
+    }
     if (!currentJobId) {
       Alert.alert(
         "Cannot discard results",
@@ -2128,13 +2151,13 @@ export default function UploadScreen() {
                 </View>
 
                 <Text style={styles.title}>
-                  {photoCount > 0
+                  {photoCount === 0 && capturedScans.length > 0 ? "Scans ready to review" : photoCount > 0
                     ? "Ready for Recognition"
                     : "No Photos Received"}
                 </Text>
 
                 <Text style={styles.description}>
-                  {photoCount > 0
+                  {photoCount === 0 && capturedScans.length > 0 ? `${capturedScans.length} barcode scans saved on this device. Review product details before saving.` : photoCount > 0
                     ? `${photoCount} ${
                         photoCount === 1
                           ? "photo is"
@@ -2440,13 +2463,13 @@ export default function UploadScreen() {
                         {results.length === 1
                           ? "result was"
                           : "results were"}{" "}
-                        identified for{" "}
+                        recorded for{" "}
                         {completedCustomer || "Mobile Walkthrough"}.
                       </Text>
                       </View>
                     </View>
 
-                    <View style={styles.reviewProgressCard}>
+                    {photoCount > 0 && <View style={styles.reviewProgressCard}>
                       <Text style={styles.reviewProgressTitle}>Photo accounting</Text>
                       <Text style={styles.reviewProgressText}>{photoCount} submitted · {countOutcome("Ready to review")} ready · {countOutcome("Confirmed")} confirmed · {countOutcome("Needs retake / review")} need retake/review · {countOutcome("Failed / missing")} failed/missing · {countOutcome("Excluded after review")} excluded</Text>
                       {(showPhotoDetails ? photoOutcomes : []).map(({ photo, index, rows, status }) => {
@@ -2457,7 +2480,7 @@ export default function UploadScreen() {
                       })}
                       <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPhotoDetails }} style={{ minHeight: 44, justifyContent: "center" }} onPress={() => setShowPhotoDetails(value => !value)}><Text style={{ color: "#60A5FA", paddingVertical: 8 }}>{showPhotoDetails ? "Collapse photo details" : "View every photo"}</Text></Pressable>
                       {countOutcome("Failed / missing") > 0 ? <Pressable accessibilityRole="button" style={{ minHeight: 44, justifyContent: "center" }} disabled={isProcessing} onPress={() => void retryFailedPhotos()}><Text style={{ color: "#60A5FA", paddingVertical: 12 }}>Retry failed photos only</Text></Pressable> : null}
-                    </View>
+                    </View>}
                     <Text selectable style={{ color: "#94A3B8", fontSize: 12, marginBottom: 12 }}>App {Constants.expoConfig?.version || "unknown"} · Release {backendDiagnostics.release || "unavailable"} · Backend {backendDiagnostics.backend_commit?.slice(0, 7) || "unknown"} · Reader {backendDiagnostics.reader || "unknown"}</Text>
                     <View style={styles.aiDisclaimerCard}>
                       <Text style={styles.aiDisclaimerIcon}>i</Text>
@@ -3346,26 +3369,26 @@ export default function UploadScreen() {
         >
           {!hasResults ? (
             <>
-            {nativeUploadSupported && !isProcessing && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14 }}>
+            {nativeUploadSupported && photoCount > 0 && !isProcessing && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14 }}>
               <Text style={{ color: "#93C5FD", textAlign: "center" }}>{alertBusy ? "Updating notification…" : completionAlertToken ? "Completion notification on · Turn off" : "Notify me when analysis finishes"}</Text>
             </Pressable>}
             <Pressable
               disabled={
                 isProcessing ||
                 isFinalizing ||
-                photoCount === 0
+                (photoCount === 0 && capturedScans.length === 0)
               }
               onPress={analyzePhotos}
               style={({ pressed }) => [
                 styles.primaryButton,
                 (isProcessing ||
                   isFinalizing ||
-                  photoCount === 0) &&
+                  (photoCount === 0 && capturedScans.length === 0)) &&
                   styles.primaryButtonDisabled,
                 pressed &&
                   !isProcessing &&
                   !isFinalizing &&
-                  photoCount > 0 &&
+                  (photoCount > 0 || capturedScans.length > 0) &&
                   styles.buttonPressed,
               ]}
             >
@@ -3394,7 +3417,7 @@ export default function UploadScreen() {
                     styles.primaryButtonText
                   }
                 >
-                  {photoCount === 0
+                  {photoCount === 0 && capturedScans.length > 0 ? `Review ${capturedScans.length} scanned items` : photoCount === 0
                     ? "Return and Add Photos"
                     : waitingForConnection ? "Waiting for connection…" : connection.connection === "offline" ? "Save and upload when connected" : `Analyze ${photoCount} ${
                         photoCount === 1
@@ -3933,7 +3956,7 @@ export default function UploadScreen() {
                   <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
                   {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
                     return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
-                  {LABEL_RETAKES_ENABLED && !correctedWorkbookUrl && <LabelRetakePanel key={editingIndex}
+                  {LABEL_RETAKES_ENABLED && !correctedWorkbookUrl && !isScanReference(editDraft.photo) && <LabelRetakePanel key={editingIndex}
                     original={editDraft} attempt={editDraft.retake_attempt} customer={completedCustomer || selectedCustomerName}
                     customerId={customerId} location={editDraft.location}
                     blocked={reviewTask !== null && reviewTask !== "retake"}
@@ -3952,7 +3975,7 @@ export default function UploadScreen() {
                       const references = (current.retake_references || []).filter(ref => ref.job_id !== reference.job_id);
                       return { ...fillRetakeBlanks(current, candidate), retake_references: [...references, reference] };
                     })} />}
-                  {SOURCING_ENABLED && !correctedWorkbookUrl && <SourcingPanel initialManufacturer={editDraft.manufacturer} initialManufacturerPartNumber={editDraft.manufacturer_part_number} key={`sourcing-${editingIndex}`}
+                  {SOURCING_ENABLED && !correctedWorkbookUrl && !!currentJobId && <SourcingPanel initialManufacturer={editDraft.manufacturer} initialManufacturerPartNumber={editDraft.manufacturer_part_number} key={`sourcing-${editingIndex}`}
                     saved={editDraft.sourcing_state} jobId={currentJobId} photo={editDraft.photo}
                     existingFastenal={editDraft.fastenal_part_number} blocked={reviewTask !== null && reviewTask !== "sourcing"}
                     onBusy={value => setReviewTask(value ? "sourcing" : null)}

@@ -1,3 +1,4 @@
+import { isScanReference } from "../lib/capture-scans";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
 import type { BarcodeScan } from "../lib/barcode-scans";
 import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
@@ -228,7 +229,7 @@ export default function WalkthroughDetailScreen() {
       .map(([name, items]) => ({
         name,
         items,
-        photoCount: new Set(items.map((item) => item.photo).filter(Boolean)).size,
+        photoCount: new Set(items.map((item) => item.photo).filter(photo => photo && !isScanReference(photo))).size,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [walkthrough]);
@@ -249,7 +250,7 @@ export default function WalkthroughDetailScreen() {
 
     for (const item of walkthrough?.items || []) {
       const photoName = item.photo?.trim();
-      if (!photoName) continue;
+      if (!photoName || isScanReference(photoName)) continue;
 
       const existing = map.get(photoName);
       if (existing) {

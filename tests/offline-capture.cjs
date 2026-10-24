@@ -35,6 +35,8 @@ function load(path) {
   await capture.saveCaptureDraft('user-a', { customerId: '7', customerName: 'Synthetic', contactName: '', photoCount: 2 });
   assert.equal((await capture.captureDrafts('user-a'))[0].photoCount, 2);
   assert.equal((await capture.captureDrafts('user-b')).length, 0);
+  await capture.saveCaptureDraft('user-a', { customerId: '7', customerName: 'Synthetic', contactName: '', photoCount: 0, scanCount: 1 });
+  assert.equal((await capture.captureDrafts('user-a'))[0].scanCount, 1, 'A scan-only draft must remain discoverable offline');
   await capture.saveCaptureDraft('user-a', { customerId: '7', customerName: 'Synthetic', contactName: '', photoCount: 0 });
   assert.equal((await capture.captureDrafts('user-a')).length, 0);
   const sources = load('lib/source-photos.ts');

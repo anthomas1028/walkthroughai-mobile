@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-export type CaptureDraft = { customerId: string; customerName: string; contactName: string; photoCount: number; updatedAt: string };
+export type CaptureDraft = { customerId: string; customerName: string; contactName: string; photoCount: number; scanCount?: number; updatedAt: string };
 let writes = Promise.resolve();
 function storageKey(userId: string) {
   if (!userId) throw new Error('Sign in before saving a walkthrough.');
@@ -16,7 +16,7 @@ export async function saveCaptureDraft(userId: string, draft: Omit<CaptureDraft,
     const raw = await AsyncStorage.getItem(key);
     const current: CaptureDraft[] = raw ? JSON.parse(raw) : [];
     const other = current.filter(value => value.customerId !== draft.customerId);
-    await AsyncStorage.setItem(key, JSON.stringify(draft.photoCount ? [{ ...draft, updatedAt: new Date().toISOString() }, ...other] : other));
+    await AsyncStorage.setItem(key, JSON.stringify(draft.photoCount || draft.scanCount ? [{ ...draft, updatedAt: new Date().toISOString() }, ...other] : other));
   });
   writes = next;
   await next;
