@@ -1,5 +1,5 @@
 export const SCAN_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'code93', 'codabar', 'itf14', 'datamatrix'] as const;
-export type BarcodeScan = { value: string; type: string; captured_at: string };
+export type BarcodeScan = { value: string; type: string; captured_at: string; quantity?: number };
 export function scannedBarcode(value: string, type: string): BarcodeScan {
   if (!(SCAN_TYPES as readonly string[]).includes(type) || !value.trim() || value.length > 512 || /[\x00-\x1c\x1e-\x1f\x7f]/.test(value)) {
     throw new Error('This code could not be recorded safely. Take a label photo instead.');
@@ -16,7 +16,7 @@ export function scanKey(scan: Pick<BarcodeScan, 'value' | 'type'>): string {
   }
   return `code:${value}`;
 }
-function note(scan: BarcodeScan) { return `Camera scan (${scan.type}): ${displayBarcode(scan.value)} · unclassified; verify label.`; }
+function note(scan: BarcodeScan) { return `Camera scan (${scan.type}): ${displayBarcode(scan.value)} · unclassified; verify label.${scan.quantity ? ` Counted quantity: ${scan.quantity}.` : ''}`; }
 export function attachBarcode<T extends { scanned_barcodes?: BarcodeScan[]; notes?: string }>(item: T, scan: BarcodeScan) {
   const existing = item.scanned_barcodes || [];
   if (existing.some(value => scanKey(value) === scanKey(scan))) return item;

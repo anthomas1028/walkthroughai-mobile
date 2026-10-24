@@ -1,4 +1,4 @@
-import { BarcodeScanner } from "../components/BarcodeScanner";
+import { BarcodeScanner, type ScanLabelPhoto } from "../components/BarcodeScanner";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
 import { scanKey, type BarcodeScan } from "../lib/barcode-scans";
 import { addAreaScan, type CapturedScan } from "../lib/capture-scans";
@@ -141,15 +141,23 @@ export default function WalkthroughPhotoScreen() {
 
   const scanCount = groups.reduce((count, group) => count + (group.scans?.length || 0), 0);
 
-  async function captureBarcode(groupId: string, scan: BarcodeScan) {
+  async function captureBarcode(groupId: string, scan: BarcodeScan, labelPhoto?: ScanLabelPhoto) {
     const current = groups.find(group => group.id === groupId);
     if (!current) throw new Error('This area is no longer available.');
     if (scanCount >= 100) throw new Error('This walkthrough already has 100 scans. Start another walkthrough for more.');
-    const next = groups.map(group => group.id === groupId ? addAreaScan(group, scan, createId('barcode')) : group);
+    if (current.scans?.some(value => scanKey(value) === scanKey(scan))) throw new Error('Already scanned in this area.');
+    if (labelPhoto && photos.length >= MAX_WALKTHROUGH_PHOTOS) throw new Error('100-photo limit reached. Remove a photo or save the scan without a label photo.');
+    const scanId = createId('barcode');
+    const photoId = labelPhoto ? createId('scan-label') : undefined;
+    const next = groups.map(group => {
+      if (group.id !== groupId) return group;
+      const updated = addAreaScan(group, scan, scanId);
+      return { ...updated, scans: updated.scans?.map(value => value.id === scanId ? { ...value, labelPhotoId: photoId } : value), photos: labelPhoto ? [...group.photos, { id: photoId!, uri: labelPhoto.uri, width: labelPhoto.width, height: labelPhoto.height, location: group.name, fileName: `${photoId}.jpg`, mimeType: 'image/jpeg', fileSize: 0 }] : group.photos };
+    });
     const saved = await storeGroups(key, next);
     if (!saved) throw new Error('The draft changed while saving. Scan again to confirm the item.');
-    await saveCaptureDraft(session!.user.id, { customerId: String(customerId || ''), customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: photos.length, scanCount: next.reduce((count, group) => count + (group.scans?.length || 0), 0) });
-    setGroups(next);
+    await saveCaptureDraft(session!.user.id, { customerId: String(customerId || ''), customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: next.reduce((count, group) => count + group.photos.length, 0), scanCount: next.reduce((count, group) => count + (group.scans?.length || 0), 0) });
+    setGroups(saved);
   }
 
   function openCreateAreaModal() {
@@ -429,6 +437,7 @@ export default function WalkthroughPhotoScreen() {
           ? {
               ...group,
               photos: group.photos.filter((photo) => photo.id !== photoId),
+              scans: group.scans?.map(scan => scan.labelPhotoId === photoId ? { ...scan, labelPhotoId: undefined } : scan),
             }
           : group
       )
@@ -715,10 +724,10 @@ export default function WalkthroughPhotoScreen() {
                       <Text style={styles.choosePhotosButtonText}>Choose Photos</Text>
                     </Pressable>
                   </View>
-                  <BarcodeScanner existing={group.scans || []} otherScans={groups.filter(other => other.id !== group.id).flatMap(other => other.scans || [])}
+                  <BarcodeScanner continuous allowLabelPhoto existing={group.scans || []} otherScans={groups.filter(other => other.id !== group.id).flatMap(other => other.scans || [])}
                     blocked={!draftReady || isOpeningPicker || (scanningArea !== null && scanningArea !== group.id)}
-                    title={`Scan in ${group.name}`} attachLabel="Save scan in this area" contextText="Works offline. Save a code here, then review product details. Scans stay separate from part numbers."
-                    onBusy={busy => setScanningArea(busy ? group.id : null)} onAttach={scan => captureBarcode(group.id, scan)} />
+                    title={`Scan in ${group.name}`} attachLabel="Save scan in this area" contextText="Scan, set quantity, and optionally photograph the same label. Save & next continues scanning. Works offline."
+                    onBusy={busy => setScanningArea(busy ? group.id : null)} onAttach={(scan, photo) => captureBarcode(group.id, scan, photo)} />
                   <ScannedBarcodes scans={group.scans} onRemove={scanningArea === null ? scan => setGroups(current => current.map(area => area.id === group.id ? { ...area, scans: (area.scans || []).filter(value => scanKey(value) !== scanKey(scan)) } : area)) : undefined} />
                 </View>
               ))}

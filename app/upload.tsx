@@ -1,4 +1,4 @@
-import { captureScanRows, isScanReference } from "../lib/capture-scans";
+import { captureScanRows, mergeCaptureScans, isScanReference } from "../lib/capture-scans";
 import { saveCaptureDraft } from "../lib/capture-drafts";
 import { BarcodeScanner } from "../components/BarcodeScanner";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
@@ -1279,7 +1279,7 @@ export default function UploadScreen() {
         if (raw) { try { const old = JSON.parse(raw); if (old.jobId === jobId) reviewed = old.results || []; } catch {} }
       }
       const scanRows = (recoveryRef.current?.captureScans || capturedScans).map(row => normalizeResult(row as RecognitionResult)).filter(row => !removedPhotos.some(key => { try { return JSON.parse(key)[0] === row.photo; } catch { return false; } }));
-      const preserved = mergeRecoveryResults([...recognizedResults, ...scanRows], reviewed, removedPhotos);
+      const preserved = mergeRecoveryResults(mergeCaptureScans(recognizedResults, scanRows), reviewed, removedPhotos);
       setResults(preserved);
       await checkpoint({ results: preserved });
       setOriginalWorkbookUrl(

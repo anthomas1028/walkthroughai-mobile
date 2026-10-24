@@ -12,20 +12,21 @@ assert.equal(scans.scanKey({ value: '048615968230', type: 'upc_a' }), scans.scan
 assert.throws(() => scans.scannedBarcode('bad\ncode', 'code128'));
 assert.equal(scans.displayBarcode('01CODE\x1d10LOT'), '01CODE[GS]10LOT');
 
-function fixture(existing = []) {
+function fixture(existing = [], options = {}) {
   const states = [], refs = []; let stateIndex = 0, refIndex = 0, effect = false, change;
   let permission = { granted: true, canAskAgain: true };
-  const events = [], attachments = [], jsx = (type, props) => ({ type, props }), exports = {};
+  const events = [], attachments = [], pictures = [], feedback = [], jsx = (type, props) => ({ type, props }), exports = {};
   const react = { useState: initial => { const index = stateIndex++; if (!(index in states)) states[index] = initial; return [states[index], value => { states[index] = typeof value === 'function' ? value(states[index]) : value; }]; },
     useRef: initial => { const index = refIndex++; return refs[index] ||= { current: initial }; }, useEffect: fn => { if (!effect) { effect = true; fn(); } } };
   vm.runInNewContext(transpile('components/BarcodeScanner.tsx'), { exports, Error, require: name => ({
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
-    'react-native': { AppState: { currentState: 'active', addEventListener: (_, callback) => { change = callback; return { remove() {} }; } }, Linking: { openSettings() {} }, Pressable: 'Button', Text: 'Text', View: 'View' },
+    'expo-haptics': { notificationAsync: async value => feedback.push(value), NotificationFeedbackType: { Warning: 'warning', Success: 'success' } },
+    'react-native': { Image: 'Image', AppState: { currentState: 'active', addEventListener: (_, callback) => { change = callback; return { remove() {} }; } }, Linking: { openSettings() {} }, Pressable: 'Button', Text: 'Text', View: 'View' },
     'expo-camera': { CameraView: 'Camera', useCameraPermissions: () => [permission, async () => {}] }, '../lib/barcode-scans': scans,
   }[name]) });
-  function render() { stateIndex = refIndex = 0; return exports.BarcodeScanner({ existing, otherScans: [], blocked: false, onAttach: async value => attachments.push(value), onBusy: value => events.push(value) }); }
+  function render() { stateIndex = refIndex = 0; return exports.BarcodeScanner({ existing, otherScans: [], blocked: false, onAttach: async (value, photo) => { if (options.fail) throw Error('Storage full'); attachments.push(value); pictures.push(photo); }, onBusy: value => events.push(value), ...options }); }
   function nodes(tree, type) { const result = []; const walk = node => { if (!node || typeof node !== 'object') return; if (node.type === type) result.push(node); const children = node.props?.children; (Array.isArray(children) ? children : [children]).flat().forEach(walk); }; walk(tree); return result; }
-  return { render, nodes, attachments, events, background: () => change('background'), deny: () => { permission = { granted: false, canAskAgain: false }; } };
+  return { render, nodes, attachments, pictures, feedback, events, setCamera: value => { refs[0].current = value; }, background: () => change('background'), deny: () => { permission = { granted: false, canAskAgain: false }; } };
 }
 (async () => {
   const f = fixture(); let tree = f.render();
@@ -47,5 +48,22 @@ function fixture(existing = []) {
   assert.equal(paused.nodes(paused.render(), 'Camera').length, 0);
   const denied = fixture(); denied.deny(); tree = denied.render(); denied.nodes(tree, 'Button')[0].props.onPress();
   assert.equal(denied.nodes(denied.render(), 'Camera').length, 0);
+  const continuous = fixture([], { continuous: true, allowLabelPhoto: true });
+  tree = continuous.render(); continuous.nodes(tree, 'Button')[0].props.onPress(); tree = continuous.render();
+  continuous.setCamera({ takePictureAsync: async () => ({ uri: 'file:///label.jpg', width: 1800, height: 2400 }) });
+  continuous.nodes(tree, 'Camera')[0].props.onBarcodeScanned({ data: 'FIRST', type: 'code128' }); tree = continuous.render();
+  assert.equal(continuous.feedback[0], 'success');
+  continuous.nodes(tree, 'Button').find(b => b.props.accessibilityLabel === 'Increase counted quantity').props.onPress(); tree = continuous.render();
+  await continuous.nodes(tree, 'Button').find(b => b.props.children?.props?.children === 'Add label photo (optional)').props.onPress(); tree = continuous.render();
+  assert.equal(continuous.nodes(tree, 'Image').length, 1);
+  await continuous.nodes(tree, 'Button').find(b => b.props.children?.props?.children === 'Save & next').props.onPress(); tree = continuous.render();
+  assert.equal(continuous.attachments[0].quantity, 2); assert.equal(continuous.pictures[0].uri, 'file:///label.jpg');
+  assert(continuous.nodes(tree, 'Camera')[0].props.onBarcodeScanned, 'Ready for next scan without reopening');
+  assert.equal(continuous.events.at(-1), true, 'Capture screen stays locked until scanner closes');
+  continuous.nodes(tree, 'Camera')[0].props.onBarcodeScanned({ data: 'SECOND', type: 'code128' }); tree = continuous.render();
+  await continuous.nodes(tree, 'Button').find(b => b.props.children?.props?.children === 'Save & next').props.onPress();
+  assert.equal(continuous.attachments[1].quantity, 1); assert.equal(continuous.pictures[1], undefined, 'Next scan must not inherit previous photo');
+  const failure = fixture([], { continuous: true, fail: true }); tree = failure.render(); failure.nodes(tree, 'Button')[0].props.onPress(); tree = failure.render(); failure.nodes(tree, 'Camera')[0].props.onBarcodeScanned({ data: 'RETRY', type: 'code128' }); tree = failure.render(); await failure.nodes(tree, 'Button').find(b => b.props.children?.props?.children === 'Save & next').props.onPress();
+  assert.equal(failure.attachments.length, 0); assert(failure.nodes(failure.render(), 'Button').find(b => b.props.children?.props?.children === 'Save & next'), 'Failed save keeps scanned code available for retry');
   console.log('PASS: leading zeros, separate fields, duplicate detection, explicit attachment, rapid-tap protection, camera permissions and background pause.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

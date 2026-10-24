@@ -37,7 +37,12 @@ function find(tree, type) { const values = []; const walk = node => { if (!node 
   let tree = render(); const scanner = find(tree, 'AreaScanner')[0];
   assert(scanner, 'The capture screen must show a scanner even with zero photos');
   assert.equal(scanner.props.blocked, false); assert.equal(scanner.props.attachLabel, 'Save scan in this area');
-  await scanner.props.onAttach(scan); tree = render();
+  await scanner.props.onAttach({ ...scan, quantity: 4 }, { uri: 'file:///label.jpg', width: 1800, height: 2400 }); tree = render();
+  const captured = states[1][0]; assert.equal(captured.photos.length, 1); assert.equal(captured.scans[0].quantity, 4); assert.equal(captured.scans[0].labelPhotoId, captured.photos[0].id);
+  const linked = capture.captureScanRows([captured]); assert.equal(linked[0].photo, 'photo_001.jpg');
+  const recognized = [{ photo: 'photo_001.jpg', manufacturer_part_number: 'KEEP', notes: 'OCR evidence' }];
+  const merged = capture.mergeCaptureScans(recognized, linked); assert.equal(merged.length, 1); assert.equal(merged[0].manufacturer_part_number, 'KEEP'); assert.equal(merged[0].scanned_barcodes[0].quantity, 4); assert(merged[0].notes.includes('Counted quantity: 4'));
+  const ambiguous = capture.mergeCaptureScans([...recognized, { photo: 'photo_001.jpg', manufacturer_part_number: 'OTHER' }], linked); assert.equal(ambiguous.length, 3, 'Multiple OCR products require review before assigning scan');
   const continueButton = find(tree, 'Button').find(button => button.props.onPress?.name === 'continueToUpload');
   assert(continueButton); assert.equal(continueButton.props.disabled, false, 'Scan-only capture must be able to continue');
   await continueButton.props.onPress(); assert.equal(pushed.pathname, '/upload'); assert.equal(pushed.params.savedDraft, 'true');
