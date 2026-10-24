@@ -1314,7 +1314,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: "#101A2A",
     borderWidth: 1,
-    borderColor: "#2B3E56",
+    borderColor: "#30465F",
   },
 
   customerViewTab: {
@@ -1331,7 +1331,7 @@ const styles = StyleSheet.create({
   },
 
   customerViewTabSelected: {
-    backgroundColor: "#1E3A5F",
+    backgroundColor: "#245181",
   },
 
   customerViewTabText: {
@@ -1348,9 +1348,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     borderRadius: 13,
-    backgroundColor: "#122033",
+    backgroundColor: "#15263B",
     borderWidth: 1,
-    borderColor: "#2B3E56",
+    borderColor: "#30465F",
     color: "#FFFFFF",
     fontSize: 15,
     paddingHorizontal: 15,
@@ -1377,18 +1377,19 @@ const styles = StyleSheet.create({
   },
 
   customerCard: {
-    backgroundColor: "#122033",
+    backgroundColor: "#15263B",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2B3E56",
+    borderColor: "#30465F",
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 8,
   },
 
   customerCardSelected: {
-    borderColor: "#3B82F6",
-    backgroundColor: "#17283D",
+    borderColor: "#69C9FF",
+    borderLeftWidth: 4,
+    backgroundColor: "#193653",
   },
 
   customerCardPressed: {
@@ -1429,7 +1430,7 @@ const styles = StyleSheet.create({
   },
 
   customerLogoPlaceholderText: {
-    color: "#BFDBFE",
+    color: "#73DCE7",
     fontSize: 13,
     fontWeight: "900",
   },
@@ -1444,7 +1445,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: "#94A8C0",
-    backgroundColor: "#122033",
+    backgroundColor: "#15263B",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1541,10 +1542,10 @@ const styles = StyleSheet.create({
   },
 
   formCard: {
-    backgroundColor: "#122033",
+    backgroundColor: "#15263B",
     borderRadius: UI.cardRadius,
     borderWidth: 1,
-    borderColor: "#2B3E56",
+    borderColor: "#30465F",
     padding: UI.cardPadding,
   },
 
@@ -1560,7 +1561,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: "#0C1524",
     borderWidth: 1,
-    borderColor: "#2B3E56",
+    borderColor: "#30465F",
     color: "#FFFFFF",
     fontSize: 15,
     paddingHorizontal: 14,
@@ -1727,7 +1728,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: UI.cardRadius,
     borderWidth: 1,
-    borderColor: "#2B3E56",
+    borderColor: "#30465F",
     backgroundColor: "#101A2A",
     paddingHorizontal: 15,
   },

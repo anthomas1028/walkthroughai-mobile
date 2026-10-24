@@ -562,7 +562,7 @@ export default function WalkthroughPhotoScreen() {
           </Pressable>
 
           <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Inventory Photos</Text>
+            <Text style={styles.headerTitle}>Capture Inventory</Text>
             <Text numberOfLines={1} style={styles.customerName}>
               {selectedCustomerName}
             </Text>
@@ -1105,8 +1105,10 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   areaCard: {
+    borderWidth: 1,
+    borderColor: "#30465F",
     borderRadius: UI.cardRadius,
-    backgroundColor: "#122033",
+    backgroundColor: "#15263B",
     padding: UI.cardPadding,
   },
   areaHeader: {
