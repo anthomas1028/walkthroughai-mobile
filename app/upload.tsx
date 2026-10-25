@@ -1,3 +1,5 @@
+import { CompletedWalkthroughActions } from '../components/CompletedWalkthroughActions';
+import { resolveReviewPhoto, reviewPhotos } from '../lib/review-photos';
 import { InventoryItemSummary } from "../components/InventoryItemSummary";
 import { captureScanRows, mergeCaptureScans, isScanReference } from "../lib/capture-scans";
 import { saveCaptureDraft } from "../lib/capture-drafts";
@@ -16,7 +18,7 @@ import { LabelSourcePhoto } from "../components/LabelSourcePhoto";
 import { LabelRetakePanel } from "../components/LabelRetakePanel";
 import { RetakeAttempt, RetakeReference, fillRetakeBlanks } from "../lib/label-retake";
 import { photoOutcome, resultKey, mergeRecoveryResults } from "../lib/photo-accounting";
-import { loadRecovery, saveRecovery, clearRecovery, retainPhotos, RecoveryDraft } from "../lib/recovery";
+import { loadRecovery, saveRecovery, clearRecovery, cleanupRecoveryPhotos, retainPhotos, RecoveryDraft } from "../lib/recovery";
 import { useAuth } from "../contexts/AuthContext";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -82,6 +84,7 @@ type RecognitionResult = {
   scanned_barcodes?: BarcodeScan[];
   barcode_evidence?: BarcodeEvidence | null;
   photo: string;
+  photo_url?: string | null;
   location: string;
   vendor: string;
   manufacturer: string;
@@ -114,6 +117,7 @@ type RecognitionResult = {
 type SourcePhotoViewer = {
   uri: string;
   label: string;
+  fallbackUri?: string;
 };
 
 type UploadApiResponse = {
@@ -535,6 +539,8 @@ function EditableField({
 export default function UploadScreen() {
   const { session } = useAuth();
   const recoveryRef = useRef<RecoveryDraft | null>(null);
+  const completedPhotoCleanup = useRef<RecoveryDraft | null>(null);
+  useEffect(() => () => { if (completedPhotoCleanup.current) cleanupRecoveryPhotos(completedPhotoCleanup.current); }, []);
   const analysisBusy = useRef(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [backendDiagnostics, setBackendDiagnostics] = useState<Record<string, string>>({});
@@ -775,6 +781,7 @@ export default function UploadScreen() {
   const [emailedRecipient, setEmailedRecipient] =
     useState("");
 
+  const [sourcePhotoError, setSourcePhotoError] = useState(false);
   const [sourcePhotoViewer, setSourcePhotoViewer] =
     useState<SourcePhotoViewer | null>(null);
 
@@ -1371,36 +1378,14 @@ export default function UploadScreen() {
   function viewSourcePhoto(
     result: RecognitionResult
   ) {
-    if (isScanReference(result.photo)) { Alert.alert('Barcode-only item', 'This item was captured with the barcode scanner. No source photo was taken.'); return; }
-    const sourcePhotoIndex = getSourcePhotoIndex(
-      result.photo,
-      photos.length
-    );
-
-    if (sourcePhotoIndex === null) {
-      Alert.alert(
-        "Source photo unavailable",
-        "Walkthrough AI could not match this result to one of the selected photos."
-      );
+    const source = resolveReviewPhoto(result, recoveryRef.current?.photos || photos);
+    if (!source) {
+      Alert.alert(isScanReference(result.photo) ? 'Barcode-only item' : 'Source photo unavailable',
+        isScanReference(result.photo) ? 'No label photo was attached to this scan.' : 'The source photo is unavailable on this device. Open this walkthrough in customer History to check its saved photos.');
       return;
     }
-
-    const sourcePhoto = (recoveryRef.current?.photos || photos)[sourcePhotoIndex];
-
-    if (!sourcePhoto?.uri) {
-      Alert.alert(
-        "Source photo unavailable",
-        "The original photo is no longer available on this screen."
-      );
-      return;
-    }
-
-    setSourcePhotoViewer({
-      uri: sourcePhoto.uri,
-      label:
-        result.photo ||
-        `Photo ${sourcePhotoIndex + 1}`,
-    });
+    setSourcePhotoError(false);
+    setSourcePhotoViewer(source);
     lastPhotoViewerTapTime.current = 0;
     photoViewerIsZoomed.current = false;
   }
@@ -1752,12 +1737,16 @@ export default function UploadScreen() {
       const finalizedResults = Array.isArray(
         data.results
       )
-        ? data.results.map(normalizeResult)
+        ? data.results.map(row => normalizeResult({ ...row, photo_url: row.photo_url || results.find(previous => previous.photo === row.photo)?.photo_url }))
         : results;
 
       setResults(finalizedResults);
+      // Keep source bytes available while this completed report remains on screen.
+      const viewerPhotos = recoveryRef.current?.photos || photos;
+      setPhotos(viewerPhotos as SelectedPhoto[]);
+      const retained = await clearRecovery(session?.user.id, true);
+      if (retained) completedPhotoCleanup.current = retained;
       recoveryRef.current = null;
-      await clearRecovery(session?.user.id);
 
       setCorrectedWorkbookUrl(data.download_url ?? null);
       await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
@@ -2690,7 +2679,7 @@ export default function UploadScreen() {
                           title={result.description || 'Inventory item'}
                           identifier={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number || result.scanned_barcodes?.[0]?.value || ''}
                           identifierLabel={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number ? 'Part number' : 'Scanned code'}
-                          photoUri={isScanReference(result.photo) ? undefined : photos[getSourcePhotoIndex(result.photo, photos.length) ?? -1]?.uri}
+                          photoUri={resolveReviewPhoto(result, recoveryRef.current?.photos || photos)?.uri}
                           quantity={result.scanned_barcodes?.length === 1 ? result.scanned_barcodes[0].quantity : undefined}
                           location={result.location}
                           status={correctedWorkbookUrl ? 'Saved' : result.is_confirmed ? 'Ready' : 'Needs details'}
@@ -2959,7 +2948,7 @@ export default function UploadScreen() {
                           title={result.description || 'Inventory item'}
                           identifier={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number || result.scanned_barcodes?.[0]?.value || ''}
                           identifierLabel={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number ? 'Part number' : 'Scanned code'}
-                          photoUri={isScanReference(result.photo) ? undefined : photos[getSourcePhotoIndex(result.photo, photos.length) ?? -1]?.uri}
+                          photoUri={resolveReviewPhoto(result, recoveryRef.current?.photos || photos)?.uri}
                           quantity={result.scanned_barcodes?.length === 1 ? result.scanned_barcodes[0].quantity : undefined}
                           location={result.location}
                           status={correctedWorkbookUrl ? 'Saved' : result.is_confirmed ? 'Ready' : 'Needs details'}
@@ -3296,7 +3285,7 @@ export default function UploadScreen() {
                 </View>
               )}
 
-              {allResultsConfirmed ? (
+              {!correctedWorkbookUrl && (allResultsConfirmed ? (
                 correctedWorkbookUrl ? null : (
                   <View style={styles.finalizeCard}>
                   <View style={styles.finalizeHeaderRow}>
@@ -3381,6 +3370,7 @@ export default function UploadScreen() {
                     onPress={confirmNextItem}
                     style={({ pressed }) => [
                       styles.primaryButton,
+                      { flex: 1, paddingHorizontal: 8 },
                       isFinalizing && styles.primaryButtonDisabled,
                       pressed && !isFinalizing && styles.buttonPressed,
                     ]}
@@ -3416,7 +3406,7 @@ export default function UploadScreen() {
                     </Text>
                   </Pressable>
                 </View>
-              )}
+              ))}
 
               {!correctedWorkbookUrl && (
                 <Pressable
@@ -3448,84 +3438,9 @@ export default function UploadScreen() {
               )}
 
               {correctedWorkbookUrl && (
-                <View style={styles.completionActionsCard}>
-                  <View style={styles.completionActionsHeader}>
-                    <View style={styles.completionCheck}>
-                      <Text style={styles.completionCheckText}>✓</Text>
-                    </View>
-
-                    <View style={styles.completionActionsTitleArea}>
-                      <Text style={styles.completionActionsTitle}>
-                        Walkthrough Complete
-                      </Text>
-
-                      <Text style={styles.completionActionsSubtitle}>
-                        Your finalized report is ready.
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Pressable
-                    onPress={openCorrectedWorkbook}
-                    style={({ pressed }) => [
-                      styles.completionViewButton,
-                      pressed && styles.buttonPressed,
-                    ]}
-                  >
-                    <Text style={styles.completionViewButtonText}>
-                      View Report
-                    </Text>
-                  </Pressable>
-
-                  <View style={styles.completionEmailRow}>
-                    <View style={styles.completionEmailInput}>
-                      <Text style={styles.reportRecipientLabel}>
-                        REPORT WILL BE EMAILED TO
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={styles.reportRecipientEmail}
-                      >
-                        {recipientEmail || "Account email unavailable"}
-                      </Text>
-                    </View>
-
-                    <Pressable
-                      disabled={isFinalizing}
-                      onPress={() => finalizeWalkthrough(true)}
-                      style={({ pressed }) => [
-                        styles.completionEmailButton,
-                        isFinalizing && styles.primaryButtonDisabled,
-                        pressed &&
-                          !isFinalizing &&
-                          styles.buttonPressed,
-                      ]}
-                    >
-                      {isFinalizing ? (
-                        <ActivityIndicator
-                          size="small"
-                          color="#FFFFFF"
-                        />
-                      ) : (
-                        <Text style={styles.completionEmailButtonText}>
-                          Email Report
-                        </Text>
-                      )}
-                    </Pressable>
-                  </View>
-
-                  <Pressable
-                    onPress={startOver}
-                    style={({ pressed }) => [
-                      styles.completionDoneButton,
-                      pressed && styles.buttonPressed,
-                    ]}
-                  >
-                    <Text style={styles.completionDoneButtonText}>
-                      Done
-                    </Text>
-                  </Pressable>
-                </View>
+                <CompletedWalkthroughActions remainingCount={remainingCount} recipientEmail={recipientEmail}
+                  busy={isFinalizing} onView={openCorrectedWorkbook}
+                  onEmail={() => { void finalizeWalkthrough(true); }} onDone={startOver} />
               )}
             </>
           )}
@@ -3602,7 +3517,7 @@ export default function UploadScreen() {
             </View>
 
             {sourcePhotoViewer && (
-              <PhotoNavigation photos={(recoveryRef.current?.photos || photos).map((photo, index) => ({ uri: photo.uri, label: `Photo ${index + 1}` }))} current={sourcePhotoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setSourcePhotoViewer(photo); }}>
+              <PhotoNavigation photos={reviewPhotos(results, recoveryRef.current?.photos || photos)} current={sourcePhotoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setSourcePhotoError(false); setSourcePhotoViewer(photo); }}>
 <ScrollView key={sourcePhotoViewer.uri}
                 ref={photoViewerScrollRef}
                 style={styles.photoViewerScroll}
@@ -3635,7 +3550,9 @@ export default function UploadScreen() {
                       photoViewerImageHeight,
                   }}
                 >
+                  {sourcePhotoError && <Text style={{ color: '#FCA5A5', padding: 16 }}>This photo could not load. Check your connection and try again, or open its saved copy in customer History.</Text>}
                   <Image
+                    onError={() => { if (sourcePhotoViewer.fallbackUri && sourcePhotoViewer.fallbackUri !== sourcePhotoViewer.uri) { setSourcePhotoViewer({ ...sourcePhotoViewer, uri: sourcePhotoViewer.fallbackUri, fallbackUri: undefined }); } else setSourcePhotoError(true); }}
                     source={{
                       uri: sourcePhotoViewer.uri,
                     }}
@@ -5289,9 +5206,11 @@ const styles = StyleSheet.create({
   },
 
   unconfirmedFooterActions: {
-    gap: 10,
+    flexDirection: "row",
+    gap: 8,
   },
   finishWithReviewButton: {
+    flex: 1,
     minHeight: UI.controlHeight,
     borderRadius: UI.cardRadius,
     borderWidth: 1,

@@ -12,6 +12,7 @@ const code=ts.transpileModule(fs.readFileSync('components/RecoveryBanner.tsx','u
    if(name==='expo-router')return{usePathname:()=> '/',router:{push:r=>routes.push(r)}};
    if(name.includes('AuthContext'))return{useAuth:()=>({session:{user:{id:'owner'}}})};
    if(name.includes('safe-area'))return{useSafeAreaInsets:()=>({top:0})};
+   if(name.includes('capture-drafts'))return{captureDrafts:async()=>[]};
    if(name.includes('recovery'))return{loadRecovery:async()=>draft};
    if(name.includes('native-upload'))return{serverBatchStatus:async()=>({result:{job_id:'job-a'}})};
    if(name.includes('/api'))return{API_BASE_URL:'https://fixture.invalid',apiFetch:async()=>({ok:true,json:async()=>({success:true,status})})};
@@ -20,7 +21,7 @@ const code=ts.transpileModule(fs.readFileSync('components/RecoveryBanner.tsx','u
   output.RecoveryBanner();effects[0]();await new Promise(r=>setImmediate(r));cursor=0;
   const view=output.RecoveryBanner();view.props.children.props.onPress();
   assert.equal(routes[0].params.resumeJobId,'job-a');assert.equal(routes[0].params.customerId,'customer-a');
-  assert.match(state[1],status==='complete'?/Results ready/:status==='failed'?/needs attention/:/Analyzing/);
+  assert.match(state[2],status==='complete'?/Results ready/:status==='failed'?/needs attention/:/Analyzing/);
  }
  console.log('PASS: native batch resolves to correct saved job; queued, ready and failed states navigate directly to its review.');
 })().catch(e=>{console.error(e);process.exitCode=1});

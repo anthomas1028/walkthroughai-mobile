@@ -16,7 +16,7 @@ export type RecoveryDraft = {
   editingIndex?: number | null; editDraft?: unknown;
   uploaded: number[]; jobId: string; results: unknown[]; updatedAt: string;
 };
-let writes = Promise.resolve();
+let writes: Promise<unknown> = Promise.resolve();
 async function key(userId?: string) {
   // Local storage scope only. Server requests still validate the access token.
   // The app passes its active AuthContext identity so offline saves never refresh a token.
@@ -39,7 +39,7 @@ export async function saveRecovery(draft: RecoveryDraft, userId?: string) {
   writes = next;
   await next;
 }
-export async function clearRecovery(userId?: string) {
+export async function clearRecovery(userId?: string, keepPhotosForViewer = false) {
   const storageKey = await key(userId);
   const next = writes.catch(() => {}).then(async () => {
     const raw = await AsyncStorage.getItem(storageKey);
@@ -50,17 +50,22 @@ export async function clearRecovery(userId?: string) {
         const { clearNativeUpload } = await import("./native-upload");
         await clearNativeUpload(draft.nativeBatchId);
       }
-      const retakes = [...draft.results, draft.editDraft].flatMap((row: any) => row?.retake_attempt?.uri ? [{ uri: row.retake_attempt.uri }] : []);
-      for (const photo of [...draft.photos, ...draft.prepared, ...retakes]) {
-        if (photo.uri.startsWith(new Directory(Paths.document, 'walkthrough-recovery').uri)) {
-          const file = new File(photo.uri);
-          try { if (file.exists) file.delete(); } catch { /* Metadata is cleared; failed local cleanup must not invalidate a saved report. */ }
-        }
-      }
+      if (!keepPhotosForViewer) cleanupRecoveryPhotos(draft);
+      else return draft;
     }
   });
   writes = next;
-  await next;
+  return await next;
+}
+export function cleanupRecoveryPhotos(draft: RecoveryDraft) {
+  if (Platform.OS === 'web') return;
+  const retakes = [...draft.results, draft.editDraft].flatMap((row: any) => row?.retake_attempt?.uri ? [{ uri: row.retake_attempt.uri }] : []);
+  for (const photo of [...draft.photos, ...draft.prepared, ...retakes]) {
+    if (photo.uri.startsWith(new Directory(Paths.document, 'walkthrough-recovery').uri)) {
+      const file = new File(photo.uri);
+      try { if (file.exists) file.delete(); } catch { /* Metadata is cleared; failed local cleanup must not invalidate a saved report. */ }
+    }
+  }
 }
 export async function retainPhotos(photos: RecoveryPhoto[], prefix: string): Promise<RecoveryPhoto[]> {
   if (Platform.OS === 'web') return photos;

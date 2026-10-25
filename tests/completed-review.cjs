@@ -1,0 +1,28 @@
+const fs = require('node:fs'), vm = require('node:vm'), ts = require('typescript'), assert = require('node:assert/strict');
+const jsx = (type, props) => typeof type === 'function' ? type(props) : ({ type, props });
+const natives = { View: 'View', Text: 'Text', Pressable: 'Button', ActivityIndicator: 'Spinner' };
+const compile = text => ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
+function load(path, modules) { const exports = {}; vm.runInNewContext(compile(fs.readFileSync(path, 'utf8')), { exports, require: name => { if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' }; if (name === 'react-native') return natives; return modules[name]; } }); return exports; }
+const completed = load('components/CompletedWalkthroughActions.tsx', {});
+const source = fs.readFileSync('app/upload.tsx', 'utf8');
+const ast = ts.createSourceFile('upload.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+let footer;
+function walk(node) { if (ts.isJsxElement(node) && node.openingElement.attributes.getText(ast).includes('styles.footer,')) footer = node.getText(ast); ts.forEachChild(node, walk); } walk(ast);
+assert(footer, 'Test must render the actual upload footer');
+const scope = { ...natives, CompletedWalkthroughActions: completed.CompletedWalkthroughActions, hasResults: true, correctedWorkbookUrl: '/report.xlsx', remainingCount: 21, recipientEmail: 'fixture@example.com', isFinalizing: false, safeAreaInsets: { bottom: 34 }, styles: new Proxy({}, { get: (_, name) => name }), setFooterHeight() {}, openCorrectedWorkbook() {}, finalizeWalkthrough() {}, startOver() {} };
+let tree;
+vm.runInNewContext(compile(`const {${Object.keys(scope).join(',')}} = scope; output(${footer});`), { exports: {}, scope, output: value => { tree = value; }, require: () => ({ jsx, jsxs: jsx, Fragment: 'Fragment' }) });
+const nodes = [];
+function visit(node) { if (!node || typeof node !== 'object') return; nodes.push(node); const children = node.props?.children; (Array.isArray(children) ? children : [children]).flat().forEach(visit); } visit(tree);
+const buttons = nodes.filter(node => node.type === 'Button');
+assert.equal(buttons.length, 3, 'A finished report has View, Email and Done without active review controls');
+assert.deepEqual(buttons.map(node => node.props.accessibilityLabel), ['View Report', 'Email report to fixture@example.com', 'Done']);
+assert(!nodes.some(node => node.type === 'Text' && /Confirm Item|Finish with|Walkthrough Complete/.test(String(node.props.children))), 'The oversized completion card and review stack must be absent');
+const photos = load('lib/review-photos.ts', { './source-photos': { sourcePhotos: () => [] }, './capture-scans': { isScanReference: name => name?.startsWith('scan_') } });
+assert.equal(photos.resolveReviewPhoto({ photo: 'photo_002.jpg' }, [{ uri: 'file:first' }, { uri: 'file:second' }]).uri, 'file:second');
+assert.equal(photos.resolveReviewPhoto({ photo: 'photo_002.jpg', photo_url: 'https://saved/image' }, []).uri, 'https://saved/image');
+const fallback = photos.resolveReviewPhoto({ photo: 'photo_001.jpg', photo_url: 'https://saved/image' }, [{ uri: 'file:local' }]);
+assert.equal(fallback.fallbackUri, 'https://saved/image');
+assert.equal(photos.resolveReviewPhoto({ photo: 'scan_only' }, []), null);
+assert.equal(photos.resolveReviewPhoto({ photo: 'photo_003.jpg' }, [{ uri: 'file:first' }]), null, 'Out-of-range photo must not open another item');
+console.log('PASS: finished footer renders only three compact actions; source matching, saved-photo fallback and barcode-only handling.');

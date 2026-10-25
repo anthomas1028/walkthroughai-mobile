@@ -23,6 +23,13 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/recovery.ts', 'utf8')
  user='user-b'; assert.equal(await out.loadRecovery(),null);
  user='user-a'; await out.saveRecovery({...draft,results:[{part_number:'00124'}]});
  assert.equal((await out.loadRecovery()).results[0].part_number,'00124');
+ const retained = await out.clearRecovery(undefined, true);
+ assert.equal(await out.loadRecovery(), null, 'Completed jobs must not reappear as unfinished drafts');
+ assert.equal(files.get(photos[0].uri), 'original pixels', 'Photo must remain viewable after finalization');
+ assert.equal(retained.photos[0].uri, photos[0].uri);
+ out.cleanupRecoveryPhotos(retained);
+ assert.equal(files.has(photos[0].uri), false, 'Delete retained files only when the finished screen closes');
+ files.set(photos[0].uri, 'original pixels'); await out.saveRecovery(draft);
  await out.clearRecovery(); assert.equal(await out.loadRecovery(),null); assert.equal(files.has(photos[0].uri),false);
  console.log('PASS: durable source copies, upload/job/review restoration, account isolation, ordered writes and local cleanup.');
 })().catch(error => {console.error(error);process.exitCode=1;});
