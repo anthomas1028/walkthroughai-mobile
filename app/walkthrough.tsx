@@ -126,6 +126,16 @@ export default function WalkthroughPhotoScreen() {
   });
   const [areaNameDraft, setAreaNameDraft] = useState("");
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
+  const pickerOperation = useRef(0);
+  const pickerBusy = useRef(false);
+  const [pickerCanCancel, setPickerCanCancel] = useState(false);
+  useEffect(() => () => { pickerOperation.current += 1; }, []);
+  function cancelPhotoSelection() {
+    pickerOperation.current += 1;
+    pickerBusy.current = false;
+    setPickerCanCancel(false);
+    setIsOpeningPicker(false);
+  }
   const [scanningArea, setScanningArea] = useState<string | null>(null);
   const [scannerEpoch, setScannerEpoch] = useState(0);
   const [isContinuing, setIsContinuing] = useState(false);
@@ -367,10 +377,15 @@ export default function WalkthroughPhotoScreen() {
   }
 
   async function takePhoto(groupId: string) {
+    if (pickerBusy.current) return;
+    pickerBusy.current = true;
+    const operation = ++pickerOperation.current;
+    setPickerCanCancel(true);
     try {
       setIsOpeningPicker(true);
       const permission = await ImagePicker.requestCameraPermissionsAsync();
 
+      if (operation !== pickerOperation.current) return;
       if (!permission.granted) {
         Alert.alert(
           "Camera permission needed",
@@ -385,23 +400,35 @@ export default function WalkthroughPhotoScreen() {
         allowsEditing: false,
       });
 
+      if (operation !== pickerOperation.current) return;
+      setPickerCanCancel(false);
       if (!result.canceled && result.assets.length > 0) {
         await addAssetsToGroup(groupId, result.assets);
       }
     } catch (error) {
+      if (operation !== pickerOperation.current) return;
       console.error("Camera error:", error);
       Alert.alert("Camera error", "The camera could not be opened. Try again.");
     } finally {
-      setIsOpeningPicker(false);
+      if (operation === pickerOperation.current) {
+        pickerBusy.current = false;
+        setPickerCanCancel(false);
+        setIsOpeningPicker(false);
+      }
     }
   }
 
   async function choosePhotos(groupId: string) {
+    if (pickerBusy.current) return;
+    pickerBusy.current = true;
+    const operation = ++pickerOperation.current;
+    setPickerCanCancel(true);
     try {
       setIsOpeningPicker(true);
       const permission =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 
+      if (operation !== pickerOperation.current) return;
       if (!permission.granted) {
         Alert.alert(
           "Photo permission needed",
@@ -414,22 +441,30 @@ export default function WalkthroughPhotoScreen() {
         mediaTypes: ["images"],
         allowsMultipleSelection: true,
         allowsEditing: false,
-        quality: 0.85,
-        selectionLimit: MAX_WALKTHROUGH_PHOTOS,
+        quality: 1,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+        selectionLimit: Math.max(1, MAX_WALKTHROUGH_PHOTOS - photos.length),
         orderedSelection: true,
       });
 
+      if (operation !== pickerOperation.current) return;
+      setPickerCanCancel(false);
       if (!result.canceled && result.assets.length > 0) {
         await addAssetsToGroup(groupId, result.assets);
       }
     } catch (error) {
+      if (operation !== pickerOperation.current) return;
       console.error("Photo-library error:", error);
       Alert.alert(
         "Photo-library error",
         "Your photos could not be opened. Try again."
       );
     } finally {
-      setIsOpeningPicker(false);
+      if (operation === pickerOperation.current) {
+        pickerBusy.current = false;
+        setPickerCanCancel(false);
+        setIsOpeningPicker(false);
+      }
     }
   }
 
@@ -770,6 +805,17 @@ export default function WalkthroughPhotoScreen() {
               </Text>
             </View>
           </View>
+          {isOpeningPicker && (
+            <View accessibilityLiveRegion="polite" style={{ padding: 16, gap: 12 }}>
+              <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                {pickerCanCancel ? 'Preparing selected photos…' : 'Saving photos on this device…'}
+              </Text>
+              <Text style={{ color: '#ABC5DF' }}>Large selections and photos stored in iCloud can take longer. Keep the app open.</Text>
+              {pickerCanCancel && <Pressable accessibilityRole="button" onPress={cancelPhotoSelection} style={{ paddingVertical: 12 }}>
+                <Text style={{ color: '#92C5FF', fontWeight: '700' }}>Cancel selection and try again</Text>
+              </Pressable>}
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.footer}>
