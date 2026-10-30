@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
 import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
@@ -104,6 +106,7 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="full" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.flex}
@@ -227,7 +230,7 @@ export default function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createPolishedStyles({
   safeArea: { flex: 1, backgroundColor: "#07111F" },
   flex: { flex: 1 },
   content: {
@@ -250,7 +253,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   subtitle: {
-    color: "#94A3B8",
+    color: "#B9C8D9",
     fontSize: 16,
     lineHeight: 22,
     textAlign: "center",

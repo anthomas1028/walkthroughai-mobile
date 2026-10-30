@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
 import type { BarcodeScan } from "../lib/barcode-scans";
 import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
@@ -1047,6 +1049,7 @@ export default function CustomerReportScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="quiet" />
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable
@@ -1629,7 +1632,7 @@ export default function CustomerReportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createPolishedStyles({
   safeArea: { flex: 1, backgroundColor: "#091321" },
   container: { width: "100%", maxWidth: 1180, alignSelf: "center", flex: 1, paddingHorizontal: 18, paddingTop: 12 },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 12 },

@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
 import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
@@ -659,6 +661,7 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="quiet" />
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable
@@ -834,7 +837,7 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createPolishedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#091321",

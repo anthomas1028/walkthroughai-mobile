@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
 import { Ionicons } from "@expo/vector-icons";
 import { Alert } from "../lib/alerts";
@@ -201,6 +203,7 @@ export default function CustomerDashboardScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
+      <AppBackdrop variant="dashboard" />
       <View style={s.container}>
         <View style={s.header}>
           <Pressable onPress={() => router.back()} style={s.back}>
@@ -485,7 +488,7 @@ export default function CustomerDashboardScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const s = createPolishedStyles({
   safe: {
     flex: 1,
     backgroundColor: "#091321",

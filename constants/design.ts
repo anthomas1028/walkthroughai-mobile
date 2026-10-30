@@ -10,8 +10,8 @@ export const COLORS = {
   primaryLight: '#67B8FF',
 
   text: '#F5F9FF',
-  textMuted: '#91A0B7',
-  textSoft: '#94A8C0',
+  textMuted: '#AFBED0',
+  textSoft: '#B7C9DE',
 
   success: '#42F39B',
   warning: '#FFB84D',

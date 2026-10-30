@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { CompletedWalkthroughActions } from '../components/CompletedWalkthroughActions';
 import { resolveReviewPhoto, reviewPhotos } from '../lib/review-photos';
 import { InventoryItemSummary } from "../components/InventoryItemSummary";
@@ -2060,6 +2062,7 @@ export default function UploadScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="quiet" />
       <KeyboardAvoidingView
         behavior={
           Platform.OS === "ios"
@@ -3890,7 +3893,7 @@ export default function UploadScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createPolishedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#091321",

@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
 import { TestUpdates } from "../components/TestUpdates";
 import { Alert } from "../lib/alerts";
@@ -437,6 +439,7 @@ export default function AccountScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="quiet" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboardView}
@@ -777,7 +780,7 @@ function PasswordInput({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createPolishedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#091321",

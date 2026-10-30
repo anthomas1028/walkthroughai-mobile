@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -578,6 +580,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="dashboard" />
       <KeyboardAvoidingView
         behavior={
           Platform.OS === "ios" ? "padding" : undefined
@@ -1103,7 +1106,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createPolishedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#091321",

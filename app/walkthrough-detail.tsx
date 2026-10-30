@@ -1,3 +1,5 @@
+import { createPolishedStyles } from "../lib/polished-styles";
+import { AppBackdrop } from "../components/AppBackdrop";
 import { isScanReference } from "../lib/capture-scans";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
 import type { BarcodeScan } from "../lib/barcode-scans";
@@ -436,6 +438,7 @@ export default function WalkthroughDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="quiet" />
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable
@@ -924,7 +927,7 @@ export default function WalkthroughDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createPolishedStyles({
   safeArea: { flex: 1, backgroundColor: "#091321" },
   container: { width: "100%", maxWidth: 1180, alignSelf: "center", flex: 1, paddingHorizontal: UI.screenPadding, paddingTop: 10 },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
