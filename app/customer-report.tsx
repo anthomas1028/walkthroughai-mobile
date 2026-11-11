@@ -570,7 +570,7 @@ export default function CustomerReportScreen() {
       setIsSavingReviewItem(true);
 
       await mutateReviewItem(selectedReviewItem, {
-        is_confirmed: true,
+        is_confirmed: false,
         review_needed: false,
         was_edited: selectedReviewItem.was_edited || false,
       });
@@ -613,7 +613,7 @@ export default function CustomerReportScreen() {
         package_quantity: reviewDraft.package_quantity || "",
         label_text: reviewDraft.label_text || "",
         notes: reviewDraft.notes || "",
-        is_confirmed: true,
+        is_confirmed: false,
         review_needed: false,
         was_edited: true,
       });
@@ -909,7 +909,7 @@ export default function CustomerReportScreen() {
           </Text>
           <Text style={styles.recordMeta}>
             {item.item_count || 0} items • {item.review_item_count || 0}{" "}
-            review
+            with missing details
           </Text>
           <Text style={styles.recordSubtext}>
             {item.vendors || "No vendor"} • {formatDate(item.completed_at)}
@@ -936,11 +936,7 @@ export default function CustomerReportScreen() {
                 <Text numberOfLines={2} style={styles.reviewCardTitle}>
                   {item.description || "Inventory item"}
                 </Text>
-                <View style={styles.reviewConfidenceBadge}>
-                  <Text style={styles.reviewConfidenceText}>
-                    {confidenceText(item.confidence)}
-                  </Text>
-                </View>
+
               </View>
 
               <Text style={styles.reviewCardPartNumber}>{partNumber}</Text>
@@ -1025,11 +1021,7 @@ export default function CustomerReportScreen() {
             </Text>
             <Text style={styles.partNumber}>{fallbackPartNumber}</Text>
           </View>
-          <View style={styles.confidenceBadge}>
-            <Text style={styles.confidenceText}>
-              {confidenceText(item.confidence)}
-            </Text>
-          </View>
+
         </View>
         <Text style={styles.recordMeta}>
           {item.vendor || "Vendor not identified"} • Walkthrough #{item.walkthrough_id}
@@ -1037,9 +1029,7 @@ export default function CustomerReportScreen() {
         <Text style={styles.recordSubtext}>
           {item.photo || "No photo name"} • {formatDate(recordDate(item))}
         </Text>
-        {item.review_needed || !item.is_confirmed ? (
-          <Text style={styles.reviewText}>Needs review</Text>
-        ) : null}
+
       </Pressable>
     );
   }
@@ -1078,7 +1068,7 @@ export default function CustomerReportScreen() {
               {isUniquePartsReport
                 ? "Inventory Items"
                 : isReviewReport
-                  ? "Review Items"
+                  ? "Missing Details"
                   : (report?.report_title || "Customer Report")}
             </Text>
             <Text numberOfLines={1} style={styles.subtitle}>
@@ -1140,7 +1130,7 @@ export default function CustomerReportScreen() {
               isUniquePartsReport
                 ? "Search part #, description, vendor…"
                 : isReviewReport
-                  ? "Search review items…"
+                  ? "Search missing details…"
                   : "Search this report"
             }
             placeholderTextColor="#70839D"
@@ -1244,8 +1234,8 @@ export default function CustomerReportScreen() {
                 : "distinct parts identified"
               : isReviewReport
                 ? (report?.record_count || 0) === 1
-                  ? "item needs review"
-                  : "items need review"
+                  ? "item has missing details"
+                  : "items have missing details"
                 : "records"}
           </Text>
           <Pressable
@@ -1308,7 +1298,7 @@ export default function CustomerReportScreen() {
                   {isUniquePartsReport
                     ? "No matching inventory"
                     : isReviewReport
-                      ? "Review queue is clear"
+                      ? "No missing details"
                       : "No matching records"}
                 </Text>
                 <Text style={styles.emptyText}>
@@ -1437,7 +1427,7 @@ export default function CustomerReportScreen() {
             >
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
-            <Text style={styles.modalTitle}>Review Item</Text>
+            <Text style={styles.modalTitle}>Edit Item</Text>
             <View style={styles.modalHeaderSpacer} />
           </View>
 
@@ -1448,7 +1438,7 @@ export default function CustomerReportScreen() {
             >
               <View style={styles.reviewDetailHero}>
                 <View style={styles.reviewDetailHeroText}>
-                  <Text style={styles.reviewDetailEyebrow}>NEEDS REVIEW</Text>
+                  <Text style={styles.reviewDetailEyebrow}>MISSING DETAILS</Text>
                   <Text style={styles.reviewDetailTitle}>
                     {reviewDraft.description ||
                       displayPartNumber(reviewDraft) ||
@@ -1459,14 +1449,7 @@ export default function CustomerReportScreen() {
                     {reviewDraft.location || "Unassigned"}
                   </Text>
                 </View>
-                <View style={styles.reviewDetailConfidence}>
-                  <Text style={styles.reviewDetailConfidenceValue}>
-                    {confidenceText(reviewDraft.confidence)}
-                  </Text>
-                  <Text style={styles.reviewDetailConfidenceLabel}>
-                    Confidence
-                  </Text>
-                </View>
+
               </View>
 
               <Pressable
@@ -1492,8 +1475,7 @@ export default function CustomerReportScreen() {
               <View style={styles.reviewEditCard}>
                 <Text style={styles.reviewEditHeading}>Inventory details</Text>
                 <Text style={styles.reviewEditHelp}>
-                  Correct anything the AI misread, then save. Saving also marks
-                  this item reviewed.
+                  Edit the captured details and save your changes.
                 </Text>
 
                 {[
@@ -1553,30 +1535,13 @@ export default function CustomerReportScreen() {
                   <>
                     <Ionicons name="save-outline" size={20} color="#FFFFFF" />
                     <Text style={styles.reviewSaveButtonText}>
-                      Save Changes & Confirm
+                      Save Changes
                     </Text>
                   </>
                 )}
               </Pressable>
 
-              <Pressable
-                disabled={isSavingReviewItem || isRemovingReviewItem}
-                onPress={confirmReviewItem}
-                style={({ pressed }) => [
-                  styles.reviewConfirmButton,
-                  (isSavingReviewItem || isRemovingReviewItem) &&
-                    styles.disabledButton,
-                  pressed &&
-                    !isSavingReviewItem &&
-                    !isRemovingReviewItem &&
-                    styles.buttonPressed,
-                ]}
-              >
-                <Ionicons name="checkmark-circle-outline" size={21} color="#9FE7C7" />
-                <Text style={styles.reviewConfirmButtonText}>
-                  Looks Correct — Confirm
-                </Text>
-              </Pressable>
+
 
               <Pressable
                 disabled={isSavingReviewItem || isRemovingReviewItem}

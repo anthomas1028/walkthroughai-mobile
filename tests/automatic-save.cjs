@@ -1,0 +1,14 @@
+const fs=require('fs'),vm=require('vm'),ts=require('typescript'),assert=require('assert/strict');
+const source=fs.readFileSync('app/upload.tsx','utf8');
+const ast=ts.createSourceFile('upload.tsx',source,99,true,4);let effect;const visible=[];
+function visit(node){if(ts.isCallExpression(node)&&node.expression.getText()==='useEffect'&&node.arguments[0]?.getText().includes('autosaveAttempt.current'))effect=node.arguments[0].getText();if(ts.isJsxText(node))visible.push(node.getText());ts.forEachChild(node,visit)}visit(ast);
+assert(effect);assert(!/AI confidence|Confirm Correct|Confirm All|Review progress|Mark Unreviewed/.test(visible.join(' ')));
+const scope={results:[{photo:'photo_001.jpg',description:'Gloves',is_confirmed:false}],isProcessing:false,isFinalizing:false,isDiscarding:false,reviewTask:null,editingIndex:null,autosaveAttempt:{current:''},calls:[],timers:[],setTimeout(fn){thisUnused=0;scope.timers.push(fn);return 1;},clearTimeout(){scope.timers=[];},finalizeWalkthrough(...args){scope.calls.push(args)}};
+const compiled=ts.transpileModule(`run = ${effect}`,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;vm.createContext(scope);vm.runInContext(compiled,scope);
+let cancel=scope.run();assert.equal(scope.timers.length,1);cancel();assert.equal(scope.timers.length,0);
+scope.run();scope.timers.shift()();assert.deepEqual(scope.calls,[[false,true]],'Save without confirmation and without sending email');
+scope.run();assert.equal(scope.timers.length,0,'A failed save does not loop automatically');
+scope.results=[{...scope.results[0],description:'Gloves, size L'}];scope.editingIndex=0;scope.run();assert.equal(scope.timers.length,0,'Wait until editing is finished');
+scope.editingIndex=null;scope.isProcessing=true;scope.run();assert.equal(scope.timers.length,0,'Do not save partial analysis');
+scope.isProcessing=false;scope.run();scope.timers.shift()();assert.equal(scope.calls.length,2,'Save changed inventory');
+console.log('PASS: automatic save, no automatic email, edit/processing guards, cancellation, and no failed-save retry loop.');

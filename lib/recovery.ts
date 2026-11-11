@@ -8,6 +8,7 @@ export type RecoveryDraft = {
   version: 1; customerId: string; customerName: string; contactName: string;
   photos: RecoveryPhoto[]; prepared: RecoveryPhoto[]; uploadId: string;
   completionAlertToken?: string;
+  captureSaveId?: string;
   nativeBatchId?: string;
   uploadRequested?: boolean;
   captureScans?: unknown[];

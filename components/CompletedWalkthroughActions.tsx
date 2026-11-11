@@ -5,7 +5,7 @@ export function CompletedWalkthroughActions({ remainingCount, recipientEmail, bu
   onView: () => void; onEmail: () => void; onDone: () => void;
 }) {
   return <View style={{ gap: 6 }}>
-    <Text style={{ color: '#86EFAC', fontSize: 13, fontWeight: '700' }}>✓ Report saved{remainingCount ? ` · ${remainingCount} need review` : ''}</Text>
+    <Text style={{ color: '#86EFAC', fontSize: 13, fontWeight: '700' }}>✓ Report saved</Text>
     <View style={{ flexDirection: 'row', gap: 8 }}>
       {[{ label: 'View Report', action: onView, color: '#176347' }, { label: 'Email', action: onEmail, color: '#285FC6' }, { label: 'Done', action: onDone, color: '#20364D' }].map(({ label, action, color }) =>
         <Pressable key={label} accessibilityRole="button" accessibilityLabel={label === 'Email' ? `Email report to ${recipientEmail || 'your account email'}` : label} disabled={busy} onPress={action}

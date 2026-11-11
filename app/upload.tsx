@@ -316,7 +316,7 @@ function applySmartConfirmation(
   return {
     ...result,
     is_confirmed: false,
-    review_needed: true,
+    review_needed: getReviewReasons(result).length > 0,
   };
 }
 
@@ -324,16 +324,10 @@ function getReviewReasons(
   result: RecognitionResult
 ): string[] {
   const reasons: string[] = [];
-  const confidence = getConfidencePercent(
-    result.confidence
-  );
 
-  if (confidence < 90) {
-    reasons.push(`Model confidence signal: ${confidence}%`);
-  }
 
-  if (!cleanText(result.vendor)) {
-    reasons.push("Vendor is missing");
+  if (!cleanText(result.manufacturer)) {
+    reasons.push("Manufacturer is missing");
   }
 
   if (!cleanText(result.description)) {
@@ -349,6 +343,7 @@ function getReviewReasons(
     reasons.push("Part number is missing");
   }
 
+  if (!cleanText(result.location) || cleanText(result.location).toLowerCase() === "unassigned") reasons.push("Location is missing");
   return reasons;
 }
 
@@ -813,6 +808,7 @@ export default function UploadScreen() {
         setPhotos(saved.photos);
         setCapturedScans((saved.captureScans || []).map(row => normalizeResult(row as RecognitionResult)));
         recoveryRef.current = saved;
+        if (saved.captureSaveId) captureSaveId.current = saved.captureSaveId;
         setWaitingForConnection(saved.uploadRequested === true && !saved.results.length);
         setDeviceSavedPhotos(saved.photos.length);
         setReceivedPhotos(saved.jobId ? saved.photos.length : saved.uploaded.length);
@@ -1540,8 +1536,8 @@ export default function UploadScreen() {
       ),
       notes: cleanText(editDraft.notes),
       was_edited: true,
-      is_confirmed: true,
-      review_needed: false,
+      is_confirmed: false,
+      review_needed: getReviewReasons(editDraft).length > 0,
     };
 
     setResults((currentResults) =>
@@ -1581,103 +1577,21 @@ export default function UploadScreen() {
     });
   }
 
-  function toggleConfirmed(index: number) {
-    const wasConfirmed = Boolean(results[index]?.is_confirmed);
-
-    setResults((currentResults) =>
-      currentResults.map((result, resultIndex) => {
-        if (resultIndex !== index) {
-          return result;
-        }
-
-        const nextConfirmed =
-          !result.is_confirmed;
-
-        return {
-          ...result,
-          is_confirmed: nextConfirmed,
-          review_needed: !nextConfirmed,
-        };
-      })
-    );
-
-    setCorrectedWorkbookUrl(null);
-    setEmailSent(false);
-    setEmailedRecipient("");
-
-    if (!wasConfirmed) {
-      const nextIndex = results.findIndex(
-        (result, resultIndex) =>
-          resultIndex > index && !result.is_confirmed
-      );
-
-      if (nextIndex >= 0) {
-        setTimeout(() => scrollToResult(nextIndex), 180);
-      }
-    }
-  }
-
-  function confirmAllResults() {
-    setResults((currentResults) =>
-      currentResults.map((result) => ({
-        ...result,
-        is_confirmed: true,
-        review_needed: false,
-      }))
-    );
-
-    setCorrectedWorkbookUrl(null);
-    setEmailSent(false);
-    setEmailedRecipient("");
-  }
-
-  function jumpToFirstUnconfirmed() {
-    if (firstUnconfirmedIndex < 0) {
-      Alert.alert(
-        "Review complete",
-        "Every inventory item has been confirmed."
-      );
-      return;
-    }
-
-    scrollToResult(firstUnconfirmedIndex);
-  }
-
-  function confirmNextItem() {
-    if (firstUnconfirmedIndex < 0) {
-      return;
-    }
-
-    const confirmedIndex = firstUnconfirmedIndex;
-
-    setResults((currentResults) =>
-      currentResults.map((result, index) =>
-        index === confirmedIndex
-          ? {
-              ...result,
-              is_confirmed: true,
-              review_needed: false,
-            }
-          : result
-      )
-    );
-
-    setCorrectedWorkbookUrl(null);
-    setEmailSent(false);
-    setEmailedRecipient("");
-
-    const nextIndex = results.findIndex(
-      (result, index) =>
-        index > confirmedIndex && !result.is_confirmed
-    );
-
-    if (nextIndex >= 0) {
-      setTimeout(() => scrollToResult(nextIndex), 180);
-    }
-  }
+  const captureSaveId = useRef(Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2));
+  const autosaveAttempt = useRef('');
+  useEffect(() => {
+    if (!results.length || isProcessing || isFinalizing || isDiscarding || reviewTask || editingIndex !== null) return;
+    const snapshot = JSON.stringify(results);
+    if (snapshot === autosaveAttempt.current) return;
+    const timer = setTimeout(() => {
+      autosaveAttempt.current = snapshot;
+      void finalizeWalkthrough(false, true);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [results, isProcessing, isFinalizing, isDiscarding, reviewTask, editingIndex]);
 
   async function finalizeWalkthrough(
-    sendEmail: boolean
+    sendEmail: boolean, automatic = false
   ): Promise<string | null> {
     if (finalizationBusy.current) return null;
     const cleanedRecipient =
@@ -1707,6 +1621,7 @@ export default function UploadScreen() {
       setIsFinalizing(true);
       setErrorMessage("");
 
+      if (!currentJobId && recoveryRef.current) await checkpoint({ captureSaveId: captureSaveId.current });
       const response = await apiFetch(
         FINALIZE_API_URL,
         {
@@ -1727,6 +1642,7 @@ export default function UploadScreen() {
               : null,
             send_email: sendEmail,
             job_id: currentJobId || null,
+            capture_id: captureSaveId.current,
             results,
           }),
         }
@@ -1751,6 +1667,7 @@ export default function UploadScreen() {
         ? data.results.map(row => normalizeResult({ ...row, photo_url: row.photo_url || results.find(previous => previous.photo === row.photo)?.photo_url }))
         : results;
 
+      autosaveAttempt.current = JSON.stringify(finalizedResults);
       setResults(finalizedResults);
       // Keep source bytes available while this completed report remains on screen.
       const viewerPhotos = recoveryRef.current?.photos || photos;
@@ -1844,7 +1761,7 @@ export default function UploadScreen() {
 
       setErrorMessage(message);
 
-      Alert.alert(
+      if (!automatic) Alert.alert(
         error instanceof Error && error.name === "FinalizationPendingError"
           ? "Save status not confirmed" : "Finalization failed",
         message
@@ -1857,34 +1774,6 @@ export default function UploadScreen() {
     }
   }
 
-  function finishWithReviewItems() {
-    if (remainingCount <= 0 || isFinalizing || isDiscarding) {
-      return;
-    }
-
-    Alert.alert(
-      "Finish with review items?",
-      `${remainingCount} ${
-        remainingCount === 1 ? "item is" : "items are"
-      } still unconfirmed. ${
-        remainingCount === 1 ? "It" : "They"
-      } will be saved to Review Items so you can resolve ${
-        remainingCount === 1 ? "it" : "them"
-      } later.`,
-      [
-        {
-          text: "Keep Reviewing",
-          style: "cancel",
-        },
-        {
-          text: "Finish Walkthrough",
-          onPress: () => {
-            void finalizeWalkthrough(false);
-          },
-        },
-      ]
-    );
-  }
 
   async function discardWalkthrough() {
     if (!currentJobId && recoveryRef.current?.localCaptureReview) {
@@ -2037,7 +1926,7 @@ export default function UploadScreen() {
     if (!correctedWorkbookUrl) {
       Alert.alert(
         "Corrected workbook unavailable",
-        "Finalize the confirmed results first."
+        "Save the inventory first."
       );
       return;
     }
@@ -2157,7 +2046,7 @@ export default function UploadScreen() {
                 </View>
 
                 <Text style={styles.title}>
-                  {photoCount === 0 && capturedScans.length > 0 ? "Scans ready to review" : photoCount > 0
+                  {photoCount === 0 && capturedScans.length > 0 ? "Scans ready to save" : photoCount > 0
                     ? "Ready for Recognition"
                     : "No Photos Received"}
                 </Text>
@@ -2324,7 +2213,7 @@ export default function UploadScreen() {
               </Text>
 
               <Text style={styles.processingNote}>{currentJobId
-                ? "Your photos are uploaded. Analysis continues on the server if you lock your phone or switch apps. Return here to review the results."
+                ? "Your photos are uploaded. Analysis continues on the server if you lock your phone or switch apps. Return here to view and save the results."
                 : nativeUploadQueued ? "iOS is uploading your photos. You can switch apps or lock your phone. Analysis starts automatically after every photo arrives. Do not swipe the app closed." : nativeUploadSupported ? "Preparing the iOS upload queue. Transfers continue when you switch apps once queued." : "Keep the app open until all photos finish uploading. Install the latest TestFlight build for background uploads."}</Text>
               {notificationIssue ? <Text style={{ color: "#FCD34D", padding: 12 }}>{notificationIssue}</Text> : null}
               {currentJobId && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14, marginTop: 10 }}>
@@ -2452,122 +2341,20 @@ export default function UploadScreen() {
             !isProcessing &&
             !isFinalizing && (
               <View style={styles.resultsSection}>
-                {!allResultsConfirmed ? (
-                  <>
-                    <View style={styles.completedCard}>
-                      <View style={styles.completedIcon}>
-                        <Text style={styles.completedIconText}>✓</Text>
-                      </View>
-
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.completedTitle}>
-                        Ready to review
-                      </Text>
-
-                      <Text style={styles.completedText}>
-                        {results.length} inventory{" "}
-                        {results.length === 1
-                          ? "result was"
-                          : "results were"}{" "}
-                        recorded for{" "}
-                        {completedCustomer || "Mobile Walkthrough"}.
-                      </Text>
-                      </View>
-                    </View>
-
+                <Text style={styles.completedTitle}>{correctedWorkbookUrl ? 'Inventory saved' : errorMessage ? 'Inventory not saved yet' : 'Saving inventory…'}</Text>
+                <Text style={styles.completedText}>{results.length} items · Edit any item or open its photo. Missing details do not block saving.</Text>
                     {photoCount > 0 && <View style={styles.reviewProgressCard}>
                       <Text style={styles.reviewProgressTitle}>Photo accounting</Text>
-                      <Text style={styles.reviewProgressText}>{photoCount} submitted · {countOutcome("Ready to review")} ready · {countOutcome("Confirmed")} confirmed · {countOutcome("Needs retake / review")} need retake/review · {countOutcome("Failed / missing")} failed/missing · {countOutcome("Excluded after review")} excluded</Text>
+                      <Text style={styles.reviewProgressText}>{photoCount} submitted · {countOutcome("Ready to review") + countOutcome("Confirmed")} captured · {countOutcome("Needs retake / review")} need a clearer label · {countOutcome("Failed / missing")} failed/missing · {countOutcome("Excluded after review")} excluded</Text>
                       {(showPhotoDetails ? photoOutcomes : []).map(({ photo, index, rows, status }) => {
                         const failed = status === "Failed / missing";
                         return <Pressable key={photo.id} accessibilityRole="button" onPress={() => rows[0] ? beginEditing(results.indexOf(rows[0])) : Alert.alert("Missing result", "Retry failed photos, or select this photo again.")}>
-                          <Text style={[styles.reviewProgressText, { color: failed ? "#FCA5A5" : "#CBD5E1", paddingVertical: 5 }]}>Photo {index + 1} · {status}</Text>
+                          <Text style={[styles.reviewProgressText, { color: failed ? "#FCA5A5" : "#CBD5E1", paddingVertical: 5 }]}>Photo {index + 1} · {status === "Ready to review" || status === "Confirmed" ? "Captured" : status === "Needs retake / review" ? "Part number not captured" : status === "Excluded after review" ? "Excluded" : status}</Text>
                         </Pressable>;
                       })}
                       <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPhotoDetails }} style={{ minHeight: 44, justifyContent: "center" }} onPress={() => setShowPhotoDetails(value => !value)}><Text style={{ color: "#60A5FA", paddingVertical: 8 }}>{showPhotoDetails ? "Collapse photo details" : "View every photo"}</Text></Pressable>
                       {countOutcome("Failed / missing") > 0 ? <Pressable accessibilityRole="button" style={{ minHeight: 44, justifyContent: "center" }} disabled={isProcessing} onPress={() => void retryFailedPhotos()}><Text style={{ color: "#60A5FA", paddingVertical: 12 }}>Retry failed photos only</Text></Pressable> : null}
                     </View>}
-                    <Text selectable style={{ color: "#94A3B8", fontSize: 12, marginBottom: 12 }}>App {Constants.expoConfig?.version || "unknown"} · Release {backendDiagnostics.release || "unavailable"} · Backend {backendDiagnostics.backend_commit?.slice(0, 7) || "unknown"} · Reader {backendDiagnostics.reader || "unknown"}</Text>
-                    <View style={styles.aiDisclaimerCard}>
-                      <Text style={styles.aiDisclaimerIcon}>i</Text>
-
-                      <Text style={styles.aiDisclaimerText}>
-                        Confirm items you trust, or finish with unresolved items saved for later review.
-                      </Text>
-                    </View>
-
-                    <View style={styles.reviewProgressCard}>
-                      <View style={styles.reviewProgressHeader}>
-                        <View>
-                          <Text style={styles.reviewProgressTitle}>
-                            Review progress
-                          </Text>
-
-                          <Text style={styles.reviewProgressText}>
-                            {confirmedCount} of {results.length} items confirmed
-                          </Text>
-                        </View>
-
-                        <View style={styles.progressBadge}>
-                          <Text style={styles.progressBadgeText}>
-                            {confirmedCount}/{results.length}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.progressTrack}>
-                        <View
-                          style={[
-                            styles.progressFill,
-                            { width: `${progressPercent}%` },
-                          ]}
-                        />
-                      </View>
-
-                      <View style={styles.reviewQuickActions}>
-                        <Pressable
-                          onPress={jumpToFirstUnconfirmed}
-                          style={({ pressed }) => [
-                            styles.jumpButton,
-                            pressed && styles.buttonPressed,
-                          ]}
-                        >
-                          <Text style={styles.jumpButtonText}>
-                            Jump to First Unconfirmed
-                          </Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={confirmAllResults}
-                          style={({ pressed }) => [
-                            styles.confirmAllButton,
-                            pressed && styles.buttonPressed,
-                          ]}
-                        >
-                          <Text style={styles.confirmAllButtonText}>
-                            Confirm All
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.readySummaryCard}>
-                    <View style={styles.readySummaryCheck}>
-                      <Text style={styles.readySummaryCheckText}>✓</Text>
-                    </View>
-
-                    <View style={styles.readySummaryTextArea}>
-                      <Text style={styles.readySummaryTitle}>
-                        {results.length} {results.length === 1 ? "item" : "items"} ready
-                      </Text>
-
-                      <Text style={styles.readySummarySubtitle}>
-                        {completedCustomer || "Mobile Walkthrough"}
-                      </Text>
-                    </View>
-                  </View>
-                )}
 
                 <View
                   onLayout={(event) => {
@@ -2578,7 +2365,7 @@ export default function UploadScreen() {
                 >
                   <View>
                     <Text style={styles.resultsTitle}>
-                      Review Results
+                      Inventory
                     </Text>
                     <Text style={styles.resultsSubtitle}>
                       {reviewMode === "area"
@@ -2649,7 +2436,7 @@ export default function UploadScreen() {
                                   {group.location}
                                 </Text>
                                 <Text style={styles.areaReviewMeta}>
-                                  {group.items.length} {group.items.length === 1 ? "item" : "items"} · {confirmedInArea} confirmed
+                                  {group.items.length} {group.items.length === 1 ? "item" : "items"}
                                 </Text>
                               </View>
                             </View>
@@ -2685,10 +2472,8 @@ export default function UploadScreen() {
                         }}
                         style={[
                           styles.resultCard,
-                          !result.is_confirmed &&
-                            styles.resultCardNeedsReview,
-                          result.is_confirmed &&
-                            styles.resultCardConfirmed,
+                          getReviewReasons(result).length > 0 && styles.resultCardNeedsReview,
+                          false && styles.resultCardConfirmed,
                         ]}
                       >
                         <InventoryItemSummary
@@ -2698,11 +2483,10 @@ export default function UploadScreen() {
                           photoUri={resolveReviewPhoto(result, recoveryRef.current?.photos || photos)?.uri}
                           quantity={result.scanned_barcodes?.length === 1 ? result.scanned_barcodes[0].quantity : undefined}
                           location={result.location}
-                          status={correctedWorkbookUrl ? 'Saved' : result.is_confirmed ? 'Ready' : 'Needs details'}
+                          status={reviewReasons.length ? 'Missing details' : correctedWorkbookUrl ? 'Saved' : 'Saving'}
                           onPhoto={() => viewSourcePhoto(result)}
                         >
-                        {!result.is_confirmed &&
-                          reviewReasons.length > 0 && (
+                        {reviewReasons.length > 0 && (
                             <View
                               style={
                                 styles.reviewReasonCard
@@ -2713,7 +2497,7 @@ export default function UploadScreen() {
                                   styles.reviewReasonTitle
                                 }
                               >
-                                Why this item needs review
+                                Missing details
                               </Text>
 
                               {reviewReasons.map(
@@ -2797,48 +2581,7 @@ export default function UploadScreen() {
                           }
                         />
 
-                        <View
-                          style={
-                            styles.confidenceSection
-                          }
-                        >
-                          <View
-                            style={
-                              styles.confidenceHeader
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.resultFieldLabel
-                              }
-                            >
-                              AI confidence
-                            </Text>
 
-                            <Text
-                              style={
-                                styles.confidenceValue
-                              }
-                            >
-                              {confidence}%
-                            </Text>
-                          </View>
-
-                          <View
-                            style={
-                              styles.confidenceTrack
-                            }
-                          >
-                            <View
-                              style={[
-                                styles.confidenceFill,
-                                {
-                                  width: `${confidence}%`,
-                                },
-                              ]}
-                            />
-                          </View>
-                        </View>
 
                         </InventoryItemSummary>
 
@@ -2891,34 +2634,7 @@ export default function UploadScreen() {
                             </Text>
                           </Pressable>
 
-                          <Pressable
-                            onPress={() =>
-                              toggleConfirmed(
-                                index
-                              )
-                            }
-                            style={({
-                              pressed,
-                            }) => [
-                              styles.confirmButton,
-                              result.is_confirmed &&
-                                styles.unconfirmButton,
-                              pressed &&
-                                styles.buttonPressed,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.confirmButtonText,
-                                result.is_confirmed &&
-                                  styles.unconfirmButtonText,
-                              ]}
-                            >
-                              {result.is_confirmed
-                                ? "Mark Unreviewed"
-                                : "Confirm Correct"}
-                            </Text>
-                          </Pressable>
+
                         </View>
                       </View>
                     );
@@ -2954,10 +2670,8 @@ export default function UploadScreen() {
                         }}
                         style={[
                           styles.resultCard,
-                          !result.is_confirmed &&
-                            styles.resultCardNeedsReview,
-                          result.is_confirmed &&
-                            styles.resultCardConfirmed,
+                          getReviewReasons(result).length > 0 && styles.resultCardNeedsReview,
+                          false && styles.resultCardConfirmed,
                         ]}
                       >
                         <InventoryItemSummary
@@ -2967,11 +2681,10 @@ export default function UploadScreen() {
                           photoUri={resolveReviewPhoto(result, recoveryRef.current?.photos || photos)?.uri}
                           quantity={result.scanned_barcodes?.length === 1 ? result.scanned_barcodes[0].quantity : undefined}
                           location={result.location}
-                          status={correctedWorkbookUrl ? 'Saved' : result.is_confirmed ? 'Ready' : 'Needs details'}
+                          status={reviewReasons.length ? 'Missing details' : correctedWorkbookUrl ? 'Saved' : 'Saving'}
                           onPhoto={() => viewSourcePhoto(result)}
                         >
-                        {!result.is_confirmed &&
-                          reviewReasons.length > 0 && (
+                        {reviewReasons.length > 0 && (
                             <View
                               style={
                                 styles.reviewReasonCard
@@ -2982,7 +2695,7 @@ export default function UploadScreen() {
                                   styles.reviewReasonTitle
                                 }
                               >
-                                Why this item needs review
+                                Missing details
                               </Text>
 
                               {reviewReasons.map(
@@ -3066,48 +2779,7 @@ export default function UploadScreen() {
                           }
                         />
 
-                        <View
-                          style={
-                            styles.confidenceSection
-                          }
-                        >
-                          <View
-                            style={
-                              styles.confidenceHeader
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.resultFieldLabel
-                              }
-                            >
-                              AI confidence
-                            </Text>
 
-                            <Text
-                              style={
-                                styles.confidenceValue
-                              }
-                            >
-                              {confidence}%
-                            </Text>
-                          </View>
-
-                          <View
-                            style={
-                              styles.confidenceTrack
-                            }
-                          >
-                            <View
-                              style={[
-                                styles.confidenceFill,
-                                {
-                                  width: `${confidence}%`,
-                                },
-                              ]}
-                            />
-                          </View>
-                        </View>
 
                         </InventoryItemSummary>
 
@@ -3160,34 +2832,7 @@ export default function UploadScreen() {
                             </Text>
                           </Pressable>
 
-                          <Pressable
-                            onPress={() =>
-                              toggleConfirmed(
-                                index
-                              )
-                            }
-                            style={({
-                              pressed,
-                            }) => [
-                              styles.confirmButton,
-                              result.is_confirmed &&
-                                styles.unconfirmButton,
-                              pressed &&
-                                styles.buttonPressed,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.confirmButtonText,
-                                result.is_confirmed &&
-                                  styles.unconfirmButtonText,
-                              ]}
-                            >
-                              {result.is_confirmed
-                                ? "Mark Unreviewed"
-                                : "Confirm Correct"}
-                            </Text>
-                          </Pressable>
+
                         </View>
                       </View>
                     );
@@ -3263,7 +2908,7 @@ export default function UploadScreen() {
                     styles.primaryButtonText
                   }
                 >
-                  {photoCount === 0 && capturedScans.length > 0 ? `Review ${capturedScans.length} scanned items` : photoCount === 0
+                  {photoCount === 0 && capturedScans.length > 0 ? `Save ${capturedScans.length} scanned items` : photoCount === 0
                     ? "Return and Add Photos"
                     : waitingForConnection ? "Waiting for connection…" : connection.connection === "offline" ? "Save and upload when connected" : `Analyze ${photoCount} ${
                         photoCount === 1
@@ -3276,183 +2921,7 @@ export default function UploadScreen() {
             </>
           ) : (
             <>
-              {!correctedWorkbookUrl && !allResultsConfirmed && (
-                <View style={styles.compactReviewStatus}>
-                  <View style={styles.compactReviewHeader}>
-                    <Text style={styles.compactReviewTitle}>
-                      {allResultsConfirmed
-                        ? "Review complete"
-                        : `Item ${firstUnconfirmedIndex + 1} of ${results.length}`}
-                    </Text>
-
-                    <Text style={styles.compactReviewCount}>
-                      {confirmedCount}/{results.length} confirmed
-                    </Text>
-                  </View>
-
-                  <View style={styles.compactProgressTrack}>
-                    <View
-                      style={[
-                        styles.compactProgressFill,
-                        { width: `${progressPercent}%` },
-                      ]}
-                    />
-                  </View>
-                </View>
-              )}
-
-              {!correctedWorkbookUrl && (allResultsConfirmed ? (
-                correctedWorkbookUrl ? null : (
-                  <View style={styles.finalizeCard}>
-                  <View style={styles.finalizeHeaderRow}>
-                    <View style={styles.finalizeTitleArea}>
-                      <Text style={styles.finalizeTitle}>
-                        Review complete
-                      </Text>
-                    </View>
-
-                  </View>
-
-                  <Pressable
-                    disabled={isFinalizing}
-                    onPress={() => {
-                      void viewReportImmediately();
-                    }}
-                    style={({ pressed }) => [
-                      styles.viewReportButton,
-                      isFinalizing &&
-                        styles.primaryButtonDisabled,
-                      pressed &&
-                        !isFinalizing &&
-                        styles.buttonPressed,
-                    ]}
-                  >
-                    {isFinalizing ? (
-                      <ActivityIndicator
-                        size="small"
-                        color="#FFFFFF"
-                      />
-                    ) : (
-                      <Text
-                        style={
-                          styles.viewReportButtonText
-                        }
-                      >
-                        View Report
-                      </Text>
-                    )}
-                  </Pressable>
-
-
-                  <View style={styles.compactEmailRow}>
-                    <View style={styles.compactEmailInput}>
-                      <Text style={styles.reportRecipientLabel}>
-                        REPORT WILL BE EMAILED TO
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={styles.reportRecipientEmail}
-                      >
-                        {recipientEmail || "Account email unavailable"}
-                      </Text>
-                    </View>
-
-                    <Pressable
-                      disabled={isFinalizing}
-                      onPress={() =>
-                        finalizeWalkthrough(true)
-                      }
-                      style={({ pressed }) => [
-                        styles.compactFinalizeButton,
-                        isFinalizing && styles.primaryButtonDisabled,
-                        pressed && !isFinalizing && styles.buttonPressed,
-                      ]}
-                    >
-                      {isFinalizing ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.compactFinalizeButtonText}>
-                          Email Report
-                        </Text>
-                      )}
-                    </Pressable>
-                  </View>
-                  </View>
-                )
-              ) : (
-                <View style={styles.unconfirmedFooterActions}>
-                  <Pressable
-                    disabled={isFinalizing}
-                    onPress={confirmNextItem}
-                    style={({ pressed }) => [
-                      styles.primaryButton,
-                      { flex: 1, paddingHorizontal: 8 },
-                      isFinalizing && styles.primaryButtonDisabled,
-                      pressed && !isFinalizing && styles.buttonPressed,
-                    ]}
-                  >
-                    <Text style={styles.primaryButtonText}>
-                      {`Confirm Item ${
-                        firstUnconfirmedIndex + 1
-                      } of ${results.length}`}
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Finish walkthrough with ${remainingCount} review ${
-                      remainingCount === 1 ? "item" : "items"
-                    }`}
-                    disabled={isFinalizing || isDiscarding}
-                    onPress={finishWithReviewItems}
-                    style={({ pressed }) => [
-                      styles.finishWithReviewButton,
-                      (isFinalizing || isDiscarding) &&
-                        styles.disabledButton,
-                      pressed &&
-                        !isFinalizing &&
-                        !isDiscarding &&
-                        styles.buttonPressed,
-                    ]}
-                  >
-                    <Text style={styles.finishWithReviewButtonText}>
-                      {`Finish with ${remainingCount} Review ${
-                        remainingCount === 1 ? "Item" : "Items"
-                      }`}
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
-
-              {!correctedWorkbookUrl && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel walkthrough and do not publish results"
-                  disabled={isFinalizing || isDiscarding}
-                  onPress={confirmDiscardWalkthrough}
-                  style={({ pressed }) => [
-                    styles.discardButton,
-                    (isFinalizing || isDiscarding) &&
-                      styles.disabledButton,
-                    pressed &&
-                      !isFinalizing &&
-                      !isDiscarding &&
-                      styles.buttonPressed,
-                  ]}
-                >
-                  {isDiscarding ? (
-                    <ActivityIndicator
-                      size="small"
-                      color="#FFB6B6"
-                    />
-                  ) : (
-                    <Text style={styles.discardButtonText}>
-                      Cancel walkthrough
-                    </Text>
-                  )}
-                </Pressable>
-              )}
-
+              {!correctedWorkbookUrl && <Pressable accessibilityRole="button" disabled={isFinalizing || isProcessing} onPress={() => void finalizeWalkthrough(false)} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{isFinalizing ? 'Saving inventory…' : 'Save inventory'}</Text></Pressable>}
               {correctedWorkbookUrl && (
                 <CompletedWalkthroughActions remainingCount={remainingCount} recipientEmail={recipientEmail}
                   busy={isFinalizing} onView={openCorrectedWorkbook}
@@ -3463,7 +2932,7 @@ export default function UploadScreen() {
 
           {!hasResults && (
             <Text style={styles.footerNote}>
-              AI results must be reviewed before finalization.
+              Results save automatically. You can edit details after analysis.
             </Text>
           )}
         </View>
@@ -3714,7 +3183,7 @@ export default function UploadScreen() {
                   />
 
                   <BarcodeSummary evidence={editDraft.barcode_evidence} />
-                  {!correctedWorkbookUrl && <BarcodeScanner key={`scanner-${editingIndex}`} existing={editDraft.scanned_barcodes || []}
+                  {<BarcodeScanner key={`scanner-${editingIndex}`} existing={editDraft.scanned_barcodes || []}
                     otherScans={results.flatMap((item, index) => index === editingIndex ? [] : [...(item.scanned_barcodes || []), ...(item.barcode_evidence?.codes || []).map(code => ({ value: code.value, type: code.format.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^upca$/, 'upc_a').replace(/^upce$/, 'upc_e'), captured_at: '' }))])}
                     blocked={reviewTask !== null && reviewTask !== 'barcode'}
                     onBusy={busy => setReviewTask(busy ? 'barcode' : null)}
@@ -3723,14 +3192,14 @@ export default function UploadScreen() {
                       if (!current) throw new Error('Open an inventory item before attaching a barcode.');
                       await persistReviewPatch(attachBarcode(current, scan));
                     }} />}
-                  <ScannedBarcodes scans={editDraft.scanned_barcodes} onRemove={!correctedWorkbookUrl && !reviewTask ? scan => {
+                  <ScannedBarcodes scans={editDraft.scanned_barcodes} onRemove={!reviewTask ? scan => {
                     const current = editDraftLatest.current;
                     if (current) void persistReviewPatch(removeBarcode(current, scan)).catch(() => Alert.alert('Scan not saved', 'Keep this item open and retry saving the scan change.'));
                   } : undefined} />
                   <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
                   {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
                     return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
-                  {LABEL_RETAKES_ENABLED && !correctedWorkbookUrl && !isScanReference(editDraft.photo) && <LabelRetakePanel key={editingIndex}
+                  {LABEL_RETAKES_ENABLED && !isScanReference(editDraft.photo) && <LabelRetakePanel key={editingIndex}
                     original={editDraft} attempt={editDraft.retake_attempt} customer={completedCustomer || selectedCustomerName}
                     customerId={customerId} location={editDraft.location}
                     blocked={reviewTask !== null && reviewTask !== "retake"}
@@ -3749,7 +3218,7 @@ export default function UploadScreen() {
                       const references = (current.retake_references || []).filter(ref => ref.job_id !== reference.job_id);
                       return { ...fillRetakeBlanks(current, candidate), retake_references: [...references, reference] };
                     })} />}
-                  {SOURCING_ENABLED && !correctedWorkbookUrl && !!currentJobId && <SourcingPanel initialManufacturer={editDraft.manufacturer} initialManufacturerPartNumber={editDraft.manufacturer_part_number} key={`sourcing-${editingIndex}`}
+                  {SOURCING_ENABLED && !!currentJobId && <SourcingPanel initialManufacturer={editDraft.manufacturer} initialManufacturerPartNumber={editDraft.manufacturer_part_number} key={`sourcing-${editingIndex}`}
                     saved={editDraft.sourcing_state} jobId={currentJobId} photo={editDraft.photo}
                     existingFastenal={editDraft.fastenal_part_number} blocked={reviewTask !== null && reviewTask !== "sourcing"}
                     onBusy={value => setReviewTask(value ? "sourcing" : null)}

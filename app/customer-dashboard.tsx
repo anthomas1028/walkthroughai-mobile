@@ -342,7 +342,7 @@ export default function CustomerDashboardScreen() {
                     [dashboard.total_photos, "Photos", "photos"],
                     [
                       dashboard.review_item_count,
-                      "Rows to review",
+                      "Missing details",
                       "review",
                     ],
                   ].map(([number, label, report]) => (
@@ -361,7 +361,7 @@ export default function CustomerDashboardScreen() {
                   ))}
                 </View>
 
-                <Text style={s.statsHint}>Unique parts are counted once. Review rows include repeat sightings across reports.</Text>
+                <Text style={s.statsHint}>Unique parts are counted once. Rows with missing details include repeat sightings across reports.</Text>
 
                 <Pressable
                   onPress={() => openReport("last")}

@@ -835,12 +835,7 @@ export default function WalkthroughDetailScreen() {
               {displayPartNumber(selectedItem) ? (
                 <Text style={styles.itemDetailPartNumber}>{displayPartNumber(selectedItem)}</Text>
               ) : null}
-              <View style={styles.itemDetailStatusRow}>
-                <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>{formatConfidence(selectedItem.confidence)} confidence</Text>
-                </View>
-                <Text style={styles.confirmedText}>{selectedItem.is_confirmed ? "✓ Confirmed" : "Not confirmed"}</Text>
-              </View>
+
               <SourcingSummary record={selectedItem.sourcing_recommendation} />
               <BarcodeSummary evidence={selectedItem.barcode_evidence} />
               <ScannedBarcodes scans={selectedItem.scanned_barcodes} />
@@ -854,9 +849,9 @@ export default function WalkthroughDetailScreen() {
                 <DetailRow label="Observed Part # (unclassified)" value={selectedItem.part_number} />
                 <DetailRow label="Customer Part #" value={selectedItem.customer_part_number} />
                 <DetailRow label="Fastenal Item #" value={selectedItem.fastenal_part_number} />
-                <DetailRow label="Reviewed By" value={selectedItem.reviewed_by} />
-                <DetailRow label="Reviewed At" value={selectedItem.reviewed_at} />
-                {selectedItem.review_history?.map((event, index) => <DetailRow key={index} label={`${event.event} · ${event.at}`} value={event.by} />)}
+
+
+
                 <DetailRow label="Size / Specification" value={selectedItem.size_specification} />
                 <DetailRow label="Package Quantity" value={selectedItem.package_quantity} />
                 <DetailRow label="Notes" value={selectedItem.notes} />

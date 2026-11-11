@@ -3,10 +3,10 @@ import { Image, Pressable, Text, View } from 'react-native';
 
 export function InventoryItemSummary({ title, identifier, identifierLabel, photoUri, quantity, location, status, onPhoto, children }: {
   title: string; identifier: string; identifierLabel: string; photoUri?: string; quantity?: number;
-  location: string; status: 'Ready' | 'Needs details' | 'Saved'; onPhoto: () => void; children: ReactNode;
+  location: string; status: 'Ready' | 'Needs details' | 'Saved' | 'Missing details' | 'Saving'; onPhoto: () => void; children: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const color = status === 'Needs details' ? '#FFD18A' : '#86EFAC';
+  const color = (status === 'Needs details' || status === 'Missing details') ? '#FFD18A' : '#86EFAC';
   return <View>
     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
       {photoUri ? <Pressable accessibilityRole="button" accessibilityLabel="View item source photo" onPress={onPhoto}>
@@ -20,7 +20,7 @@ export function InventoryItemSummary({ title, identifier, identifierLabel, photo
       </View>
     </View>
     <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}>
-      <Text style={{ color: '#93C5FD', fontWeight: '600' }}>{expanded ? 'Hide details −' : 'Details & review notes +'}</Text>
+      <Text style={{ color: '#93C5FD', fontWeight: '600' }}>{expanded ? 'Hide details −' : 'Details & notes +'}</Text>
     </Pressable>
     {expanded && children}
   </View>;
