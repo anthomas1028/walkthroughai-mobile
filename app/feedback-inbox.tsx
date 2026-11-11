@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -58,6 +59,7 @@ const FILTERS: { label: string; value: FilterValue }[] = [
 ];
 
 export default function FeedbackInboxScreen() {
+  const goBack = useBackTo('account');
   const [records, setRecords] = useState<FeedbackRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedFilter, setSelectedFilter] = useState<FilterValue>("all");
@@ -173,7 +175,7 @@ export default function FeedbackInboxScreen() {
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={({ pressed }) => [
               styles.backButton,
               pressed && styles.buttonPressed,

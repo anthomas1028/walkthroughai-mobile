@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { API_BASE_URL, apiFetch } from "../lib/api";
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
@@ -73,6 +74,7 @@ function createId(prefix: string): string {
 }
 
 export default function WalkthroughPhotoScreen() {
+  const goBack = useBackTo('customer');
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
   const photoViewerImageHeight = Math.max(windowHeight - 120, 320);
@@ -615,7 +617,7 @@ export default function WalkthroughPhotoScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={({ pressed }) => [
               styles.backButton,
               pressed && styles.buttonPressed,
@@ -1003,7 +1005,7 @@ export default function WalkthroughPhotoScreen() {
                 showsHorizontalScrollIndicator={false}
                 showsVerticalScrollIndicator={false}
               >
-                <Pressable
+                <Pressable accessibilityRole="button"
                   onPress={handlePhotoViewerTap}
                   style={{ width: windowWidth, height: photoViewerImageHeight }}
                 >

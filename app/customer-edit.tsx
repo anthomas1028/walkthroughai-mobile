@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -51,6 +52,7 @@ type CustomerResponse = {
 };
 
 export default function CustomerEditScreen() {
+  const goBack = useBackTo('customer');
   const params = useLocalSearchParams<{
     customerId?: string;
   }>();
@@ -369,7 +371,7 @@ export default function CustomerEditScreen() {
         [
           {
             text: "OK",
-            onPress: () => router.back(),
+            onPress: () => goBack(),
           },
         ]
       );
@@ -425,7 +427,7 @@ export default function CustomerEditScreen() {
         nextArchived
           ? `${data.customer.company_name} was moved to Archived Customers.`
           : `${data.customer.company_name} was restored to Active Customers.`,
-        [{ text: "OK", onPress: () => router.back() }]
+        [{ text: "OK", onPress: () => goBack() }]
       );
     } catch (error) {
       Alert.alert(
@@ -515,7 +517,7 @@ export default function CustomerEditScreen() {
       Alert.alert(
         "Customer deleted",
         `${savedCompanyName} and its saved walkthrough records were permanently deleted.`,
-        [{ text: "OK", onPress: () => router.back() }]
+        [{ text: "OK", onPress: () => goBack() }]
       );
     } catch (error) {
       Alert.alert(
@@ -540,7 +542,7 @@ export default function CustomerEditScreen() {
           <View style={styles.header}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.back()}
+              onPress={() => goBack()}
               style={({ pressed }) => [
                 styles.backButton,
                 pressed && styles.buttonPressed,

@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
@@ -208,6 +209,7 @@ function buildQuery(
 }
 
 export default function CustomerReportScreen() {
+  const goBack = useBackTo('customer');
   const params = useLocalSearchParams<{
     customerId?: string;
     customerName?: string;
@@ -583,7 +585,7 @@ export default function CustomerReportScreen() {
         "Unable to confirm item",
         error instanceof Error
           ? error.message
-          : "The inventory item could not be confirmed."
+          : "The inventory item could not be saved."
       );
     } finally {
       setIsSavingReviewItem(false);
@@ -1037,46 +1039,7 @@ export default function CustomerReportScreen() {
   const customerName =
     report?.customer.company_name || fallbackCustomerName;
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <AppBackdrop variant="quiet" />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-          </Pressable>
-
-          {customerLogoUrl ? (
-            <View style={styles.headerLogoFrame}>
-              <Image
-                source={{ uri: customerLogoUrl }}
-                resizeMode="contain"
-                style={styles.customerLogoImage}
-              />
-            </View>
-          ) : null}
-
-          <View style={styles.headerText}>
-            <Text numberOfLines={1} style={styles.title}>
-              {isUniquePartsReport
-                ? "Inventory Items"
-                : isReviewReport
-                  ? "Missing Details"
-                  : (report?.report_title || "Customer Report")}
-            </Text>
-            <Text numberOfLines={1} style={styles.subtitle}>
-              {customerName}
-            </Text>
-          </View>
-        </View>
-
+  const reportControls = <View>
         {isUniquePartsReport && report ? (
           <View style={styles.inventoryHero}>
             <View style={styles.inventoryHeroHeader}>
@@ -1123,6 +1086,7 @@ export default function CustomerReportScreen() {
 
         <View style={styles.searchRow}>
           <TextInput
+            accessibilityLabel="Search inventory"
             value={searchDraft}
             onChangeText={setSearchDraft}
             onSubmitEditing={() => setAppliedSearch(searchDraft.trim())}
@@ -1137,7 +1101,7 @@ export default function CustomerReportScreen() {
             returnKeyType="search"
             style={styles.searchInput}
           />
-          <Pressable
+          <Pressable accessibilityRole="button"
             onPress={() => setAppliedSearch(searchDraft.trim())}
             style={({ pressed }) => [
               styles.searchButton,
@@ -1151,7 +1115,7 @@ export default function CustomerReportScreen() {
         {isUniquePartsReport ? (
           <>
             <View style={styles.inventoryFilterRow}>
-              <Pressable
+              <Pressable accessibilityRole="button"
                 onPress={openInventoryFilters}
                 style={({ pressed }) => [
                   styles.inventoryFilterButton,
@@ -1175,7 +1139,7 @@ export default function CustomerReportScreen() {
                 </Text>
               </Pressable>
               {activeFilterCount > 0 ? (
-                <Pressable
+                <Pressable accessibilityRole="button"
                   onPress={clearInventoryFilters}
                   style={({ pressed }) => [styles.clearFiltersButton, pressed && styles.buttonPressed]}
                 >
@@ -1189,7 +1153,7 @@ export default function CustomerReportScreen() {
                 { value: "part_asc", label: "Part #" },
                 { value: "description_asc", label: "Description" },
               ].map((option, index, values) => (
-                <Pressable
+                <Pressable accessibilityRole="button" accessibilityState={{selected:sort===option.value}}
                   key={option.value}
                   onPress={() => setSort(option.value)}
                   style={({ pressed }) => [
@@ -1210,14 +1174,14 @@ export default function CustomerReportScreen() {
           <>
             <View style={styles.filterRow}>
               {DATE_OPTIONS.map((option, index) => (
-                <Pressable key={option.value} onPress={() => setDays(option.value)} style={({ pressed }) => [styles.chip, index === DATE_OPTIONS.length - 1 && styles.lastChip, days === option.value && styles.chipSelected, pressed && styles.buttonPressed]}>
+                <Pressable accessibilityRole="button" key={option.value} onPress={() => setDays(option.value)} style={({ pressed }) => [styles.chip, index === DATE_OPTIONS.length - 1 && styles.lastChip, days === option.value && styles.chipSelected, pressed && styles.buttonPressed]}>
                   <Text style={[styles.chipText, days === option.value && styles.chipTextSelected]}>{option.label}</Text>
                 </Pressable>
               ))}
             </View>
             <View style={styles.filterRow}>
               {SORT_OPTIONS.map((option, index) => (
-                <Pressable key={option.value} onPress={() => setSort(option.value)} style={({ pressed }) => [styles.chip, index === SORT_OPTIONS.length - 1 && styles.lastChip, sort === option.value && styles.chipSelected, pressed && styles.buttonPressed]}>
+                <Pressable accessibilityRole="button" key={option.value} onPress={() => setSort(option.value)} style={({ pressed }) => [styles.chip, index === SORT_OPTIONS.length - 1 && styles.lastChip, sort === option.value && styles.chipSelected, pressed && styles.buttonPressed]}>
                   <Text style={[styles.chipText, sort === option.value && styles.chipTextSelected]}>{option.label}</Text>
                 </Pressable>
               ))}
@@ -1238,7 +1202,7 @@ export default function CustomerReportScreen() {
                   : "items have missing details"
                 : "records"}
           </Text>
-          <Pressable
+          <Pressable accessibilityRole="button"
             disabled={isExporting}
             onPress={exportReport}
             style={({ pressed }) => [
@@ -1257,6 +1221,48 @@ export default function CustomerReportScreen() {
           </Pressable>
         </View>
 
+  </View>;
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <AppBackdrop variant="quiet" />
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => goBack()}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </Pressable>
+
+          {customerLogoUrl ? (
+            <View style={styles.headerLogoFrame}>
+              <Image
+                source={{ uri: customerLogoUrl }}
+                resizeMode="contain"
+                style={styles.customerLogoImage}
+              />
+            </View>
+          ) : null}
+
+          <View style={styles.headerText}>
+            <Text numberOfLines={1} style={styles.title}>
+              {isUniquePartsReport
+                ? "Inventory Items"
+                : isReviewReport
+                  ? "Missing Details"
+                  : (report?.report_title || "Customer Report")}
+            </Text>
+            <Text numberOfLines={1} style={styles.subtitle}>
+              {customerName}
+            </Text>
+          </View>
+        </View>
+
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3B82F6" />
@@ -1264,6 +1270,8 @@ export default function CustomerReportScreen() {
           </View>
         ) : (
           <FlatList
+            ListHeaderComponent={reportControls}
+            keyboardShouldPersistTaps="handled"
             data={report?.records || []}
             keyExtractor={(item, index) =>
               `${reportType}-${item.id || item.walkthrough_id || item.vendor || item.photo || "record"}-${item.item_number || index}`
@@ -1322,11 +1330,11 @@ export default function CustomerReportScreen() {
       >
         <SafeAreaView style={styles.modalSafeArea}>
           <View style={styles.modalHeader}>
-            <Pressable onPress={() => setFilterModalVisible(false)} style={styles.modalCloseButton}>
+            <Pressable accessibilityRole="button" onPress={() => setFilterModalVisible(false)} style={styles.modalCloseButton}>
               <Text style={styles.modalCloseText}>Cancel</Text>
             </Pressable>
             <Text style={styles.modalTitle}>Filter Inventory Items</Text>
-            <Pressable onPress={applyInventoryFilters} style={styles.modalApplyButton}>
+            <Pressable accessibilityRole="button" onPress={applyInventoryFilters} style={styles.modalApplyButton}>
               <Text style={styles.modalApplyText}>Apply</Text>
             </Pressable>
           </View>
@@ -1337,7 +1345,7 @@ export default function CustomerReportScreen() {
 
             <Text style={styles.filterSectionTitle}>Area</Text>
             {["", ...availableInventoryAreas].map((areaName) => (
-              <Pressable
+              <Pressable accessibilityRole="button"
                 key={`area-${areaName || "all"}`}
                 onPress={() => setDraftInventoryArea(areaName)}
                 style={styles.filterOption}
@@ -1351,7 +1359,7 @@ export default function CustomerReportScreen() {
 
             <Text style={styles.filterSectionTitle}>Vendor</Text>
             {["", ...availableInventoryVendors].map((vendorName) => (
-              <Pressable
+              <Pressable accessibilityRole="button"
                 key={`vendor-${vendorName || "all"}`}
                 onPress={() => setDraftInventoryVendor(vendorName)}
                 style={styles.filterOption}
@@ -1364,7 +1372,7 @@ export default function CustomerReportScreen() {
             ))}
 
             {(draftInventoryArea || draftInventoryVendor) ? (
-              <Pressable
+              <Pressable accessibilityRole="button"
                 onPress={() => {
                   setDraftInventoryArea("");
                   setDraftInventoryVendor("");
@@ -1384,7 +1392,7 @@ export default function CustomerReportScreen() {
       <Modal visible={selectedPart !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedPart(null)}>
         <SafeAreaView style={styles.modalSafeArea}>
           <View style={styles.modalHeader}>
-            <Pressable onPress={() => setSelectedPart(null)} style={styles.modalCloseButton}>
+            <Pressable accessibilityRole="button" onPress={() => setSelectedPart(null)} style={styles.modalCloseButton}>
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
             <Text style={styles.modalTitle}>Inventory Part</Text>
@@ -1403,7 +1411,7 @@ export default function CustomerReportScreen() {
                 <Text style={styles.partDetailLabel}>History</Text><Text style={styles.partDetailValue}>{selectedPart.walkthrough_count || 0} walkthroughs · {selectedPart.appearance_count || 0} appearances</Text>
                 <Text style={styles.partDetailLabel}>Last Seen</Text><Text style={styles.partDetailValue}>{formatDate(selectedPart.last_seen_at)}</Text>
               </View>
-              <Pressable disabled={!selectedPart.photo_url} onPress={() => openPartPhoto(selectedPart)} style={({ pressed }) => [styles.viewPhotoButton, !selectedPart.photo_url && styles.disabledButton, pressed && selectedPart.photo_url && styles.buttonPressed]}>
+              <Pressable accessibilityRole="button" disabled={!selectedPart.photo_url} onPress={() => openPartPhoto(selectedPart)} style={({ pressed }) => [styles.viewPhotoButton, !selectedPart.photo_url && styles.disabledButton, pressed && selectedPart.photo_url && styles.buttonPressed]}>
                 <Ionicons name="image-outline" size={22} color="#FFFFFF" />
                 <Text style={styles.viewPhotoButtonText}>View Latest Source Photo</Text>
               </Pressable>
@@ -1420,7 +1428,7 @@ export default function CustomerReportScreen() {
       >
         <SafeAreaView style={styles.modalSafeArea}>
           <View style={styles.modalHeader}>
-            <Pressable
+            <Pressable accessibilityRole="button"
               disabled={isSavingReviewItem || isRemovingReviewItem}
               onPress={closeReviewItem}
               style={styles.modalCloseButton}
@@ -1452,7 +1460,7 @@ export default function CustomerReportScreen() {
 
               </View>
 
-              <Pressable
+              <Pressable accessibilityRole="button"
                 disabled={!selectedReviewItem.photo_url}
                 onPress={() => openPartPhoto(selectedReviewItem)}
                 style={({ pressed }) => [
@@ -1516,7 +1524,7 @@ export default function CustomerReportScreen() {
                 ))}
               </View>
 
-              <Pressable
+              <Pressable accessibilityRole="button"
                 disabled={isSavingReviewItem || isRemovingReviewItem}
                 onPress={saveEditedReviewItem}
                 style={({ pressed }) => [
@@ -1543,7 +1551,7 @@ export default function CustomerReportScreen() {
 
 
 
-              <Pressable
+              <Pressable accessibilityRole="button"
                 disabled={isSavingReviewItem || isRemovingReviewItem}
                 onPress={confirmRemoveReviewItem}
                 style={({ pressed }) => [
@@ -1580,14 +1588,14 @@ export default function CustomerReportScreen() {
       <Modal visible={photoViewer !== null} animationType="fade" presentationStyle="pageSheet" allowSwipeDismissal onDismiss={closePhotoViewer} onRequestClose={closePhotoViewer}>
         <View style={styles.viewerSafeArea}>
           <View style={[styles.viewerHeader, { minHeight: 68 + safeAreaInsets.top, paddingTop: safeAreaInsets.top }]}>
-            <Pressable onPress={closePhotoViewer} style={styles.viewerCloseButton}><Text style={styles.viewerCloseText}>Close</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={closePhotoViewer} style={styles.viewerCloseButton}><Text style={styles.viewerCloseText}>Close</Text></Pressable>
             <View style={styles.viewerTitleArea}><Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text><Text style={styles.viewerHint}>Swipe photos · pinch to zoom</Text></View>
             <View style={styles.viewerSpacer} />
           </View>
           {photoViewer ? (
             <PhotoNavigation photos={sourcePhotos(report?.records || [])} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
 <ScrollView key={photoViewer.uri} ref={photoViewerScrollRef} style={styles.viewerScroll} contentContainerStyle={styles.viewerContent} centerContent minimumZoomScale={1} maximumZoomScale={5} onScroll={(event) => { const zoomScale = event.nativeEvent.zoomScale; if (typeof zoomScale === "number") photoViewerIsZoomed.current = zoomScale > 1.1; }} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
-              <Pressable onPress={handlePhotoViewerTap} style={{ width: windowWidth, height: viewerHeight }}><Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} /></Pressable>
+              <Pressable accessibilityRole="button" onPress={handlePhotoViewerTap} style={{ width: windowWidth, height: viewerHeight }}><Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} /></Pressable>
             </ScrollView>
 </PhotoNavigation>
           ) : null}
@@ -1732,12 +1740,15 @@ const styles = createPolishedStyles({
   searchButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   filterRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     alignItems: "stretch",
     minHeight: 38,
     marginBottom: 8,
   },
   chip: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 90,
     minHeight: 38,
     borderRadius: 999,
     borderWidth: 1,
@@ -1746,7 +1757,7 @@ const styles = createPolishedStyles({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 6,
-    marginRight: 7,
+    marginRight: 0,
   },
   lastChip: { marginRight: 0 },
   chipSelected: { borderColor: "#3B82F6", backgroundColor: "#16396D" },

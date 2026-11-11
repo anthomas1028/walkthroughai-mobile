@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -91,6 +92,7 @@ function isDiscardedWalkthrough(
 }
 
 export default function HistoryScreen() {
+  const goBack = useBackTo('customer');
   const params = useLocalSearchParams<{
     customerId?: string;
     customerName?: string;
@@ -666,7 +668,7 @@ export default function HistoryScreen() {
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={({ pressed }) => [
               styles.backButton,
               pressed && styles.buttonPressed,

@@ -1,3 +1,5 @@
+import { useBackTo } from '../lib/back-navigation';
+import Constants from 'expo-constants';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -53,6 +55,7 @@ const feedbackOptions: FeedbackOption[] = [
 ];
 
 export default function HelpFeedbackScreen() {
+  const goBack = useBackTo('account');
   const { session, workspace } = useAuth();
   const [feedbackType, setFeedbackType] = useState<FeedbackType>("bug");
   const [message, setMessage] = useState("");
@@ -125,7 +128,7 @@ export default function HelpFeedbackScreen() {
         [
           {
             text: "Done",
-            onPress: () => router.back(),
+            onPress: () => goBack(),
           },
         ]
       );
@@ -150,7 +153,7 @@ export default function HelpFeedbackScreen() {
           <View style={styles.header}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.back()}
+              onPress={() => goBack()}
               style={({ pressed }) => [
                 styles.backButton,
                 pressed && styles.buttonPressed,
@@ -280,7 +283,7 @@ export default function HelpFeedbackScreen() {
               </Text>
             </View>
 
-            <Text style={styles.versionText}>Version 2.0.0</Text>
+            <Text style={styles.versionText}>Version {Constants.expoConfig?.version || '2.0.1'}</Text>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>

@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { isScanReference } from "../lib/capture-scans";
@@ -163,6 +164,7 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 export default function WalkthroughDetailScreen() {
+  const goBack = useBackTo('history');
   const params = useLocalSearchParams<{ walkthroughId?: string; customerName?: string }>();
   const walkthroughId = Number(params.walkthroughId || 0);
   const fallbackCustomer = typeof params.customerName === "string" ? params.customerName : "Customer";
@@ -433,7 +435,7 @@ export default function WalkthroughDetailScreen() {
       return;
     }
 
-    router.back();
+    goBack();
   }
 
   return (
@@ -442,7 +444,7 @@ export default function WalkthroughDetailScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable
-            accessibilityRole="button"
+            accessibilityRole="button" accessibilityLabel="Go back"
             onPress={handleBackPress}
             style={({ pressed }) => [styles.backButton, pressed && styles.buttonPressed]}
           >
@@ -552,7 +554,7 @@ export default function WalkthroughDetailScreen() {
                 <Text style={styles.sectionTitle}>Inventory by Area</Text>
                 <View style={styles.locationList}>
                   {locationGroups.map((group) => (
-                    <Pressable
+                    <Pressable accessibilityRole="button"
                       key={group.name}
                       onPress={() => setSelectedLocation(group.name)}
                       style={({ pressed }) => [styles.locationRow, pressed && styles.buttonPressed]}
@@ -572,7 +574,7 @@ export default function WalkthroughDetailScreen() {
                 </View>
 
                 <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>All Inventory</Text>
-                <Pressable
+                <Pressable accessibilityRole="button"
                   onPress={() => setSelectedLocation("__ALL__")}
                   style={({ pressed }) => [styles.navigationCard, pressed && styles.buttonPressed]}
                 >
@@ -677,7 +679,7 @@ export default function WalkthroughDetailScreen() {
 
                 <View style={styles.locationList}>
                   {locationGroups.map((group) => (
-                    <Pressable
+                    <Pressable accessibilityRole="button"
                       key={group.name}
                       onPress={() => {
                         setSelectedMetricView(null);
@@ -714,7 +716,7 @@ export default function WalkthroughDetailScreen() {
                 {vendorGroups.length ? (
                   <View style={styles.metricList}>
                     {vendorGroups.map((group) => (
-                      <Pressable
+                      <Pressable accessibilityRole="button"
                         key={group.name}
                         onPress={() => setSelectedVendor(group.name)}
                         style={({ pressed }) => [styles.metricRow, pressed && styles.buttonPressed]}
@@ -823,7 +825,7 @@ export default function WalkthroughDetailScreen() {
       >
         <SafeAreaView style={styles.modalSafeArea}>
           <View style={styles.modalHeader}>
-            <Pressable onPress={() => setSelectedItem(null)} style={styles.closeButton}>
+            <Pressable accessibilityRole="button" onPress={() => setSelectedItem(null)} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>Close</Text>
             </Pressable>
             <Text style={styles.modalTitle}>Part Details</Text>
@@ -856,7 +858,7 @@ export default function WalkthroughDetailScreen() {
                 <DetailRow label="Package Quantity" value={selectedItem.package_quantity} />
                 <DetailRow label="Notes" value={selectedItem.notes} />
               </View>
-              <Pressable
+              <Pressable accessibilityRole="button"
                 disabled={!selectedItem.photo_url}
                 onPress={() => openSourcePhoto(selectedItem)}
                 style={({ pressed }) => [styles.viewPhotoButton, !selectedItem.photo_url && styles.disabled, pressed && styles.buttonPressed]}
@@ -910,7 +912,7 @@ export default function WalkthroughDetailScreen() {
               showsHorizontalScrollIndicator={false}
               showsVerticalScrollIndicator={false}
             >
-              <Pressable onPress={handlePhotoViewerTap} style={{ width: viewerWidth, height: viewerHeight }}>
+              <Pressable accessibilityRole="button" onPress={handlePhotoViewerTap} style={{ width: viewerWidth, height: viewerHeight }}>
                 <Image source={{ uri: photoViewer.uri }} resizeMode="contain" style={styles.viewerImage} />
               </Pressable>
             </ScrollView>

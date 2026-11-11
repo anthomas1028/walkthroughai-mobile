@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -64,6 +65,7 @@ function formatDate(value: string | null): string {
 }
 
 export default function ArchivedHistoryScreen() {
+  const goBack = useBackTo('history');
   const params = useLocalSearchParams<{
     customerId?: string;
     customerName?: string;
@@ -377,7 +379,7 @@ export default function ArchivedHistoryScreen() {
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={({ pressed }) => [
               styles.backButton,
               pressed && styles.buttonPressed,

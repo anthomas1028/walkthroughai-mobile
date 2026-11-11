@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -87,6 +88,7 @@ function countLabel(count: number, singular: string) {
 }
 
 export default function CustomerDashboardScreen() {
+  const goBack = useBackTo('home');
   const { width, fontScale } = useWindowDimensions();
   const wideStat = width < 360 || fontScale > 1.2;
   const params = useLocalSearchParams<{
@@ -206,7 +208,7 @@ export default function CustomerDashboardScreen() {
       <AppBackdrop variant="dashboard" />
       <View style={s.container}>
         <View style={s.header}>
-          <Pressable onPress={() => router.back()} style={s.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => goBack()} style={s.back}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
 
@@ -249,7 +251,7 @@ export default function CustomerDashboardScreen() {
               />
             }
             renderItem={({ item }) => (
-              <Pressable
+              <Pressable accessibilityRole="button"
                 onPress={() => openWalkthrough(item.id)}
                 style={s.walkCard}
               >
@@ -364,7 +366,7 @@ export default function CustomerDashboardScreen() {
 
                 <Text style={s.statsHint}>Unique parts are counted once. Rows with missing details include repeat sightings across reports.</Text>
 
-                <Pressable
+                <Pressable accessibilityRole="button"
                   onPress={() => openReport("last")}
                   style={s.last}
                 >
@@ -380,7 +382,7 @@ export default function CustomerDashboardScreen() {
                 <View style={s.listCard}>
                   {dashboard.locations.length ? (
                     dashboard.locations.map((location, index) => (
-                      <Pressable
+                      <Pressable accessibilityRole="button"
                         key={location.name}
                         onPress={() => openLocation(location.name)}
                         style={[
@@ -418,7 +420,7 @@ export default function CustomerDashboardScreen() {
                 <View style={s.listCard}>
                   {dashboard.recent_vendors.length ? (
                     dashboard.recent_vendors.map((vendor, index) => (
-                      <Pressable
+                      <Pressable accessibilityRole="button"
                         key={vendor.vendor}
                         onPress={() =>
                           openReport("vendor", vendor.vendor)
@@ -455,7 +457,7 @@ export default function CustomerDashboardScreen() {
                 <View style={s.sectionRow}>
                   <Text style={s.section}>Recent Walkthroughs</Text>
 
-                  <Pressable
+                  <Pressable accessibilityRole="button"
                     onPress={() =>
                       isReadOnly
                         ? openReport("walkthroughs")

@@ -185,7 +185,7 @@ export default function SignInScreen() {
               </Pressable>
             </View>
 
-            <Pressable
+            <Pressable accessibilityRole="button"
               disabled={isSubmitting}
               onPress={submit}
               style={({ pressed }) => [
@@ -203,7 +203,7 @@ export default function SignInScreen() {
               )}
             </Pressable>
 
-            <Pressable
+            <Pressable accessibilityRole="button"
               disabled={isSubmitting}
               onPress={() => setIsCreatingAccount((current) => !current)}
               style={({ pressed }) => [

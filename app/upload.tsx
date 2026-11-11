@@ -1,3 +1,4 @@
+import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { CompletedWalkthroughActions } from '../components/CompletedWalkthroughActions';
@@ -70,7 +71,7 @@ const JOB_POLL_INTERVAL_MS = 2500;
 
 const ANALYSIS_WAITING_MESSAGES = [
   { heading: "Reading labels", text: "Clear, close-up photos help preserve part numbers and small print." },
-  { heading: "Review comes next", text: "Check uncertain part numbers against the source photo before confirming." },
+  { heading: "Your inventory, organized", text: "Your inventory saves automatically. Open any item to compare it with its photo." },
   { heading: "Organized by location", text: "Your location labels stay attached to the products in your report." },
 ];
 const JOB_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -536,6 +537,7 @@ function EditableField({
 }
 
 export default function UploadScreen() {
+  const goBack = useBackTo('capture');
   const { session } = useAuth();
   const recoveryRef = useRef<RecoveryDraft | null>(null);
   const completedPhotoCleanup = useRef<RecoveryDraft | null>(null);
@@ -953,7 +955,7 @@ export default function UploadScreen() {
       return;
     }
 
-    router.back();
+    goBack();
   }
 
   async function analyzePhotos() {
@@ -1570,8 +1572,8 @@ export default function UploadScreen() {
     setEmailedRecipient("");
 
     if (andNext) {
-      const nextIndex = results.findIndex((result, index) => index > editingIndex && !result.is_confirmed && (result.review_needed || getReviewReasons(result).length > 0));
-      const wrapped = nextIndex >= 0 ? nextIndex : results.findIndex((result, index) => index !== editingIndex && !result.is_confirmed && (result.review_needed || getReviewReasons(result).length > 0));
+      const nextIndex = results.findIndex((result, index) => index > editingIndex && getReviewReasons(result).length > 0);
+      const wrapped = nextIndex >= 0 ? nextIndex : results.findIndex((result, index) => index !== editingIndex && getReviewReasons(result).length > 0);
       if (wrapped >= 0) { beginEditing(wrapped); return; }
     }
     cancelEditing();
@@ -2249,7 +2251,7 @@ export default function UploadScreen() {
                 ? "Your photos are uploaded. Analysis continues on the server if you lock your phone or switch apps. Return here to view and save the results."
                 : nativeUploadQueued ? "iOS is uploading your photos. You can switch apps or lock your phone. Analysis starts automatically after every photo arrives. Do not swipe the app closed." : nativeUploadSupported ? "Preparing the iOS upload queue. Transfers continue when you switch apps once queued." : "Keep the app open until all photos finish uploading. Install the latest TestFlight build for background uploads."}</Text>
               {notificationIssue ? <Text style={{ color: "#FCD34D", padding: 12 }}>{notificationIssue}</Text> : null}
-              {currentJobId && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14, marginTop: 10 }}>
+              {Boolean(currentJobId) && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14, marginTop: 10 }}>
                 <Text style={{ color: "#93C5FD", fontWeight: "700", textAlign: "center" }}>{alertBusy ? "Updating notification…" : completionAlertToken ? "Completion notification on · Turn off" : "Notify me when analysis finishes"}</Text>
               </Pressable>}
               {(currentJobId || nativeUploadQueued) && <Pressable accessibilityRole="button" onPress={() => router.replace("/")} style={{ padding: 14 }}>
@@ -2344,7 +2346,7 @@ export default function UploadScreen() {
 
           {!isProcessing &&
             !isFinalizing &&
-            errorMessage && (
+            Boolean(errorMessage) && (
               <View style={styles.errorCard}>
                 <Text style={styles.errorIcon}>
                   !
@@ -2408,7 +2410,7 @@ export default function UploadScreen() {
                   </View>
 
                   <View style={styles.reviewModeToggle}>
-                    <Pressable
+                    <Pressable accessibilityRole="button"
                       onPress={() => setReviewMode("area")}
                       style={[
                         styles.reviewModeOption,
@@ -2425,7 +2427,7 @@ export default function UploadScreen() {
                       </Text>
                     </Pressable>
 
-                    <Pressable
+                    <Pressable accessibilityRole="button"
                       onPress={() => setReviewMode("all")}
                       style={[
                         styles.reviewModeOption,
@@ -2453,7 +2455,7 @@ export default function UploadScreen() {
 
                       return (
                         <View key={group.location} style={styles.areaReviewSection}>
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             onPress={() => toggleAreaCollapsed(group.location)}
                             style={({ pressed }) => [
                               styles.areaReviewHeader,
@@ -2623,7 +2625,7 @@ export default function UploadScreen() {
                             styles.resultActionsRow
                           }
                         >
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             onPress={() =>
                               viewSourcePhoto(
                                 result
@@ -2646,7 +2648,7 @@ export default function UploadScreen() {
                             </Text>
                           </Pressable>
 
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             onPress={() =>
                               beginEditing(index)
                             }
@@ -2821,7 +2823,7 @@ export default function UploadScreen() {
                             styles.resultActionsRow
                           }
                         >
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             onPress={() =>
                               viewSourcePhoto(
                                 result
@@ -2844,7 +2846,7 @@ export default function UploadScreen() {
                             </Text>
                           </Pressable>
 
-                          <Pressable
+                          <Pressable accessibilityRole="button"
                             onPress={() =>
                               beginEditing(index)
                             }
@@ -2896,7 +2898,7 @@ export default function UploadScreen() {
             {nativeUploadSupported && photoCount > 0 && !isProcessing && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14 }}>
               <Text style={{ color: "#93C5FD", textAlign: "center" }}>{alertBusy ? "Updating notification…" : completionAlertToken ? "Completion notification on · Turn off" : "Notify me when analysis finishes"}</Text>
             </Pressable>}
-            <Pressable
+            <Pressable accessibilityRole="button"
               disabled={
                 isProcessing ||
                 isFinalizing ||
@@ -2954,9 +2956,9 @@ export default function UploadScreen() {
             </>
           ) : (
             <>
-              {teamSessionId && errorMessage.includes('another device') && <Pressable accessibilityRole="button" onPress={() => Alert.alert('Reload saved contribution?', 'This replaces unsaved edits on this device with the latest saved version. Your source photos remain available.', [{text:'Cancel',style:'cancel'},{text:'Reload saved version',onPress:()=>void reloadTeamContribution()}])} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Reload saved contribution</Text></Pressable>}
+              {Boolean(teamSessionId) && errorMessage.includes('another device') && <Pressable accessibilityRole="button" onPress={() => Alert.alert('Reload saved contribution?', 'This replaces unsaved edits on this device with the latest saved version. Your source photos remain available.', [{text:'Cancel',style:'cancel'},{text:'Reload saved version',onPress:()=>void reloadTeamContribution()}])} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Reload saved contribution</Text></Pressable>}
               {!correctedWorkbookUrl && <Pressable accessibilityRole="button" disabled={isFinalizing || isProcessing} onPress={() => void finalizeWalkthrough(false)} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{isFinalizing ? 'Saving inventory…' : 'Save inventory'}</Text></Pressable>}
-              {correctedWorkbookUrl && teamSessionId && <Pressable accessibilityRole="button" disabled={isFinalizing} style={styles.primaryButton} onPress={() => router.replace({ pathname: '/shared', params: { visitId: teamSessionId } })}><Text style={styles.primaryButtonText}>Contribution saved · Open shared walkthrough</Text></Pressable>}
+              {Boolean(correctedWorkbookUrl) && Boolean(teamSessionId) && <Pressable accessibilityRole="button" disabled={isFinalizing} style={styles.primaryButton} onPress={() => router.replace({ pathname: '/shared', params: { visitId: teamSessionId } })}><Text style={styles.primaryButtonText}>Contribution saved · Open shared walkthrough</Text></Pressable>}
               {correctedWorkbookUrl && !teamSessionId && (
                 <CompletedWalkthroughActions remainingCount={remainingCount} recipientEmail={recipientEmail}
                   busy={isFinalizing} onView={openCorrectedWorkbook}
@@ -2996,7 +2998,7 @@ export default function UploadScreen() {
                 },
               ]}
             >
-              <Pressable
+              <Pressable accessibilityRole="button"
                 onPress={() =>
                   setSourcePhotoViewer(null)
                 }
@@ -3062,7 +3064,7 @@ export default function UploadScreen() {
                 showsHorizontalScrollIndicator={false}
                 showsVerticalScrollIndicator={false}
               >
-                <Pressable
+                <Pressable accessibilityRole="button"
                   onPress={handlePhotoViewerTap}
                   style={{
                     width: windowWidth,
@@ -3107,7 +3109,7 @@ export default function UploadScreen() {
               }
             >
               <View style={styles.modalHeader}>
-                <Pressable
+                <Pressable accessibilityRole="button"
                   onPress={cancelEditing}
                   style={({ pressed }) => [
                     styles.modalCancelButton,
@@ -3174,9 +3176,7 @@ export default function UploadScreen() {
                         styles.modalIntroText
                       }
                     >
-                      Correct anything that was
-                      read incorrectly. Saving
-                      marks this item as confirmed.
+                      Compare the fields with the source photo and save any corrections.
                     </Text>
                   </View>
 
@@ -3231,9 +3231,7 @@ export default function UploadScreen() {
                     const current = editDraftLatest.current;
                     if (current) void persistReviewPatch(removeBarcode(current, scan)).catch(() => Alert.alert('Scan not saved', 'Keep this item open and retry saving the scan change.'));
                   } : undefined} />
-                  <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || "Verify each value against the source photo."}</Text>
-                  {(() => { const index = getSourcePhotoIndex(editDraft.photo, photos.length); const uri = index === null ? "" : (recoveryRef.current?.photos || photos)[index]?.uri;
-                    return uri ? <Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: 220, marginBottom: 12 }} /> : null; })()}
+                  <Text style={{ color: "#FBBF24", marginBottom: 12 }}>{getReviewReasons(editDraft).join(" · ") || ""}</Text>
                   {LABEL_RETAKES_ENABLED && !isScanReference(editDraft.photo) && <LabelRetakePanel key={editingIndex}
                     original={editDraft} attempt={editDraft.retake_attempt} customer={completedCustomer || selectedCustomerName}
                     customerId={customerId} location={editDraft.location}
@@ -3360,9 +3358,9 @@ export default function UploadScreen() {
                   />
 
                   <Pressable accessibilityRole="button" onPress={() => saveEditedResult(true)} style={styles.saveChangesButton}>
-                    <Text style={styles.saveChangesButtonText}>Confirm and next</Text>
+                    <Text style={styles.saveChangesButtonText}>Save and next</Text>
                   </Pressable>
-                  <Pressable
+                  <Pressable accessibilityRole="button"
                     onPress={() => saveEditedResult()}
                     style={({ pressed }) => [
                       styles.saveChangesButton,
@@ -3375,13 +3373,13 @@ export default function UploadScreen() {
                         styles.saveChangesButtonText
                       }
                     >
-                      Confirm item
+                      Save changes
                     </Text>
                   </Pressable>
 
 
 
-                  <Pressable
+                  <Pressable accessibilityRole="button"
                     onPress={
                       requestRemoveEditedResult
                     }
@@ -3396,7 +3394,7 @@ export default function UploadScreen() {
                         styles.removeResultButtonText
                       }
                     >
-                      Remove False Result
+                      Remove item
                     </Text>
                   </Pressable>
                 </ScrollView>
@@ -3426,7 +3424,8 @@ const styles = createPolishedStyles({
   },
 
   header: {
-    minHeight: 68,
+    minHeight: 56,
+    alignItems: "flex-start",
     justifyContent: "center",
     paddingHorizontal: UI.screenPadding,
   },
@@ -3438,7 +3437,7 @@ const styles = createPolishedStyles({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: UI.cardRadius,
-    backgroundColor: "#2D74F4",
+    backgroundColor: "#172B43",
   },
 
   backArrow: {
@@ -3449,7 +3448,7 @@ const styles = createPolishedStyles({
 
   backText: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "800",
   },
 
@@ -3459,7 +3458,7 @@ const styles = createPolishedStyles({
 
   scrollContent: {
     paddingHorizontal: UI.screenPadding,
-    paddingTop: 22,
+    paddingTop: 12,
     paddingBottom: 32,
   },
 
@@ -3989,7 +3988,7 @@ const styles = createPolishedStyles({
   },
 
   reviewModeOption: {
-    minHeight: 34,
+    minHeight: 44,
     paddingHorizontal: 13,
     borderRadius: 9,
     alignItems: "center",
@@ -4079,6 +4078,8 @@ const styles = createPolishedStyles({
 
   resultsHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,

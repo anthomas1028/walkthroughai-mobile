@@ -1,3 +1,5 @@
+import { useBackTo } from '../lib/back-navigation';
+import Constants from 'expo-constants';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -48,6 +50,7 @@ type FeedbackAdminAccessResponse = {
 };
 
 export default function AccountScreen() {
+  const goBack = useBackTo('home');
   const { session, workspace, refreshWorkspace, signOut } = useAuth();
 
   const [workspaceName, setWorkspaceName] = useState(workspace?.name || "");
@@ -448,7 +451,7 @@ export default function AccountScreen() {
           <View style={styles.header}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.back()}
+              onPress={() => goBack()}
               style={({ pressed }) => [
                 styles.backButton,
                 pressed && styles.buttonPressed,
@@ -699,7 +702,7 @@ export default function AccountScreen() {
                 editable={!isDeletingAccount}
                 onChangeText={setDeletionConfirmation}
                 placeholder="Type DELETE"
-                placeholderTextColor="#7F1D1D"
+                placeholderTextColor="#FCA5A5"
                 style={[styles.input, styles.dangerInput]}
                 value={deletionConfirmation}
               /></View>
@@ -722,7 +725,7 @@ export default function AccountScreen() {
               </Pressable>
             </View>
 
-            <Text style={styles.versionText}>Version 2.0.0</Text>
+            <Text style={styles.versionText}>Version {Constants.expoConfig?.version || '2.0.1'}</Text>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -748,8 +751,8 @@ function PasswordInput({
   value,
 }: PasswordInputProps) {
   return (
-    <View style={styles.passwordInputRow}>
-      <TextInput
+    <View><Text style={{color:"#B8C8DB",fontSize:14,fontWeight:"600",marginBottom:6}}>{placeholder}</Text><View style={styles.passwordInputRow}>
+      <TextInput accessibilityLabel={placeholder}
         autoCapitalize="none"
         autoCorrect={false}
         onChangeText={onChangeText}
@@ -776,7 +779,7 @@ function PasswordInput({
           size={21}
         />
       </Pressable>
-    </View>
+    </View></View>
   );
 }
 
@@ -1044,7 +1047,7 @@ const styles = createPolishedStyles({
   },
 
   versionText: {
-    color: "#475569",
+    color: "#93A6BD",
     fontSize: 12,
     textAlign: "center",
     marginTop: 2,
