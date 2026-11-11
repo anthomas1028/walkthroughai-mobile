@@ -15,6 +15,8 @@ const exported = {}, design = {};
 vm.runInNewContext(compile('constants/design.ts'), { exports: design });
 const jsx = (type, props) => typeof type === 'function' ? type(props) : ({ type, props });
 const stubs = {
+  '../lib/polished-styles': { createPolishedStyles: styles => styles },
+  '../components/AppBackdrop': { AppBackdrop: () => null },
   '../components/BarcodeScanner': { BarcodeScanner: props => ({ type: 'AreaScanner', props }) },
   '../components/ScannedBarcodes': { ScannedBarcodes: () => null },
   '../lib/barcode-scans': scans, '../lib/capture-scans': capture,

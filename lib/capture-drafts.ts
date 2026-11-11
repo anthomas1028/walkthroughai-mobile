@@ -6,7 +6,7 @@ function storageKey(userId: string) {
   return `walkthrough-capture-index:${userId}`;
 }
 export async function captureDrafts(userId: string): Promise<CaptureDraft[]> {
-  await writes;
+  await writes.catch(() => {});
   const value = await AsyncStorage.getItem(storageKey(userId));
   return value ? JSON.parse(value) : [];
 }

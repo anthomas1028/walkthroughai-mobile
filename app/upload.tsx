@@ -21,6 +21,7 @@ import { LabelRetakePanel } from "../components/LabelRetakePanel";
 import { RetakeAttempt, RetakeReference, fillRetakeBlanks } from "../lib/label-retake";
 import { photoOutcome, resultKey, mergeRecoveryResults } from "../lib/photo-accounting";
 import { loadRecovery, saveRecovery, clearRecovery, cleanupRecoveryPhotos, retainPhotos, RecoveryDraft } from "../lib/recovery";
+import { recoverUploadSession } from "../lib/upload-session";
 import { useAuth } from "../contexts/AuthContext";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -544,6 +545,7 @@ export default function UploadScreen() {
   const completedPhotoCleanup = useRef<RecoveryDraft | null>(null);
   useEffect(() => () => { if (completedPhotoCleanup.current) cleanupRecoveryPhotos(completedPhotoCleanup.current); }, []);
   const analysisBusy = useRef(false);
+  const finalizationBusy = useRef(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [backendDiagnostics, setBackendDiagnostics] = useState<Record<string, string>>({});
   const [showPhotoDetails, setShowPhotoDetails] = useState(false);
@@ -1051,22 +1053,27 @@ export default function UploadScreen() {
       data: UploadApiResponse;
     }> {
       const pending = pendingUpload.current!;
-      if (!pending.uploadId) {
-        const { data } = await uploadRequest(UPLOAD_API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ photo_count: preparedPhotos.length }),
-        });
-        if (!data.upload_id) throw new Error("The server did not create an upload session.");
-        pending.uploadId = data.upload_id;
-        await checkpoint();
-      }
-      const base = `${UPLOAD_API_URL}/${pending.uploadId}`;
-      const reconciledResponse = await apiFetch(base);
-      const reconciled = await readJsonResponse<{ uploaded_slots?: number[]; result?: UploadApiResponse }>(reconciledResponse);
-      if (!reconciledResponse.ok) throw new Error("This upload is unavailable or expired. Your local photos remain saved; start a new walkthrough when ready.");
-      pending.uploaded = new Set(reconciled.uploaded_slots || []);
-      if (reconciled.result?.job_id) return { response: reconciledResponse, data: reconciled.result };
+      const reconciled = await recoverUploadSession<UploadApiResponse>({
+        uploadId: pending.uploadId,
+        photoCount: preparedPhotos.length,
+        status: id => apiFetch(`${UPLOAD_API_URL}/${id}`),
+        create: async () => {
+          const { data } = await uploadRequest(UPLOAD_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ photo_count: preparedPhotos.length }),
+          });
+          return data.upload_id || "";
+        },
+        checkpoint: async (id, uploaded) => {
+          pending.uploadId = id;
+          pending.uploaded = new Set(uploaded);
+          await checkpoint();
+        },
+      });
+      pending.uploaded = reconciled.uploaded;
+      if (reconciled.result?.job_id) return { response: { ok: true } as Response, data: reconciled.result };
+      const base = `${UPLOAD_API_URL}/${reconciled.uploadId}`;
 
       for (let index = 0; index < preparedPhotos.length; index += 1) {
         if (pending.uploaded.has(index)) continue;
@@ -1672,6 +1679,7 @@ export default function UploadScreen() {
   async function finalizeWalkthrough(
     sendEmail: boolean
   ): Promise<string | null> {
+    if (finalizationBusy.current) return null;
     const cleanedRecipient =
       recipientEmail.trim();
 
@@ -1694,6 +1702,7 @@ export default function UploadScreen() {
       return null;
     }
 
+    finalizationBusy.current = true;
     try {
       setIsFinalizing(true);
       setErrorMessage("");
@@ -1746,11 +1755,14 @@ export default function UploadScreen() {
       // Keep source bytes available while this completed report remains on screen.
       const viewerPhotos = recoveryRef.current?.photos || photos;
       setPhotos(viewerPhotos as SelectedPhoto[]);
-      const retained = await clearRecovery(session?.user.id, true);
-      if (retained) completedPhotoCleanup.current = retained;
-      recoveryRef.current = null;
-
       setCorrectedWorkbookUrl(data.download_url ?? null);
+      try {
+        const retained = await clearRecovery(session?.user.id, true);
+        if (retained) completedPhotoCleanup.current = retained;
+      } catch {
+        setErrorMessage("Your report is saved in History, but this device could not clear its local draft. Open History to use the saved report.");
+      }
+      recoveryRef.current = null;
       await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
       await writeDraft(photoDraftKey, null).catch(() => {});
       if (session) await saveCaptureDraft(session.user.id, { customerId, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 }).catch(() => {});
@@ -1840,6 +1852,7 @@ export default function UploadScreen() {
 
       return null;
     } finally {
+      finalizationBusy.current = false;
       setIsFinalizing(false);
     }
   }

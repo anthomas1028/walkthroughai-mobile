@@ -26,7 +26,7 @@ async function key(userId?: string) {
   return `walkthrough-recovery-v1:${data.session.user.id}`;
 }
 export async function loadRecovery(userId?: string): Promise<RecoveryDraft | null> {
-  await writes;
+  await writes.catch(() => {});
   const raw = await AsyncStorage.getItem(await key(userId));
   if (!raw) return null;
   const draft = JSON.parse(raw);
