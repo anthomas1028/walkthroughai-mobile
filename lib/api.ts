@@ -26,7 +26,7 @@ export async function apiFetch(
   headers.set("Authorization", `Bearer ${session.access_token}`);
 
   const controller = new AbortController();
-  const finalizing = input.split("?")[0].endsWith("/api/finalize");
+  const finalizing = input.split("?")[0].endsWith("/api/finalize") || /\/api\/team-walkthroughs\/[^/]+\/(contributions|finish)$/.test(input.split("?")[0]);
   const timer = init.signal ? undefined : setTimeout(() => controller.abort(), finalizing ? 300000 : 30000);
   try {
     const response = await fetch(input, { ...init, headers, signal: init.signal || controller.signal });

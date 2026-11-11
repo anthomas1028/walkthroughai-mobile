@@ -618,6 +618,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
+          <Pressable accessibilityRole="button" onPress={() => router.push('/shared')} style={{backgroundColor:'#183655',padding:16,borderRadius:12,marginBottom:14}}><Text style={{color:'#D6E8FF',fontWeight:'700'}}>Shared walkthroughs & invitations ›</Text></Pressable>
           {!showNewCustomerForm ? <ResumeWalkthrough /> : null}
           {demoCustomer && !showNewCustomerForm ? (
             <View style={styles.demoSection}>

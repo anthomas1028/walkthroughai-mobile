@@ -1,0 +1,16 @@
+const assert=require('assert/strict'),fs=require('fs'),vm=require('vm'),ts=require('typescript');
+const source=fs.readFileSync('app/upload.tsx','utf8');const start=source.indexOf('  async function finalizeWalkthrough('),end=source.indexOf('\n  async function discardWalkthrough()',start);
+const code=ts.transpileModule(source.slice(start,end).replace('async function','export async function'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+(async()=>{let request,checkpoint;
+const row={photo:'photo_001.jpg',description:'Gloves'};
+const ctx={exports:{},finalizationBusy:{current:false},captureSaveId:{current:'capture-test-12345'},autosaveAttempt:{current:''},contributionRevision:{current:3},teamSessionId:'shared-visit',teamArea:'Crib',recipientEmail:'',results:[row],completedCustomer:'Shared Customer',walkthroughName:'Shared Customer',walkthroughTitle:'Team',customerId:'',selectedContactName:'',currentJobId:'own-job',FINALIZE_API_URL:'/api/finalize',API_BASE_URL:'https://api.example.invalid',photos:[],session:{user:{id:'alice'}},activeKey:'active',photoDraftKey:'team-draft',recoveryRef:{current:{photos:[]}},completedPhotoCleanup:{current:null},
+apiFetch:async(url,init)=>{request={url,payload:JSON.parse(init.body)};return {ok:true}},readJsonResponse:async()=>({success:true,download_url:'combined.xlsx',results:[row],contribution_revision:4}),normalizeResult:r=>r,
+setIsFinalizing(){},setErrorMessage(){},setResults(){},setPhotos(){},setCorrectedWorkbookUrl(){},checkpoint:async patch=>{checkpoint=patch},clearRecovery:async()=>null,AsyncStorage:{multiRemove:async()=>{}},writeDraft:async()=>{},saveCaptureDraft:async()=>{},setEmailSent(){},setEmailedRecipient(){},Alert:{alert(){throw Error('Unexpected alert')}},console,Error,Array};
+vm.runInNewContext(code,ctx);await ctx.exports.finalizeWalkthrough(false,true);
+assert.equal(request.url,'https://api.example.invalid/api/team-walkthroughs/shared-visit/contributions');assert.equal(request.payload.job_id,'own-job');assert.equal(request.payload.contribution_revision,3);assert.equal(request.payload.send_email,false);assert.equal(checkpoint.contributionRevision,4);assert.equal(ctx.contributionRevision.current,4);
+// Team and personal drafts sharing a customer ID must coexist.
+const storage=new Map();const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/capture-drafts.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,{exports:module.exports,require:()=>({getItem:async k=>storage.get(k)||null,setItem:async(k,v)=>storage.set(k,v)}),Date,JSON,Promise,Error});
+for(const teamSessionId of ['one','two'])await module.exports.saveCaptureDraft('alice',{customerId:'',teamSessionId,customerName:'Shared',contactName:'',photoCount:1});
+assert.equal((await module.exports.captureDrafts('alice')).length,2);await module.exports.saveCaptureDraft('alice',{customerId:'',teamSessionId:'one',customerName:'Shared',contactName:'',photoCount:0});assert.equal((await module.exports.captureDrafts('alice'))[0].teamSessionId,'two');
+console.log('PASS: team capture submits to its visit with a revision, persists acknowledged version, and isolates team drafts.');
+})().catch(e=>{console.error(e);process.exitCode=1});

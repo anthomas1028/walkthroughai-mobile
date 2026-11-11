@@ -65,7 +65,7 @@ export function RecoveryBanner() {
   }, [pathname, session?.user.id]);
   if (!session || pathname === '/upload' || pathname === '/walkthrough') return null;
   const visibleDraft = draftOwner === session.user.id ? draft : null;
-  if (!visibleDraft && capture && captureOwner === session.user.id) return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/walkthrough', params: { customerId: capture.customerId, customerName: capture.customerName, contactName: capture.contactName } })}>
+  if (!visibleDraft && capture && captureOwner === session.user.id) return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/walkthrough', params: { customerId: capture.customerId, teamSessionId: capture.teamSessionId || "", teamArea: capture.teamArea || "", customerName: capture.customerName, contactName: capture.contactName } })}>
     <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Continue walkthrough · {capture.customerName}</Text>
     <Text style={{ color: '#CBD5E1', marginTop: 3 }}>{capture.photoCount} photos · {capture.scanCount || 0} scans saved on this device. Available offline.</Text>
   </Pressable></View>;
@@ -73,7 +73,7 @@ export function RecoveryBanner() {
   return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}>
     <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/upload', params: {
       resume: '1', ...(jobId && !visibleDraft.results.length ? { resumeJobId: jobId } : {}),
-      customerId: visibleDraft.customerId, customerName: visibleDraft.customerName,
+      teamSessionId: visibleDraft.teamSessionId || "", teamArea: visibleDraft.teamArea || "", customerId: visibleDraft.customerId, customerName: visibleDraft.customerName,
       contactName: visibleDraft.contactName, photos: JSON.stringify(visibleDraft.photos),
     } })}>
       <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>{status} · {visibleDraft.customerName}</Text>

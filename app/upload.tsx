@@ -160,6 +160,7 @@ type JobStatusApiResponse = {
 };
 
 type FinalizeApiResponse = {
+  contribution_revision?: number;
   success: boolean;
   customer?: string;
   timestamp?: string;
@@ -563,6 +564,8 @@ export default function UploadScreen() {
 
   const params = useLocalSearchParams<{
     resume?: string;
+    teamSessionId?: string;
+    teamArea?: string;
     photos?: string | string[];
     savedDraft?: string;
     resumeJobId?: string;
@@ -572,6 +575,9 @@ export default function UploadScreen() {
     contactName?: string | string[];
   }>();
 
+  const [teamSessionId, setTeamSessionId] = useState(getSingleParameter(params.teamSessionId));
+  const [teamArea, setTeamArea] = useState(getSingleParameter(params.teamArea));
+  const contributionRevision = useRef(0);
   const customerId = getSingleParameter(
     params.customerId
   );
@@ -587,7 +593,7 @@ export default function UploadScreen() {
   const uploadMounted = useRef(true);
   useEffect(() => { uploadMounted.current = true; return () => { uploadMounted.current = false; }; }, []);
   const activeKey = `active-walkthrough:${session?.user.id || ""}`;
-  const photoDraftKey = draftKey(session?.user.id || "", customerId);
+  const photoDraftKey = draftKey(session?.user.id || "", teamSessionId ? `team:${teamSessionId}` : customerId);
   const resumeJobId = typeof params.resumeJobId === "string" ? params.resumeJobId : "";
   const [photos, setPhotos] = useState<SelectedPhoto[]>(() => parsePhotos(params.photos));
   const [capturedScans, setCapturedScans] = useState<RecognitionResult[]>([]);
@@ -799,15 +805,18 @@ export default function UploadScreen() {
     let active = true;
     loadRecovery(session?.user.id).then(async saved => {
       if (!active) return;
-      if (saved && params.resume === "1" && saved.customerId === customerId) {
+      if (saved && ((params.resume === "1" && saved.customerId === customerId && (!teamSessionId || teamSessionId === saved.teamSessionId)) || (resumeJobId && (resumeJobId === saved.jobId || resumeJobId === saved.nativeBatchId)))) {
         if (Platform.OS === "web") {
-          const groups = await restoreGroups(photoDraftKey);
+          const groups = await restoreGroups(draftKey(session?.user.id || "", saved.teamSessionId ? `team:${saved.teamSessionId}` : saved.customerId));
           if (groups) saved.photos = groups.flatMap(group => group.photos.map((photo: SelectedPhoto) => ({ ...photo, location: group.name })));
           saved.prepared = [];
         }
         setPhotos(saved.photos);
         setCapturedScans((saved.captureScans || []).map(row => normalizeResult(row as RecognitionResult)));
         recoveryRef.current = saved;
+        setTeamSessionId(saved.teamSessionId || "");
+        setTeamArea(saved.teamArea || "");
+        contributionRevision.current = saved.contributionRevision || 0;
         if (saved.captureSaveId) captureSaveId.current = saved.captureSaveId;
         setWaitingForConnection(saved.uploadRequested === true && !saved.results.length);
         setDeviceSavedPhotos(saved.photos.length);
@@ -836,7 +845,7 @@ export default function UploadScreen() {
 
   async function checkpoint(overrides: Partial<RecoveryDraft> = {}) {
     const pending = pendingUpload.current;
-    const draft: RecoveryDraft = { ...recoveryRef.current, version: 1, customerId, customerName: walkthroughName, contactName: selectedContactName,
+    const draft: RecoveryDraft = { ...recoveryRef.current, version: 1, customerId, teamSessionId, teamArea, contributionRevision: contributionRevision.current, customerName: walkthroughName, contactName: selectedContactName,
       photos: recoveryRef.current?.photos || photos, captureScans: capturedScans, prepared: pending?.prepared || [], uploadId: pending?.uploadId || "",
       uploaded: Array.from(pending?.uploaded || []), jobId: recoveryRef.current?.jobId || currentJobId,
       results: recoveryRef.current?.results || results, updatedAt: new Date().toISOString(), ...overrides };
@@ -950,6 +959,14 @@ export default function UploadScreen() {
   async function analyzePhotos() {
     if (analysisBusy.current || !recoveryReady) return;
     analysisBusy.current = true;
+    if (teamSessionId) {
+      try {
+        const response = await apiFetch(`${API_BASE_URL}/api/team-walkthroughs/${teamSessionId}/presence`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({area:teamArea,state:'uploading'})});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not join the shared walkthrough.');
+      } catch (error) { analysisBusy.current=false;setErrorMessage(String(error));return; }
+    }
+
     if (!recoveryRef.current && !resumeJobId && params.resume !== "1") {
       try {
         const saved = await loadRecovery(session?.user.id);
@@ -957,7 +974,7 @@ export default function UploadScreen() {
           analysisBusy.current = false;
           Alert.alert("Unfinished walkthrough", "Resume your saved walkthrough, or replace its local recovery draft. Saved reports in History are kept.", [
             { text: "Cancel", style: "cancel" },
-            { text: "Resume saved", onPress: () => router.replace({ pathname: "/upload", params: { resume: "1", customerId: saved.customerId, customerName: saved.customerName, contactName: saved.contactName, photos: JSON.stringify(saved.photos) } }) },
+            { text: "Resume saved", onPress: () => router.replace({ pathname: "/upload", params: { resume: "1", teamSessionId: saved.teamSessionId || "", teamArea: saved.teamArea || "", customerId: saved.customerId, customerName: saved.customerName, contactName: saved.contactName, photos: JSON.stringify(saved.photos) } }) },
             { text: "Replace draft", style: "destructive", onPress: () => { void clearRecovery(session?.user.id).then(() => analyzePhotos()); } },
           ]);
           return;
@@ -1222,10 +1239,10 @@ export default function UploadScreen() {
       if (!(recoveryRef.current?.jobId || resumeJobId) && (!pendingUpload.current || pendingUpload.current.key !== uploadKey || !pendingUpload.current.prepared.length)) {
         const priorUpload = recoveryRef.current?.uploadId || "";
         const originals = await retainPhotos(photos, `source-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
+        recoveryRef.current = { version: 1, customerId, teamSessionId, teamArea, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
         await saveRecovery(recoveryRef.current, session?.user.id);
         preparedPhotos = nativeUploadSupported ? originals : await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
+        recoveryRef.current = { version: 1, customerId, teamSessionId, teamArea, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
         pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: priorUpload, uploaded: new Set() };
       } else {
         preparedPhotos = pendingUpload.current?.prepared || [];
@@ -1590,6 +1607,20 @@ export default function UploadScreen() {
     return () => clearTimeout(timer);
   }, [results, isProcessing, isFinalizing, isDiscarding, reviewTask, editingIndex]);
 
+  async function reloadTeamContribution() {
+    try {
+      const key = currentJobId || `scan-${captureSaveId.current}`;
+      const response = await apiFetch(`${API_BASE_URL}/api/team-walkthroughs/${teamSessionId}/contributions/${encodeURIComponent(key)}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Saved contribution unavailable.');
+      const saved = data.results.map(normalizeResult);
+      contributionRevision.current = data.contribution_revision;
+      autosaveAttempt.current = JSON.stringify(saved);
+      setResults(saved);setErrorMessage('');
+      await checkpoint({results:saved,contributionRevision:data.contribution_revision});
+    } catch (error) {setErrorMessage(String(error));}
+  }
+
   async function finalizeWalkthrough(
     sendEmail: boolean, automatic = false
   ): Promise<string | null> {
@@ -1623,7 +1654,7 @@ export default function UploadScreen() {
 
       if (!currentJobId && recoveryRef.current) await checkpoint({ captureSaveId: captureSaveId.current });
       const response = await apiFetch(
-        FINALIZE_API_URL,
+        teamSessionId ? `${API_BASE_URL}/api/team-walkthroughs/${teamSessionId}/contributions` : FINALIZE_API_URL,
         {
           method: "POST",
           headers: {
@@ -1643,6 +1674,7 @@ export default function UploadScreen() {
             send_email: sendEmail,
             job_id: currentJobId || null,
             capture_id: captureSaveId.current,
+            contribution_revision: contributionRevision.current,
             results,
           }),
         }
@@ -1667,6 +1699,7 @@ export default function UploadScreen() {
         ? data.results.map(row => normalizeResult({ ...row, photo_url: row.photo_url || results.find(previous => previous.photo === row.photo)?.photo_url }))
         : results;
 
+      if (typeof data.contribution_revision === "number") { contributionRevision.current = data.contribution_revision; if (recoveryRef.current) await checkpoint({contributionRevision:data.contribution_revision,results:finalizedResults}); }
       autosaveAttempt.current = JSON.stringify(finalizedResults);
       setResults(finalizedResults);
       // Keep source bytes available while this completed report remains on screen.
@@ -1682,7 +1715,7 @@ export default function UploadScreen() {
       recoveryRef.current = null;
       await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
       await writeDraft(photoDraftKey, null).catch(() => {});
-      if (session) await saveCaptureDraft(session.user.id, { customerId, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 }).catch(() => {});
+      if (session) await saveCaptureDraft(session.user.id, { customerId, teamSessionId, teamArea, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 }).catch(() => {});
 
       if (sendEmail && data.email_sent) {
         setEmailSent(true);
@@ -1779,7 +1812,7 @@ export default function UploadScreen() {
     if (!currentJobId && recoveryRef.current?.localCaptureReview) {
       await clearRecovery(session?.user.id);
       await writeDraft(photoDraftKey, null);
-      if (session) await saveCaptureDraft(session.user.id, { customerId, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 });
+      if (session) await saveCaptureDraft(session.user.id, { customerId, teamSessionId, teamArea, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 });
       recoveryRef.current = null; setResults([]); router.replace('/'); return;
     }
     if (!currentJobId) {
@@ -1827,7 +1860,7 @@ export default function UploadScreen() {
       await clearRecovery(session?.user.id);
       await AsyncStorage.multiRemove([activeKey, `${activeKey}:review`]).catch(() => {});
       await writeDraft(photoDraftKey, null).catch(() => {});
-      if (session) await saveCaptureDraft(session.user.id, { customerId, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 }).catch(() => {});
+      if (session) await saveCaptureDraft(session.user.id, { customerId, teamSessionId, teamArea, customerName: walkthroughName, contactName: selectedContactName, photoCount: 0 }).catch(() => {});
       setResults([]);
       setCorrectedWorkbookUrl(null);
       setEmailSent(false);
@@ -2921,8 +2954,10 @@ export default function UploadScreen() {
             </>
           ) : (
             <>
+              {teamSessionId && errorMessage.includes('another device') && <Pressable accessibilityRole="button" onPress={() => Alert.alert('Reload saved contribution?', 'This replaces unsaved edits on this device with the latest saved version. Your source photos remain available.', [{text:'Cancel',style:'cancel'},{text:'Reload saved version',onPress:()=>void reloadTeamContribution()}])} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Reload saved contribution</Text></Pressable>}
               {!correctedWorkbookUrl && <Pressable accessibilityRole="button" disabled={isFinalizing || isProcessing} onPress={() => void finalizeWalkthrough(false)} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{isFinalizing ? 'Saving inventory…' : 'Save inventory'}</Text></Pressable>}
-              {correctedWorkbookUrl && (
+              {correctedWorkbookUrl && teamSessionId && <Pressable accessibilityRole="button" disabled={isFinalizing} style={styles.primaryButton} onPress={() => router.replace({ pathname: '/shared', params: { visitId: teamSessionId } })}><Text style={styles.primaryButtonText}>Contribution saved · Open shared walkthrough</Text></Pressable>}
+              {correctedWorkbookUrl && !teamSessionId && (
                 <CompletedWalkthroughActions remainingCount={remainingCount} recipientEmail={recipientEmail}
                   busy={isFinalizing} onView={openCorrectedWorkbook}
                   onEmail={() => { void finalizeWalkthrough(true); }} onDone={startOver} />

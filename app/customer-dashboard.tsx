@@ -275,12 +275,13 @@ export default function CustomerDashboardScreen() {
               <>
                 {!isReadOnly ? <View style={{ marginBottom: 16, gap: 10 }}>
                   <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/walkthrough", params: { customerId: String(customerId), customerName: name, customerEmail: dashboard.customer.email || "", contactName: dashboard.customer.contact_name || "" } })} style={{ backgroundColor: "#2D6BF0", minHeight: UI.controlHeight, paddingVertical: 12, paddingHorizontal: 14, justifyContent: "center", borderRadius: UI.cardRadius }}><Text style={{ color: "white", textAlign: "center", fontWeight: "700", fontSize: 16 }}>Start walkthrough</Text></Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/shared', params: { customerId: String(customerId), customerName: name } })} style={{backgroundColor:'#183655',padding:14,borderRadius:12,minHeight:46}}><Text style={{color:'#D6E8FF',textAlign:'center',fontWeight:'700'}}>Team walkthrough & customer access</Text></Pressable>
                   <View style={{ flexDirection: "row", gap: 12 }}>{[{ label: "History", route: "/history" }, { label: "Edit customer", route: "/customer-edit" }].map(action => <Pressable key={action.route} accessibilityRole="button" onPress={() => router.push({ pathname: action.route as any, params: { customerId: String(customerId), customerName: name } })} style={{ flex: 1, minHeight: 44, paddingVertical: 10, paddingHorizontal: 12, justifyContent: "center", borderRadius: UI.cardRadius, backgroundColor: "#1b2c43" }}><Text style={{ color: "#bfdbfe", textAlign: "center", fontWeight: "600" }}>{action.label}</Text></Pressable>)}</View>
                 </View> : null}
                 {(isReadOnly || dashboard.customer.logo_url || dashboard.customer.contact_name || dashboard.customer.email || dashboard.customer.notes) ? <View style={s.customerCard}>
                   {isReadOnly ? (
                     <Text style={s.demoLabel}>
-                      DEMO CUSTOMER · READ ONLY
+                      {dashboard.is_demo ? 'DEMO CUSTOMER · READ ONLY' : 'SHARED CUSTOMER · HISTORY ACCESS'}
                     </Text>
                   ) : null}
 

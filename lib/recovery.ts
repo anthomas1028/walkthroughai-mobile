@@ -9,6 +9,9 @@ export type RecoveryDraft = {
   photos: RecoveryPhoto[]; prepared: RecoveryPhoto[]; uploadId: string;
   completionAlertToken?: string;
   captureSaveId?: string;
+  teamSessionId?: string;
+  teamArea?: string;
+  contributionRevision?: number;
   nativeBatchId?: string;
   uploadRequested?: boolean;
   captureScans?: unknown[];

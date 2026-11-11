@@ -9,7 +9,7 @@ const ast = ts.createSourceFile('upload.tsx', source, ts.ScriptTarget.Latest, tr
 let footer;
 function walk(node) { if (ts.isJsxElement(node) && node.openingElement.attributes.getText(ast).includes('styles.footer,')) footer = node.getText(ast); ts.forEachChild(node, walk); } walk(ast);
 assert(footer, 'Test must render the actual upload footer');
-const scope = { ...natives, CompletedWalkthroughActions: completed.CompletedWalkthroughActions, hasResults: true, correctedWorkbookUrl: '/report.xlsx', remainingCount: 21, recipientEmail: 'fixture@example.com', isFinalizing: false, safeAreaInsets: { bottom: 34 }, styles: new Proxy({}, { get: (_, name) => name }), setFooterHeight() {}, openCorrectedWorkbook() {}, finalizeWalkthrough() {}, startOver() {} };
+const scope = { ...natives, CompletedWalkthroughActions: completed.CompletedWalkthroughActions, hasResults: true, teamSessionId: "", correctedWorkbookUrl: '/report.xlsx', remainingCount: 21, recipientEmail: 'fixture@example.com', isFinalizing: false, safeAreaInsets: { bottom: 34 }, styles: new Proxy({}, { get: (_, name) => name }), setFooterHeight() {}, openCorrectedWorkbook() {}, finalizeWalkthrough() {}, startOver() {} };
 let tree;
 vm.runInNewContext(compile(`const {${Object.keys(scope).join(',')}} = scope; output(${footer});`), { exports: {}, scope, output: value => { tree = value; }, require: () => ({ jsx, jsxs: jsx, Fragment: 'Fragment' }) });
 const nodes = [];

@@ -1,3 +1,4 @@
+import { API_BASE_URL, apiFetch } from "../lib/api";
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { BarcodeScanner, type ScanLabelPhoto } from "../components/BarcodeScanner";
@@ -76,11 +77,13 @@ export default function WalkthroughPhotoScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const photoViewerImageHeight = Math.max(windowHeight - 120, 320);
 
-  const { customerId, customerName, customerEmail, contactName } =
+  const { customerId, customerName, customerEmail, contactName, teamSessionId, teamArea } =
     useLocalSearchParams<{
       customerId?: string;
       customerName?: string;
       customerEmail?: string;
+      teamSessionId?: string;
+      teamArea?: string;
       contactName?: string;
     }>();
 
@@ -90,9 +93,9 @@ export default function WalkthroughPhotoScreen() {
       : "Selected Customer";
 
   const { session } = useAuth();
-  const key = draftKey(session?.user.id || "", String(customerId || ""));
+  const key = draftKey(session?.user.id || "", teamSessionId ? `team:${teamSessionId}` : String(customerId || ""));
   const [draftReady, setDraftReady] = useState(false);
-  const [groups, setGroups] = useState<LocationGroup[]>([]);
+  const [groups, setGroups] = useState<LocationGroup[]>(typeof teamArea === 'string' && teamArea.trim() ? [{id: 'team-area', name: teamArea.trim(), photos: []}] : []);
   const { connection } = useConnection();
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
   useEffect(() => {
@@ -111,7 +114,7 @@ export default function WalkthroughPhotoScreen() {
     if (!draftReady || !session) return;
     let active = true;
     setSaveStatus('saving');
-    storeGroups(key, groups).then(async saved => { if (active && saved) { await saveCaptureDraft(session.user.id, { customerId: String(customerId || ''), customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: saved.reduce((count: number, group: LocationGroup) => count + group.photos.length, 0), scanCount: saved.reduce((count: number, group: LocationGroup) => count + (group.scans?.length || 0), 0) }); if (active) setSaveStatus('saved'); } }).catch(() => {
+    storeGroups(key, groups).then(async saved => { if (active && saved) { await saveCaptureDraft(session.user.id, { customerId: String(customerId || ''), teamSessionId: typeof teamSessionId === 'string' ? teamSessionId : undefined, teamArea: typeof teamArea === 'string' ? teamArea : undefined, customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: saved.reduce((count: number, group: LocationGroup) => count + group.photos.length, 0), scanCount: saved.reduce((count: number, group: LocationGroup) => count + (group.scans?.length || 0), 0) }); if (active) setSaveStatus('saved'); } }).catch(() => {
       if (active) { setSaveStatus('error'); Alert.alert("Draft could not be saved", "Device storage is full or unavailable. Keep the app open until you finish."); }
     });
     return () => { active = false; };
@@ -171,7 +174,7 @@ export default function WalkthroughPhotoScreen() {
     });
     const saved = await storeGroups(key, next);
     if (!saved) throw new Error('The draft changed while saving. Scan again to confirm the item.');
-    await saveCaptureDraft(session!.user.id, { customerId: String(customerId || ''), customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: next.reduce((count, group) => count + group.photos.length, 0), scanCount: next.reduce((count, group) => count + (group.scans?.length || 0), 0) });
+    await saveCaptureDraft(session!.user.id, { customerId: String(customerId || ''), teamSessionId: typeof teamSessionId === 'string' ? teamSessionId : undefined, teamArea: typeof teamArea === 'string' ? teamArea : undefined, customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: next.reduce((count, group) => count + group.photos.length, 0), scanCount: next.reduce((count, group) => count + (group.scans?.length || 0), 0) });
     setGroups(saved);
   }
 
@@ -540,6 +543,26 @@ export default function WalkthroughPhotoScreen() {
     await saveAndContinue();
   }
 
+  async function inviteTeammate() {
+    if (!session || !customerId || continueLock.current) return;
+    continueLock.current=true;setIsContinuing(true);
+    try {
+      const response=await apiFetch(`${API_BASE_URL}/api/team-walkthroughs`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_id:customerId,name:`${selectedCustomerName} · ${new Date().toLocaleDateString()}`.slice(0,120)})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error || 'Invitation setup failed.');
+      const saved=await storeGroups(draftKey(session.user.id,`team:${data.id}`),groups);
+      if (!saved) throw new Error('Photos could not be copied to the shared draft. Your original draft is still available.');
+      await saveCaptureDraft(session.user.id,{customerId:'',teamSessionId:data.id,teamArea:groups[0]?.name||'',customerName:selectedCustomerName,contactName:'',photoCount:photos.length,scanCount});
+      if (photos.length || scanCount) {
+        const presence=await apiFetch(`${API_BASE_URL}/api/team-walkthroughs/${data.id}/presence`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({area:groups[0]?.name||'My areas',state:'capturing'})});
+        if(!presence.ok)throw new Error('Shared visit created, but area status could not be saved. Open Shared walkthroughs to continue.');
+      }
+      await writeDraft(key,null);
+      await saveCaptureDraft(session.user.id,{customerId:String(customerId),customerName:selectedCustomerName,contactName:'',photoCount:0,scanCount:0});
+      router.replace({pathname:'/shared',params:{visitId:data.id}});
+    } catch(error) { Alert.alert('Could not start sharing',String(error)); }
+    finally {continueLock.current=false;setIsContinuing(false);}
+  }
+
   async function saveAndContinue() {
     if (continueLock.current) return;
     continueLock.current = true;
@@ -563,6 +586,8 @@ export default function WalkthroughPhotoScreen() {
         params: {
           photos: "",
           savedDraft: "true",
+          teamSessionId: typeof teamSessionId === "string" ? teamSessionId : "",
+          teamArea: typeof teamArea === "string" ? teamArea : "",
           customerId: typeof customerId === "string" ? customerId : "",
           customerName: selectedCustomerName,
           customerEmail:
@@ -637,6 +662,8 @@ export default function WalkthroughPhotoScreen() {
             ) : null}
           </View>
 
+          {!teamSessionId && customerId ? <Pressable accessibilityRole="button" disabled={isContinuing || !draftReady} onPress={() => void inviteTeammate()} style={{backgroundColor:'#183655',padding:14,borderRadius:12,marginBottom:16}}><Text style={{color:'#D6E8FF',fontWeight:'700',textAlign:'center'}}>Invite teammate to this walkthrough</Text></Pressable> : null}
+          {teamSessionId ? <Text style={{color:'#9FC4F4',paddingBottom:12}}>Shared walkthrough · Your photos contribute to the combined inventory.</Text> : null}
           {groups.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconWrap}>
