@@ -69,11 +69,6 @@ const FINALIZE_API_URL = `${API_BASE_URL}/api/finalize`;
 
 const JOB_POLL_INTERVAL_MS = 2500;
 
-const ANALYSIS_WAITING_MESSAGES = [
-  { heading: "Reading labels", text: "Clear, close-up photos help preserve part numbers and small print." },
-  { heading: "Your inventory, organized", text: "Your inventory saves automatically. Open any item to compare it with its photo." },
-  { heading: "Organized by location", text: "Your location labels stay attached to the products in your report." },
-];
 const JOB_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 type SelectedPhoto = {
@@ -687,50 +682,14 @@ export default function UploadScreen() {
   const [jobProgress, setJobProgress] =
     useState(0);
 
-  const [
-    waitingMessageIndex,
-    setWaitingMessageIndex,
-  ] = useState(0);
 
   const processingProgressAnimation =
     useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    Animated.timing(
-      processingProgressAnimation,
-      {
-        toValue: Math.max(
-          0,
-          Math.min(jobProgress, 100),
-        ),
-        duration: 450,
-        useNativeDriver: false,
-      },
-    ).start();
-  }, [
-    jobProgress,
-    processingProgressAnimation,
-  ]);
 
 
-  useEffect(() => {
-    if (!isProcessing) {
-      setWaitingMessageIndex(0);
-      return;
-    }
 
-    const interval = setInterval(() => {
-      setWaitingMessageIndex(
-        (currentIndex) =>
-          (currentIndex + 1) %
-          ANALYSIS_WAITING_MESSAGES.length,
-      );
-    }, 6500);
-
-    return () => clearInterval(interval);
-  }, [isProcessing]);
-
-  const [jobStatusMessage, setJobStatusMessage] =
+  const [, setJobStatusMessage] =
     useState(
       "Uploading photos and preparing background analysis."
     );
@@ -743,6 +702,8 @@ export default function UploadScreen() {
 
   const [currentJobId, setCurrentJobId] =
     useState("");
+
+
 
   const [results, setResults] = useState<
     RecognitionResult[]
@@ -858,6 +819,27 @@ export default function UploadScreen() {
   }
 
   const photoCount = photos.length;
+
+  useEffect(() => {
+    Animated.timing(
+      processingProgressAnimation,
+      {
+        toValue: Math.max(
+          0,
+          Math.min(currentJobId ? jobProgress : (photoCount > 0 ? receivedPhotos / photoCount * 100 : 0), 100),
+        ),
+        duration: 450,
+        useNativeDriver: false,
+      },
+    ).start();
+  }, [
+    jobProgress,
+    currentJobId,
+    photoCount,
+    receivedPhotos,
+    processingProgressAnimation,
+  ]);
+
   const hasResults = results.length > 0;
 
   const photoOutcomes = photos.map((photo, index) => {
@@ -2048,7 +2030,7 @@ export default function UploadScreen() {
             styles.scrollContent,
             {
               paddingBottom:
-                footerHeight > 0
+                isProcessing ? 24 : footerHeight > 0
                   ? footerHeight + 24
                   : 280,
             },
@@ -2056,7 +2038,7 @@ export default function UploadScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {!hasResults && <View style={{ backgroundColor: '#14243A', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+          {!hasResults && !isProcessing && <View style={{ backgroundColor: '#14243A', borderRadius: 12, padding: 12, marginBottom: 12 }}>
             <Text accessibilityLiveRegion="polite" style={{ color: '#CBD5E1', fontSize: 13 }}>
               {deviceSavedPhotos || (params.savedDraft === 'true' ? photoCount : 0)} saved on device · {receivedPhotos} received by server
             </Text>
@@ -2208,111 +2190,37 @@ export default function UploadScreen() {
 
           {isProcessing && (
             <View style={styles.processingCard}>
-              <ActivityIndicator
-                size="large"
-                color="#64B5FF"
-              />
-
-              <Text
-                style={styles.processingTitle}
-              >
+              <ActivityIndicator size="small" color="#64B5FF" />
+              <Text style={styles.processingTitle}>
                 {currentJobId ? "Analyzing inventory" : "Uploading photos"}
               </Text>
-
-              <Text
-                style={
-                  styles.processingMessageHeading
-                }
-              >
-                {
-                  ANALYSIS_WAITING_MESSAGES[
-                    waitingMessageIndex
-                  ].heading
-                }
+              <Text accessibilityLiveRegion="polite" style={styles.processingNote}>
+                {currentJobId ? `${jobProgress}% complete` : `${receivedPhotos} of ${photoCount} photos uploaded`}
               </Text>
-
-              <Text
-                style={styles.processingText}
-              >
-                {
-                  ANALYSIS_WAITING_MESSAGES[
-                    waitingMessageIndex
-                  ].text
-                }
-              </Text>
-
-              <Text
-                style={styles.processingNote}
-              >
-                {currentJobId ? `${jobProgress}% analyzed` : jobStatusMessage}
-              </Text>
-
-              <Text style={styles.processingNote}>{currentJobId
-                ? "Your photos are uploaded. Analysis continues on the server if you lock your phone or switch apps. Return here to view and save the results."
-                : nativeUploadQueued ? "iOS is uploading your photos. You can switch apps or lock your phone. Analysis starts automatically after every photo arrives. Do not swipe the app closed." : nativeUploadSupported ? "Preparing the iOS upload queue. Transfers continue when you switch apps once queued." : "Keep the app open until all photos finish uploading. Install the latest TestFlight build for background uploads."}</Text>
-              {notificationIssue ? <Text style={{ color: "#FCD34D", padding: 12 }}>{notificationIssue}</Text> : null}
-              {Boolean(currentJobId) && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ padding: 14, marginTop: 10 }}>
-                <Text style={{ color: "#93C5FD", fontWeight: "700", textAlign: "center" }}>{alertBusy ? "Updating notification…" : completionAlertToken ? "Completion notification on · Turn off" : "Notify me when analysis finishes"}</Text>
-              </Pressable>}
-              {(currentJobId || nativeUploadQueued) && <Pressable accessibilityRole="button" onPress={() => router.replace("/")} style={{ padding: 14 }}>
-                <Text style={{ color: "#BFDBFE", textAlign: "center" }}>Continue in background</Text>
-              </Pressable>}
-
-              <View
-                style={
-                  styles.processingProgressTrack
-                }
-              >
-                <Animated.View
-                  style={[
-                    styles.processingProgressFill,
-                    {
-                      width:
-                        processingProgressAnimation.interpolate(
-                          {
-                            inputRange: [0, 100],
-                            outputRange: [
-                              "0%",
-                              "100%",
-                            ],
-                            extrapolate: "clamp",
-                          },
-                        ),
-                    },
-                  ]}
-                />
+              <View accessibilityRole="progressbar"
+                accessibilityLabel={currentJobId ? "Analysis progress" : "Upload progress"}
+                accessibilityValue={{ min: 0, max: 100, now: Math.max(0, Math.min(100, currentJobId ? jobProgress : photoCount > 0 ? receivedPhotos / photoCount * 100 : 0)) }}
+                style={styles.processingProgressTrack}>
+                <Animated.View style={[styles.processingProgressFill, {
+                  width: processingProgressAnimation.interpolate({
+                    inputRange: [0, 100], outputRange: ["0%", "100%"], extrapolate: "clamp",
+                  }),
+                }]} />
               </View>
-
-              <View
-                style={
-                  styles.processingProgressLabels
-                }
-              >
-                <Text
-                  style={
-                    styles.processingProgressLabel
-                  }
-                >
-                  0%
-                </Text>
-
-                <Text
-                  style={
-                    styles.processingProgressLabel
-                  }
-                >
-                  100%
-                </Text>
-              </View>
-
-              <Text
-                style={
-                  styles.processingKeepOpenText
-                }
-              >
-                Keep this screen open while the app
-                checks the background job.
+              <Text style={styles.processingKeepOpenText}>
+                {currentJobId
+                  ? "You can leave this screen. Analysis continues in the background."
+                  : nativeUploadQueued
+                    ? "You can lock your phone or switch apps. Don’t force-close the app."
+                    : "Keep the app open while photos are prepared and uploaded."}
               </Text>
+              {notificationIssue ? <Text style={{ color: "#FCD34D", marginTop: 12 }}>{notificationIssue}</Text> : null}
+              {Boolean(currentJobId) && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ minHeight: 44, justifyContent: "center", marginTop: 8 }}>
+                <Text style={{ color: "#93C5FD", textAlign: "center" }}>{alertBusy ? "Updating…" : completionAlertToken ? "Notifications on · Turn off" : "Notify me when finished"}</Text>
+              </Pressable>}
+              {(currentJobId || nativeUploadQueued) && <Pressable accessibilityRole="button" onPress={() => router.replace("/")} style={{ minHeight: 44, justifyContent: "center", marginTop: 8 }}>
+                <Text style={{ color: "#BFDBFE", fontWeight: "700", textAlign: "center" }}>Continue in background</Text>
+              </Pressable>}
             </View>
           )}
 
@@ -2877,7 +2785,7 @@ export default function UploadScreen() {
             )}
         </ScrollView>
 
-        <View
+        {!isProcessing && <View
           onLayout={(event) => {
             setFooterHeight(
               Math.ceil(event.nativeEvent.layout.height)
@@ -2972,7 +2880,7 @@ export default function UploadScreen() {
               Results save automatically. You can edit details after analysis.
             </Text>
           )}
-        </View>
+        </View>}
 
         <Modal
           visible={sourcePhotoViewer !== null}
@@ -3634,7 +3542,7 @@ const styles = createPolishedStyles({
     fontSize: UI.pageTitle,
     fontWeight: "800",
     textAlign: "center",
-    marginTop: 24,
+    marginTop: 12,
   },
 
   processingMessageHeading: {
