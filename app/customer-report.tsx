@@ -951,7 +951,7 @@ export default function CustomerReportScreen() {
 
               <View style={styles.reviewStatusRow}>
                 <Ionicons name="alert-circle-outline" size={16} color="#F8D477" />
-                <Text style={styles.reviewStatusText}>Needs review</Text>
+                <Text style={styles.reviewStatusText}>Missing details</Text>
               </View>
             </View>
 
