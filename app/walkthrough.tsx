@@ -13,6 +13,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { draftKey, restoreGroups, storeGroups, writeDraft } from "../lib/drafts";
 import { Alert } from "../lib/alerts";
 import { Ionicons } from "@expo/vector-icons";
+import { CameraView } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -133,10 +134,39 @@ export default function WalkthroughPhotoScreen() {
   });
   const [areaNameDraft, setAreaNameDraft] = useState("");
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
+  const camera = useRef<CameraView>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const shutterBusy = useRef(false);
+  type Shot = Pick<ImagePicker.ImagePickerAsset, "uri" | "width" | "height">;
+  const pendingShot = useRef<((photo: Shot | null) => void) | null>(null);
+
+  function finishShot(photo: Shot | null) {
+    const resolve = pendingShot.current;
+    pendingShot.current = null;
+    setCameraOpen(false);
+    resolve?.(photo);
+  }
+
+  async function pressShutter() {
+    if (!cameraReady || shutterBusy.current || !camera.current) return;
+    shutterBusy.current = true;
+    try {
+      const photo = await camera.current.takePictureAsync({ quality: 0.85 });
+      if (!photo) throw new Error("No photo returned");
+      finishShot(photo);
+    } catch {
+      finishShot(null);
+      Alert.alert("Photo could not be captured", "Open the camera and try again.");
+    } finally {
+      shutterBusy.current = false;
+    }
+  }
+
   const pickerOperation = useRef(0);
   const pickerBusy = useRef(false);
   const [pickerCanCancel, setPickerCanCancel] = useState(false);
-  useEffect(() => () => { pickerOperation.current += 1; }, []);
+  useEffect(() => () => { pickerOperation.current += 1; pendingShot.current?.(null); pendingShot.current = null; }, []);
   function cancelPhotoSelection() {
     pickerOperation.current += 1;
     pickerBusy.current = false;
@@ -401,6 +431,20 @@ export default function WalkthroughPhotoScreen() {
         return;
       }
 
+      if (Platform.OS !== "web") {
+        setScanningArea(null);
+        setScannerEpoch(value => value + 1);
+        setCameraReady(false);
+        const shot = await new Promise<Shot | null>(resolve => {
+          pendingShot.current = resolve;
+          setCameraOpen(true);
+        });
+        if (shot && operation === pickerOperation.current) {
+          setPickerCanCancel(false);
+          await addAssetsToGroup(groupId, [shot]);
+        }
+        return;
+      }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         quality: 0.85,
@@ -731,11 +775,14 @@ export default function WalkthroughPhotoScreen() {
 
                   {group.photos.length > 0 ? (
                     <ScrollView
+                      key={group.photos[group.photos.length - 1]?.id}
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.thumbnailRow}
                     >
-                      {group.photos.map((photo, index) => (
+                      {group.photos.slice().reverse().map((photo, displayIndex) => {
+                        const index = group.photos.length - 1 - displayIndex;
+                        return (
                         <View key={photo.id} style={styles.thumbnailCard}>
                           <Pressable
                             accessibilityRole="button"
@@ -776,7 +823,8 @@ export default function WalkthroughPhotoScreen() {
                             <Ionicons name="close" size={15} color="#FFFFFF" />
                           </Pressable>
                         </View>
-                      ))}
+                        );
+                      })}
                     </ScrollView>
                   ) : (
                     <Text style={styles.areaEmptyText}>
@@ -948,6 +996,23 @@ export default function WalkthroughPhotoScreen() {
             </KeyboardAvoidingView>
           </SafeAreaView>
         </Modal>
+
+        {cameraOpen && (
+          <Modal visible presentationStyle="fullScreen" onRequestClose={() => { if (!shutterBusy.current) finishShot(null); }}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
+              <CameraView ref={camera} facing="back" style={{ flex: 1 }}
+                onCameraReady={() => setCameraReady(true)}
+                onMountError={() => { finishShot(null); Alert.alert("Camera unavailable", "Try opening the camera again."); }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", padding: 16 }}>
+                <Pressable accessibilityRole="button" onPress={() => { if (!shutterBusy.current) finishShot(null); }} style={{ padding: 12 }}>
+                  <Text style={{ color: "white" }}>Cancel</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="Take photo" disabled={!cameraReady}
+                  onPress={pressShutter} style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: cameraReady ? "white" : "#777" }} />
+              </View>
+            </SafeAreaView>
+          </Modal>
+        )}
 
         <Modal
           visible={photoViewer !== null}
