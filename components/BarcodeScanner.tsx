@@ -57,7 +57,7 @@ export function BarcodeScanner({ continuous = false, allowLabelPhoto = false, ex
           <Pressable accessibilityRole="button" disabled={saving || takingPhoto || !foreground || cameraError} style={[button, { marginTop: 8 }]} onPress={async () => {
             if (photoLock.current || attaching.current) return;
             photoLock.current = true; setTakingPhoto(true); setError('');
-            try { const photo = await camera.current?.takePictureAsync({ quality: .95 }); if (!photo?.uri) throw new Error('Camera is not ready. Try again.'); setLabelPhoto({ uri: photo.uri, width: photo.width, height: photo.height }); }
+            try { const photo = await camera.current?.takePictureAsync({ quality: 1 }); if (!photo?.uri) throw new Error('Camera is not ready. Try again.'); setLabelPhoto({ uri: photo.uri, width: photo.width, height: photo.height }); }
             catch (issue) { setError(issue instanceof Error ? issue.message : 'Label photo could not be taken. Try again.'); }
             finally { photoLock.current = false; setTakingPhoto(false); }
           }}><Text style={{ color: '#BFDBFE' }}>{takingPhoto ? 'Taking label photo…' : labelPhoto ? 'Retake label photo' : 'Add label photo (optional)'}</Text></Pressable>

@@ -54,7 +54,7 @@ final class UploadManager: NSObject, URLSessionDataDelegate, URLSessionTaskDeleg
     try? save(id, value)
   }
   func enqueue(id: String, files: [String], metadata: String, authorization: String, promise: Promise) {
-    guard id.range(of: "^[a-f0-9]{48}$", options: .regularExpression) != nil, !files.isEmpty, files.count <= 100 else {
+    guard id.range(of: "^[a-f0-9]{48}$", options: .regularExpression) != nil, !files.isEmpty, files.count <= 500 else {
       promise.reject("INVALID_BATCH", "Invalid photo batch"); return
     }
     // Native staging continues during the finite iOS transition window. Network transfer
@@ -81,7 +81,8 @@ final class UploadManager: NSObject, URLSessionDataDelegate, URLSessionTaskDeleg
           let active = Set(tasks.compactMap { $0.taskDescription }.filter { $0.hasPrefix(id + ":") })
           let metaURL = self.folder(id).appendingPathComponent("metadata.json")
           try Data(metadata.utf8).write(to: metaURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-          var queued = 0
+          var pending: [(String, URL)] = []
+          var bytes: Int64 = 0
           for index in -1..<files.count {
             let slot = index < 0 ? "metadata" : String(index)
             if completed.contains(slot) || active.contains(id + ":" + slot) { continue }
@@ -96,23 +97,54 @@ final class UploadManager: NSObject, URLSessionDataDelegate, URLSessionTaskDeleg
                     throw NSError(domain:"WalkthroughUpload", code:1, userInfo:[NSLocalizedDescriptionKey:"Photo could not be read."])
                   }
                   if CGImageSourceGetType(source) as String? == "public.jpeg" {
-                    try FileManager.default.copyItem(at:sourceURL, to:bodyURL)
+                    do { try FileManager.default.linkItem(at:sourceURL, to:bodyURL) }
+                    catch { try FileManager.default.copyItem(at:sourceURL, to:bodyURL) }
                     try FileManager.default.setAttributes([.protectionKey:FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath:bodyURL.path)
                     return
                   }
-                  guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways:true, kCGImageSourceCreateThumbnailWithTransform:true, kCGImageSourceThumbnailMaxPixelSize:2560] as CFDictionary),
-                        let jpeg = UIImage(cgImage:image).jpegData(compressionQuality:0.88) else {
+                  guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                        let width = properties[kCGImagePropertyPixelWidth] as? Int,
+                        let height = properties[kCGImagePropertyPixelHeight] as? Int,
+                        let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways:true, kCGImageSourceCreateThumbnailWithTransform:true, kCGImageSourceThumbnailMaxPixelSize:max(width, height)] as CFDictionary),
+                        let jpeg = UIImage(cgImage:image).jpegData(compressionQuality:1) else {
                     throw NSError(domain:"WalkthroughUpload", code:1, userInfo:[NSLocalizedDescriptionKey:"Photo \(index + 1) could not be prepared. Select it again."])
                   }
                   try jpeg.write(to: bodyURL, options:[.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 }
               }
             }
+            pending.append((slot, bodyURL))
+            if index >= 0 {
+              bytes += Int64(try bodyURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
+            }
+          }
+          if !pending.isEmpty {
+            var check = URLRequest(url: URL(string:"https://walkthroughai-api.onrender.com/api/upload-capacity")!)
+            check.httpMethod = "POST"
+            check.timeoutInterval = 30
+            check.setValue(authorization, forHTTPHeaderField:"Authorization")
+            check.setValue("application/json", forHTTPHeaderField:"Content-Type")
+            check.httpBody = try JSONSerialization.data(withJSONObject:["bytes":bytes])
+            let semaphore = DispatchSemaphore(value: 0)
+            var capacityError: Error?
+            URLSession.shared.dataTask(with: check) { data, response, error in
+              defer { semaphore.signal() }
+              if let error = error { capacityError = error; return }
+              if !((200..<300).contains((response as? HTTPURLResponse)?.statusCode ?? 0)) {
+                let object = data.flatMap { try? JSONSerialization.jsonObject(with:$0) as? [String:Any] }
+                capacityError = NSError(domain:"WalkthroughUpload", code:2, userInfo:[NSLocalizedDescriptionKey:object?["error"] as? String ?? "Could not verify upload capacity. Resume to retry."])
+              }
+            }.resume()
+            semaphore.wait()
+            if let error = capacityError { throw error }
+          }
+          var queued = 0
+          for (slot, bodyURL) in pending {
             var request = URLRequest(url: URL(string:"https://walkthroughai-api.onrender.com/api/native-batches/\(id)/\(slot)")!)
             request.httpMethod = "PUT"
             request.setValue(authorization, forHTTPHeaderField:"Authorization")
             request.setValue(String(files.count), forHTTPHeaderField:"X-Photo-Count")
-            request.setValue(index < 0 ? "application/json" : "image/jpeg", forHTTPHeaderField:"Content-Type")
+            request.setValue(slot == "metadata" ? "application/json" : "image/jpeg", forHTTPHeaderField:"Content-Type")
             let task = self.session.uploadTask(with:request, fromFile:bodyURL)
             task.taskDescription = id + ":" + slot
             task.resume()

@@ -1,3 +1,4 @@
+import { PhotoExport } from "../components/PhotoExport";
 import { useBackTo } from '../lib/back-navigation';
 import { API_BASE_URL, apiFetch } from "../lib/api";
 import { createPolishedStyles } from "../lib/polished-styles";
@@ -19,12 +20,14 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionSheetIOS,
+  type GestureResponderEvent,
 
   Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -68,7 +71,7 @@ type AreaModalState = {
   groupId: string | null;
 };
 
-const MAX_WALKTHROUGH_PHOTOS = 100;
+const MAX_WALKTHROUGH_PHOTOS = 500;
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -104,13 +107,18 @@ export default function WalkthroughPhotoScreen() {
   useEffect(() => {
     if (!session) return;
     let alive = true;
+    setDraftReady(false);
     restoreGroups(key).then(saved => {
       if (!alive) return;
       if (saved?.length) Alert.alert("Saved walkthrough", "Restore the photos and locations saved on this device?", [
-        { text: "Discard draft", style: "destructive", onPress: () => { void writeDraft(key, null); setDraftReady(true); } },
+        { text: "Discard draft", style: "destructive", onPress: () => { void writeDraft(key, null).then(() => { if (alive) setDraftReady(true); }).catch(() => Alert.alert("Could not clear draft", "Return to this walkthrough to retry.")); } },
         { text: "Restore draft", onPress: () => { setGroups(saved); setDraftReady(true); } },
       ]); else setDraftReady(true);
-    }).catch(() => { setDraftReady(true); Alert.alert("Draft recovery unavailable", "Device storage is unavailable. Keep the app open until your walkthrough is saved."); });
+    }).catch(() => {
+      if (!alive) return;
+      setDraftReady(false);
+      Alert.alert("Could not open the draft", "Your saved draft is protected. Go back and reopen this walkthrough to retry.");
+    });
     return () => { alive = false; };
   }, [key]);
   useEffect(() => {
@@ -135,38 +143,61 @@ export default function WalkthroughPhotoScreen() {
   const [areaNameDraft, setAreaNameDraft] = useState("");
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
   const camera = useRef<CameraView>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraArea, setCameraArea] = useState<string | null>(null);
+  const [takingShot, setTakingShot] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const shutterBusy = useRef(false);
-  type Shot = Pick<ImagePicker.ImagePickerAsset, "uri" | "width" | "height">;
-  const pendingShot = useRef<((photo: Shot | null) => void) | null>(null);
+  const [rearLenses, setRearLenses] = useState<string[]>([]);
+  const [lensMode, setLensMode] = useState<"main" | "ultra" | "tele">("main");
+  const [zoomStep, setZoomStep] = useState(0);
+  const pinchDistance = useRef<number | null>(null);
+  function trackCameraPinch(event: GestureResponderEvent) {
+    const touches = event.nativeEvent.touches;
+    if (touches.length !== 2) {
+      pinchDistance.current = null;
+      return;
+    }
+    const [first, second] = touches;
+    const distance = Math.hypot(first.pageX - second.pageX, first.pageY - second.pageY);
+    const previous = pinchDistance.current;
+    pinchDistance.current = distance;
+    if (previous && distance > 0) {
+      const change = 4 * Math.log2(distance / previous);
+      setZoomStep(step => Math.max(0, Math.min(8, step + change)));
+    }
+  }
 
-  function finishShot(photo: Shot | null) {
-    const resolve = pendingShot.current;
-    pendingShot.current = null;
-    setCameraOpen(false);
-    resolve?.(photo);
+  const mainLens = rearLenses.find(name => /wide|main|fusion/i.test(name) && !/ultra|dual|triple/i.test(name))
+    ?? rearLenses.find(name => /^back camera$/i.test(name));
+  const ultraLens = rearLenses.find(name => /ultra/i.test(name));
+  const teleLens = rearLenses.find(name => /telephoto/i.test(name));
+  const activeLens = lensMode === "ultra" ? ultraLens : lensMode === "tele" ? teleLens : mainLens;
+  const shutterBusy = useRef(false);
+  function closeCamera() {
+    if (!shutterBusy.current) setCameraArea(null);
   }
 
   async function pressShutter() {
-    if (!cameraReady || shutterBusy.current || !camera.current) return;
+    if (!cameraArea || !cameraReady || shutterBusy.current || !camera.current || photos.length >= MAX_WALKTHROUGH_PHOTOS) return;
+    const operation = pickerOperation.current;
     shutterBusy.current = true;
+    setTakingShot(true);
     try {
-      const photo = await camera.current.takePictureAsync({ quality: 0.85 });
+      const photo = await camera.current.takePictureAsync({ quality: 1 });
+      if (operation !== pickerOperation.current) return;
       if (!photo) throw new Error("No photo returned");
-      finishShot(photo);
+      await addAssetsToGroup(cameraArea, [photo]);
     } catch {
-      finishShot(null);
-      Alert.alert("Photo could not be captured", "Open the camera and try again.");
+      Alert.alert("Photo could not be captured", "Try taking the photo again.");
     } finally {
       shutterBusy.current = false;
+      setTakingShot(false);
     }
   }
 
   const pickerOperation = useRef(0);
   const pickerBusy = useRef(false);
   const [pickerCanCancel, setPickerCanCancel] = useState(false);
-  useEffect(() => () => { pickerOperation.current += 1; pendingShot.current?.(null); pendingShot.current = null; }, []);
+  useEffect(() => () => { pickerOperation.current += 1; }, []);
   function cancelPhotoSelection() {
     pickerOperation.current += 1;
     pickerBusy.current = false;
@@ -196,7 +227,7 @@ export default function WalkthroughPhotoScreen() {
     if (!current) throw new Error('This area is no longer available.');
     if (scanCount >= 100) throw new Error('This walkthrough already has 100 scans. Start another walkthrough for more.');
     if (current.scans?.some(value => scanKey(value) === scanKey(scan))) throw new Error('Already scanned in this area.');
-    if (labelPhoto && photos.length >= MAX_WALKTHROUGH_PHOTOS) throw new Error('100-photo limit reached. Remove a photo or save the scan without a label photo.');
+    if (labelPhoto && photos.length >= MAX_WALKTHROUGH_PHOTOS) throw new Error('500-photo limit reached. Remove a photo or save the scan without a label photo.');
     const scanId = createId('barcode');
     const photoId = labelPhoto ? createId('scan-label') : undefined;
     const next = groups.map(group => {
@@ -365,7 +396,7 @@ export default function WalkthroughPhotoScreen() {
 
       if (remainingSlots <= 0) {
         Alert.alert(
-          "100-photo limit reached",
+          "500-photo limit reached",
           "Remove a photo before adding another one."
         );
         return;
@@ -434,20 +465,16 @@ export default function WalkthroughPhotoScreen() {
       if (Platform.OS !== "web") {
         setScanningArea(null);
         setScannerEpoch(value => value + 1);
+        pinchDistance.current = null;
         setCameraReady(false);
-        const shot = await new Promise<Shot | null>(resolve => {
-          pendingShot.current = resolve;
-          setCameraOpen(true);
-        });
-        if (shot && operation === pickerOperation.current) {
-          setPickerCanCancel(false);
-          await addAssetsToGroup(groupId, [shot]);
-        }
+        setLensMode("main");
+        setZoomStep(0);
+        setCameraArea(groupId);
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
-        quality: 0.85,
+        quality: 1,
         allowsEditing: false,
       });
 
@@ -579,6 +606,10 @@ export default function WalkthroughPhotoScreen() {
 
   async function continueToUpload() {
     if (!draftReady || continueLock.current) return;
+    if (groups.some(group => group.photos.some(photo => !photo.uri))) {
+      Alert.alert("Replace missing photos", "Remove or replace unavailable photos before continuing. The rest of the draft is saved.");
+      return;
+    }
     if (scanningArea !== null) {
       Alert.alert("Finish scanning?", "Continue with the photos and scans already saved. If a code is still waiting for Save & next, keep scanning and save it first.", [
         { text: "Keep scanning", style: "cancel" },
@@ -685,6 +716,9 @@ export default function WalkthroughPhotoScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {photos.length > 0 && <PhotoExport resumeScope={key} archiveName={selectedCustomerName + " photos"} photos={() =>
+            groups.flatMap(group => group.photos.map(photo => ({ id: photo.id, uri: photo.uri, name: photo.fileName, area: group.name })))
+          } />}
           <View style={styles.toolbar}>
             <View style={styles.toolbarText}>
               <Text style={styles.toolbarTitle}>Areas</Text>
@@ -774,13 +808,15 @@ export default function WalkthroughPhotoScreen() {
                   </View>
 
                   {group.photos.length > 0 ? (
-                    <ScrollView
-                      key={group.photos[group.photos.length - 1]?.id}
+                    <FlatList
                       horizontal
+                      data={group.photos.slice().reverse()}
+                      keyExtractor={photo => photo.id}
+                      initialNumToRender={8}
+                      windowSize={5}
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.thumbnailRow}
-                    >
-                      {group.photos.slice().reverse().map((photo, displayIndex) => {
+                      renderItem={({ item: photo, index: displayIndex }) => {
                         const index = group.photos.length - 1 - displayIndex;
                         return (
                         <View key={photo.id} style={styles.thumbnailCard}>
@@ -824,8 +860,8 @@ export default function WalkthroughPhotoScreen() {
                           </Pressable>
                         </View>
                         );
-                      })}
-                    </ScrollView>
+                      }}
+                    />
                   ) : (
                     <Text style={styles.areaEmptyText}>
                       No photos added yet.
@@ -997,18 +1033,52 @@ export default function WalkthroughPhotoScreen() {
           </SafeAreaView>
         </Modal>
 
-        {cameraOpen && (
-          <Modal visible presentationStyle="fullScreen" onRequestClose={() => { if (!shutterBusy.current) finishShot(null); }}>
+        {cameraArea !== null && (
+          <Modal visible presentationStyle="fullScreen" onRequestClose={closeCamera}>
             <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
-              <CameraView ref={camera} facing="back" style={{ flex: 1 }}
-                onCameraReady={() => setCameraReady(true)}
-                onMountError={() => { finishShot(null); Alert.alert("Camera unavailable", "Try opening the camera again."); }} />
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", padding: 16 }}>
-                <Pressable accessibilityRole="button" onPress={() => { if (!shutterBusy.current) finishShot(null); }} style={{ padding: 12 }}>
-                  <Text style={{ color: "white" }}>Cancel</Text>
+              <View style={{ flex: 1 }}>
+                <CameraView ref={camera} facing="back" style={{ flex: 1 }}
+                  selectedLens={activeLens ?? (Platform.OS === "ios" ? "Back Wide Angle Camera" : undefined)}
+                  zoom={zoomStep / 24}
+                  onAvailableLensesChanged={({ lenses }) => setRearLenses(lenses)}
+                  onCameraReady={() => setCameraReady(true)}
+                  onMountError={() => { setCameraArea(null); Alert.alert("Camera unavailable", "Try opening the camera again."); }} />
+                <View style={StyleSheet.absoluteFill} accessible={false}
+                  onTouchStart={trackCameraPinch} onTouchMove={trackCameraPinch}
+                  onTouchEnd={() => { pinchDistance.current = null; }}
+                  onTouchCancel={() => { pinchDistance.current = null; }} />
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4 }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Zoom out" disabled={zoomStep === 0}
+                  onPress={() => setZoomStep(step => Math.max(0, step - 1))} style={{ padding: 12 }}>
+                  <Text style={{ color: zoomStep ? "white" : "#777", fontSize: 22 }}>−</Text>
                 </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Take photo" disabled={!cameraReady}
-                  onPress={pressShutter} style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: cameraReady ? "white" : "#777" }} />
+                {(["ultra", "main", "tele"] as const).filter(mode =>
+                  mode === "main" || (mode === "ultra" ? ultraLens : teleLens)
+                ).map(mode => (
+                  <Pressable key={mode} accessibilityRole="button"
+                    accessibilityState={{ selected: lensMode === mode && zoomStep === 0 }}
+                    onPress={() => { setLensMode(mode); setZoomStep(0); }} style={{ padding: 12 }}>
+                    <Text style={{ color: lensMode === mode ? "#ffd33d" : "white", fontWeight: "700" }}>
+                      {mode === "ultra" ? "0.5×" : mode === "tele" ? "Tele" : "1×"}
+                    </Text>
+                  </Pressable>
+                ))}
+                <Pressable accessibilityRole="button" accessibilityLabel="Zoom in" disabled={zoomStep === 8}
+                  onPress={() => setZoomStep(step => Math.min(8, step + 1))} style={{ padding: 12 }}>
+                  <Text style={{ color: zoomStep < 8 ? "white" : "#777", fontSize: 22 }}>+</Text>
+                </Pressable>
+              </View>
+              <Text style={{ color: "white", textAlign: "center" }}>
+                {takingShot ? "Saving photo…" : photos.length >= MAX_WALKTHROUGH_PHOTOS ? "500-photo limit reached" :
+                  `${groups.find(group => group.id === cameraArea)?.photos.length ?? 0} photos in this area`}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", padding: 16 }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Done, return to Capture Inventory" disabled={takingShot} onPress={closeCamera} style={{ padding: 12 }}>
+                  <Text style={{ color: "white" }}>Done</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="Take photo" disabled={!cameraReady || takingShot || photos.length >= MAX_WALKTHROUGH_PHOTOS}
+                  onPress={pressShutter} style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: cameraReady && !takingShot && photos.length < MAX_WALKTHROUGH_PHOTOS ? "white" : "#777" }} />
               </View>
             </SafeAreaView>
           </Modal>
@@ -1050,7 +1120,7 @@ export default function WalkthroughPhotoScreen() {
                 <Text style={styles.photoViewerHint}>Pinch or double-tap to zoom</Text>
               </View>
 
-              <View style={styles.photoViewerHeaderSpacer} />
+              {photoViewer && <PhotoExport photos={() => [{ uri: photoViewer.uri, name: photoViewer.label }]} />}
             </View>
 
             {photoViewer ? (

@@ -1,3 +1,5 @@
+import { useAuth } from "../contexts/AuthContext";
+import { PhotoExport } from "../components/PhotoExport";
 import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
@@ -164,6 +166,7 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 export default function WalkthroughDetailScreen() {
+  const { session } = useAuth();
   const goBack = useBackTo('history');
   const params = useLocalSearchParams<{ walkthroughId?: string; customerName?: string }>();
   const walkthroughId = Number(params.walkthroughId || 0);
@@ -637,6 +640,11 @@ export default function WalkthroughDetailScreen() {
                   </View>
                 </View>
 
+                <PhotoExport resumeScope={session ? `saved:${session.user.id}:${walkthrough.id}` : undefined} archiveName={walkthrough.customer_name + " walkthrough " + walkthrough.id} photos={async () => {
+                  const response = await apiFetch(API_BASE_URL + "/api/walkthroughs/" + walkthrough.id + "/photos");
+                  if (!response.ok) throw new Error("Could not load the walkthrough’s photos. Please try again.");
+                  return (await response.json()).photos;
+                }} />
                 <View style={styles.metricList}>
                   {photoGroups.map((group, index) => (
                     <Pressable
@@ -883,6 +891,7 @@ export default function WalkthroughDetailScreen() {
             <Pressable accessibilityRole="button" accessibilityLabel="Close source photo" onPress={closePhotoViewer} style={styles.viewerCloseButton}>
               <Text style={styles.viewerCloseText}>Close</Text>
             </Pressable>
+            {photoViewer && <PhotoExport photos={() => [{ uri: photoViewer.uri, name: photoViewer.label }]} />}
             <View style={styles.viewerTitleArea}>
               <Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text>
               <Text style={styles.viewerHint}>Swipe photos · pinch to zoom</Text>

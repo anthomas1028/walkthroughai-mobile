@@ -13,7 +13,7 @@ import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSumma
 import { useConnection } from "../hooks/use-connection";
 import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
-import { nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus } from "../lib/native-upload";
+import { clearNativeUpload, nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus } from "../lib/native-upload";
 import { completionAlertsSupported, setCompletionAlert, requestCompletionToken } from "../lib/completion-notifications";
 import { SourcingPanel } from "../components/SourcingPanel";
 import { SourcingState, applySourcingSelection } from "../lib/sourcing";
@@ -69,9 +69,10 @@ const FINALIZE_API_URL = `${API_BASE_URL}/api/finalize`;
 
 const JOB_POLL_INTERVAL_MS = 2500;
 
-const JOB_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const JOB_POLL_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 
 type SelectedPhoto = {
+  fileSize?: number;
   id: string;
   uri: string;
   fileName: string;
@@ -353,17 +354,36 @@ async function preparePhotosForUpload(
 
   for (const [index, photo] of photos.entries()) {
     try {
+      if (Platform.OS === "web") {
+        const response = await fetch(photo.uri);
+        if (!response.ok) throw new Error("Photo could not be read.");
+        const blob = await response.blob();
+        const bytes = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+        const tag = String.fromCharCode(...bytes);
+        const format = bytes[0] === 255 && bytes[1] === 216 ? "jpeg"
+          : tag.startsWith("\x89PNG\r\n\x1a\n") ? "png"
+          : tag.startsWith("RIFF") && tag.slice(8) === "WEBP" ? "webp" : null;
+        if (format) {
+          preparedPhotos.push({ ...photo, fileSize: blob.size, mimeType: "image/" + format,
+            uri: photo.uri.startsWith("data:") ? URL.createObjectURL(blob) : photo.uri,
+            fileName: `inventory-photo-${uploadTimestamp}-${index + 1}.${format}` });
+          continue;
+        }
+      }
       const converted = await ImageManipulator.manipulateAsync(
         photo.uri,
         [],
         {
-          compress: 0.92,
+          compress: 1,
           format: ImageManipulator.SaveFormat.JPEG,
         }
       );
 
+      const fileSize = Platform.OS === "web"
+        ? (await (await fetch(converted.uri)).blob()).size
+        : new (await import("expo-file-system")).File(converted.uri).size;
       preparedPhotos.push({
-        ...photo,
+        ...photo, fileSize,
         uri: converted.uri,
         fileName: `inventory-photo-${uploadTimestamp}-${index + 1}.jpg`,
         mimeType: "image/jpeg",
@@ -809,8 +829,8 @@ export default function UploadScreen() {
   async function checkpoint(overrides: Partial<RecoveryDraft> = {}) {
     const pending = pendingUpload.current;
     const draft: RecoveryDraft = { ...recoveryRef.current, version: 1, customerId, teamSessionId, teamArea, contributionRevision: contributionRevision.current, customerName: walkthroughName, contactName: selectedContactName,
-      photos: recoveryRef.current?.photos || photos, captureScans: capturedScans, prepared: pending?.prepared || [], uploadId: pending?.uploadId || "",
-      uploaded: Array.from(pending?.uploaded || []), jobId: recoveryRef.current?.jobId || currentJobId,
+      photos: recoveryRef.current?.photos || photos, captureScans: capturedScans, prepared: pending?.prepared ?? recoveryRef.current?.prepared ?? [], uploadId: pending?.uploadId ?? recoveryRef.current?.uploadId ?? "",
+      uploaded: Array.from(pending?.uploaded ?? recoveryRef.current?.uploaded ?? []), jobId: recoveryRef.current?.jobId || currentJobId,
       results: recoveryRef.current?.results || results, updatedAt: new Date().toISOString(), ...overrides };
     recoveryRef.current = draft;
     await saveRecovery(draft, session?.user.id);
@@ -1019,8 +1039,12 @@ export default function UploadScreen() {
     }
 
     async function submitNativeJob(): Promise<{ response: Response; data: UploadApiResponse }> {
-      const id = recoveryRef.current?.nativeBatchId || newBatchId();
+      let id = recoveryRef.current?.nativeBatchId || newBatchId();
       const existing = recoveryRef.current?.nativeBatchId ? await serverBatchStatus(id) : null;
+      if (existing?.expired || (recoveryRef.current?.nativeBatchId && !existing && (await nativeUploadStatus(id)).uploaded?.length)) {
+        await clearNativeUpload(id);
+        id = newBatchId();
+      }
       if (existing?.result?.job_id) return { response: { ok: true } as Response, data: existing.result };
       await checkpoint({ nativeBatchId: id, completionAlertToken: notificationToken });
       // All file transfers and retries are queued natively. No JS "submit" call is required.
@@ -1034,6 +1058,7 @@ export default function UploadScreen() {
         if (AppState.currentState === 'active') {
           const local = await nativeUploadStatus(id);
           const remote = await serverBatchStatus(id);
+          if (remote?.expired) throw new Error("Upload expired. Resume to start a fresh upload from your saved photos.");
           if (remote?.result?.job_id) return { response: { ok: true } as Response, data: remote.result };
           if (local.error) throw new Error(local.error);
           const count = remote?.uploaded_slots?.length ?? 0;
@@ -1090,7 +1115,8 @@ export default function UploadScreen() {
           method: "POST", headers: { Accept: "application/json" }, body,
         });
         pending.uploaded.add(index);
-        await checkpoint();
+        // Resume queries the server for acknowledged slots using the saved session ID.
+        setReceivedPhotos(pending.uploaded.size);
       }
       setJobStatusMessage("All photos uploaded. Starting analysis.");
       const body = new FormData();
@@ -1116,7 +1142,7 @@ export default function UploadScreen() {
         }
         if (Date.now() - startedAt - (backgroundTime.current.total - initialBackground) > JOB_POLL_TIMEOUT_MS) {
           throw new Error(
-            "The background analysis is still running after two hours. Your upload may still finish, but this screen stopped checking it."
+            "The background analysis is still running after six hours. Your upload may still finish, but this screen stopped checking it."
           );
         }
 
@@ -1221,12 +1247,16 @@ export default function UploadScreen() {
       }
       const uploadKey = JSON.stringify([customer, customerId, photos]);
       if (!(recoveryRef.current?.jobId || resumeJobId) && (!pendingUpload.current || pendingUpload.current.key !== uploadKey || !pendingUpload.current.prepared.length)) {
-        const priorUpload = recoveryRef.current?.uploadId || "";
-        const originals = await retainPhotos(photos, `source-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, teamSessionId, teamArea, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: "", jobId: "", results: [], updatedAt: new Date().toISOString() };
+        const prior = recoveryRef.current;
+        const samePhotos = prior?.photos.length === photos.length && photos.every((photo, index) =>
+          !!photo.id && photo.id === prior.photos[index].id && photo.location === prior.photos[index].location);
+        const priorUpload = samePhotos ? prior?.uploadId || "" : "";
+        const nativeBatchId = samePhotos ? prior?.nativeBatchId : undefined;
+        const originals = samePhotos && Platform.OS !== "web" ? prior.photos : await retainPhotos(photos, `source-${Date.now()}`);
+        recoveryRef.current = { version: 1, customerId, teamSessionId, teamArea, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: priorUpload, nativeBatchId, jobId: "", results: [], updatedAt: new Date().toISOString() };
         await saveRecovery(recoveryRef.current, session?.user.id);
         preparedPhotos = nativeUploadSupported ? originals : await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
-        recoveryRef.current = { version: 1, customerId, teamSessionId, teamArea, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, jobId: "", results: [], updatedAt: new Date().toISOString() };
+        recoveryRef.current = { version: 1, customerId, teamSessionId, teamArea, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: preparedPhotos, uploaded: [], uploadId: priorUpload, nativeBatchId, jobId: "", results: [], updatedAt: new Date().toISOString() };
         pendingUpload.current = { key: uploadKey, prepared: preparedPhotos, uploadId: priorUpload, uploaded: new Set() };
       } else {
         preparedPhotos = pendingUpload.current?.prepared || [];
@@ -1238,6 +1268,15 @@ export default function UploadScreen() {
 
       await checkpoint({ completionAlertToken: notificationToken });
       const existingJobId = recoveryRef.current?.jobId || resumeJobId;
+      if (!existingJobId && !pendingUpload.current?.uploadId && !recoveryRef.current?.nativeBatchId) {
+        // Native staging checks its final encoded size again before starting any transfer.
+        const size = preparedPhotos.reduce((n, photo) => n + (photo.fileSize || 0), 0);
+        if (size && !nativeUploadSupported) {
+          await uploadRequest(API_BASE_URL + "/api/upload-capacity", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bytes: size }),
+          });
+        }
+      }
       const { response, data } = existingJobId
         ? { response: { ok: true } as Response, data: { success: true, job_id: existingJobId } as UploadApiResponse }
         : await (nativeUploadSupported ? submitNativeJob() : submitBackgroundJob());
