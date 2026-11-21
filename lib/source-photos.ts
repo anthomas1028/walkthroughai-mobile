@@ -10,3 +10,38 @@ export function sourcePhotos(items: PhotoEvidence[]): SourcePhoto[] {
   }
   return [...photos.values()];
 }
+
+export type SavedOriginal = { name: string; uri: string; area?: string };
+export type SavedPhotoGroup = SourcePhoto & { name: string; title: string; area: string; itemCount: number };
+
+export function savedPhotoGroups(items: (PhotoEvidence & { location?: string | null })[], originals: SavedOriginal[]) {
+  const groups = new Map<string, SavedPhotoGroup>();
+  function add(name: string, uri: string, area?: string | null) {
+    let group = groups.get(name);
+    if (!group) {
+      const number = /^photo_(\d+)\.[^.]+$/i.exec(name);
+      const title = number ? `Photo ${Number(number[1])}` : name;
+      group = { name, title, uri, area: area || "Unassigned", label: name, itemCount: 0 };
+      groups.set(name, group);
+    }
+    return group;
+  }
+  for (const photo of originals) add(photo.name, photo.uri, photo.area);
+  for (const item of items) {
+    const names = (item.photo || "").split(",").map(name => name.trim()).filter(name => name && !name.startsWith("scan_"));
+    for (const name of new Set(names)) {
+      const uri = name === names[0] ? item.photo_url || "" : "";
+      const group = add(name, uri, item.location);
+      if (uri) group.uri = uri;
+      group.itemCount++;
+    }
+    for (const retake of item.retake_evidence || []) {
+      if (!retake.photo || !retake.photo_url) continue;
+      const group = add(retake.photo, retake.photo_url, item.location);
+      group.title = `Label close-up · ${names[0] || retake.photo}`;
+      group.uri = retake.photo_url;
+      if (!names.includes(retake.photo)) group.itemCount++;
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}

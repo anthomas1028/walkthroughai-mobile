@@ -7,7 +7,7 @@ import { isScanReference } from "../lib/capture-scans";
 import { ScannedBarcodes } from "../components/ScannedBarcodes";
 import type { BarcodeScan } from "../lib/barcode-scans";
 import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSummary";
-import { sourcePhotos } from "../lib/source-photos";
+import { savedPhotoGroups, type SavedOriginal } from "../lib/source-photos";
 import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
@@ -103,12 +103,6 @@ type PhotoViewer = {
 };
 
 type MetricView = "photos" | "areas" | "vendors" | null;
-
-type PhotoGroup = {
-  name: string;
-  item: WalkthroughItem;
-  itemCount: number;
-};
 
 type VendorGroup = {
   name: string;
@@ -263,27 +257,30 @@ export default function WalkthroughDetailScreen() {
     );
   }, [selectedLocation, walkthrough]);
 
-  const photoGroups = useMemo<PhotoGroup[]>(() => {
-    const map = new Map<string, PhotoGroup>();
-
-    for (const item of walkthrough?.items || []) {
-      const photoName = item.photo?.trim();
-      if (!photoName || isScanReference(photoName)) continue;
-
-      const existing = map.get(photoName);
-      if (existing) {
-        existing.itemCount += 1;
-      } else {
-        map.set(photoName, {
-          name: photoName,
-          item,
-          itemCount: 1,
-        });
-      }
-    }
-
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [walkthrough]);
+  const [photoInventory, setPhotoInventory] = useState<{ id: number; photos: SavedOriginal[] } | null>(null);
+  const [photoListError, setPhotoListError] = useState("");
+  const [photoListAttempt, setPhotoListAttempt] = useState(0);
+  const showingPhotos = selectedMetricView === "photos" || !!photoViewer;
+  const fetchOriginals = useCallback(async () => {
+    const response = await apiFetch(API_BASE_URL + "/api/walkthroughs/" + walkthroughId + "/photos");
+    if (!response.ok) throw new Error("Could not load the complete photo list.");
+    const data = await response.json();
+    if (!Array.isArray(data.photos)) throw new Error("Could not load the complete photo list.");
+    return data.photos as SavedOriginal[];
+  }, [walkthroughId]);
+  useEffect(() => {
+    if (!showingPhotos || walkthrough?.id !== walkthroughId) return;
+    let active = true;
+    setPhotoListError("");
+    void fetchOriginals().then(photos => {
+      if (active) setPhotoInventory({ id: walkthroughId, photos });
+    }).catch(() => {
+      if (active) setPhotoListError("The complete photo list is unavailable.");
+    });
+    return () => { active = false; };
+  }, [showingPhotos, walkthrough?.id, walkthroughId, fetchOriginals, photoListAttempt]);
+  const originals = photoInventory?.id === walkthroughId ? photoInventory.photos : undefined;
+  const photoGroups = useMemo(() => savedPhotoGroups(walkthrough?.items || [], originals || []), [walkthrough, originals]);
 
   const vendorGroups = useMemo<VendorGroup[]>(() => {
     const map = new Map<string, WalkthroughItem[]>();
@@ -345,7 +342,7 @@ export default function WalkthroughDetailScreen() {
     }
   }
 
-  function openSourcePhoto(item: WalkthroughItem) {
+  function openSourcePhoto(item: Pick<WalkthroughItem, "photo" | "photo_url" | "location">) {
     if (!item.photo_url) {
       Alert.alert("Source photo unavailable", "A saved source-photo link was not returned for this item.");
       return;
@@ -532,7 +529,7 @@ export default function WalkthroughDetailScreen() {
                       <Ionicons name="images-outline" size={21} color="#93C5FD" />
                       <Ionicons name="chevron-forward" size={17} color="#58708D" />
                     </View>
-                    <Text style={styles.statValue}>{walkthrough.photo_count}</Text>
+                    <Text style={styles.statValue}>{originals ? photoGroups.length : walkthrough.photo_count}</Text>
                     <Text style={styles.statLabel}>Photos</Text>
                   </Pressable>
 
@@ -642,7 +639,7 @@ export default function WalkthroughDetailScreen() {
             ) : selectedMetricView === "photos" ? (
               <>
                 <View style={styles.metricSummary}>
-                  <Text style={styles.metricSummaryValue}>{walkthrough.photo_count}</Text>
+                  <Text style={styles.metricSummaryValue}>{originals ? photoGroups.length : walkthrough.photo_count}</Text>
                   <View style={styles.metricSummaryText}>
                     <Text style={styles.metricSummaryTitle}>Source Photos</Text>
                     <Text style={styles.metricSummaryMeta}>
@@ -651,32 +648,33 @@ export default function WalkthroughDetailScreen() {
                   </View>
                 </View>
 
-                <PhotoExport resumeScope={session ? `saved:${session.user.id}:${walkthrough.id}` : undefined} archiveName={walkthrough.customer_name + " walkthrough " + walkthrough.id} photos={async () => {
-                  const response = await apiFetch(API_BASE_URL + "/api/walkthroughs/" + walkthrough.id + "/photos");
-                  if (!response.ok) throw new Error("Could not load the walkthrough’s photos. Please try again.");
-                  return (await response.json()).photos;
-                }} />
+                <PhotoExport resumeScope={session ? `saved:${session.user.id}:${walkthrough.id}` : undefined} archiveName={walkthrough.customer_name + " walkthrough " + walkthrough.id} photos={fetchOriginals} />
+                {photoListError ? (
+                  <Pressable accessibilityRole="button" onPress={() => setPhotoListAttempt(n => n + 1)} style={styles.metricRow}>
+                    <Text style={styles.navigationMeta}>{photoListError} Tap to retry.</Text>
+                  </Pressable>
+                ) : !originals ? <ActivityIndicator accessibilityLabel="Loading all saved photos" /> : null}
                 <View style={styles.metricList}>
-                  {photoGroups.map((group, index) => (
+                  {photoGroups.map(group => (
                     <Pressable
                       key={group.name}
                       accessibilityRole="button"
-                      accessibilityLabel={`Open photo ${index + 1}, ${group.item.location?.trim() || "Unassigned"}`}
-                      disabled={!group.item.photo_url}
-                      onPress={() => openSourcePhoto(group.item)}
+                      accessibilityLabel={`Open ${group.title}, ${group.area}`}
+                      disabled={!group.uri}
+                      onPress={() => openSourcePhoto({ photo: group.name, photo_url: group.uri, location: group.area })}
                       style={({ pressed }) => [
                         styles.metricRow,
-                        !group.item.photo_url && styles.disabled,
-                        pressed && group.item.photo_url && styles.buttonPressed,
+                        !group.uri && styles.disabled,
+                        pressed && group.uri && styles.buttonPressed,
                       ]}
                     >
                       <View style={styles.metricIcon}>
                         <Ionicons name="image-outline" size={21} color="#93C5FD" />
                       </View>
                       <View style={styles.navigationText}>
-                        <Text numberOfLines={1} style={styles.navigationTitle}>Photo {index + 1}</Text>
+                        <Text numberOfLines={1} style={styles.navigationTitle}>{group.title}</Text>
                         <Text style={styles.navigationMeta}>
-                          {plural(group.itemCount, "part")} · {group.item.location?.trim() || "Unassigned"}
+                          {group.itemCount ? plural(group.itemCount, "part") : "No saved parts"} · {group.area}
                         </Text>
                       </View>
                       <Ionicons name="expand-outline" size={20} color="#93C5FD" />
@@ -913,7 +911,7 @@ export default function WalkthroughDetailScreen() {
             }}><Text style={styles.viewerCloseText}>Fit</Text></Pressable>
           </View>
           {photoViewer ? (
-            <PhotoNavigation photos={sourcePhotos(walkthrough?.items || [])} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
+            <PhotoNavigation photos={photoGroups.filter(photo => !!photo.uri)} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
 <ScrollView
               ref={photoViewerScrollRef}
               key={photoViewer.uri}
