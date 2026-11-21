@@ -18,3 +18,13 @@ test('retry preserves employee corrections and excludes only the removed item', 
   const corrected = {...a,part_number:'00124',is_confirmed:true};
   assert.deepEqual(mergeRecoveryResults([a,b],[corrected,b],[resultKey(b)]),[corrected]);
 });
+
+test('an edited nut follows its own label when the washer is returned first', () => {
+  const nut = {photo:'photo_007.jpg', source_row_id:'nut', description:'nut'};
+  const washer = {photo:nut.photo, source_row_id:'washer', description:'washer'};
+  const corrected = {...nut, part_number:'0007-01', was_edited:true};
+  assert.deepEqual(mergeRecoveryResults([washer,nut],[corrected,washer],[]), [washer,corrected]);
+  assert.deepEqual(mergeRecoveryResults([washer,nut],[corrected],[resultKey(washer)]), [corrected]);
+  const similar = {...nut, source_row_id:undefined};
+  assert.throws(() => mergeRecoveryResults([similar,similar],[{...similar,was_edited:true}],[]), /single label/);
+});

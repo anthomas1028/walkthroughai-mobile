@@ -1333,8 +1333,17 @@ export default function UploadScreen() {
       }
       const scanRows = (recoveryRef.current?.captureScans || capturedScans).map(row => normalizeResult(row as RecognitionResult)).filter(row => !removedPhotos.some(key => { try { return JSON.parse(key)[0] === row.photo; } catch { return false; } }));
       const preserved = mergeRecoveryResults(mergeCaptureScans(recognizedResults, scanRows), reviewed, removedPhotos);
+      const savedDraft = recoveryRef.current;
+      let recoveredIndex = savedDraft?.editingIndex ?? null;
+      if (savedDraft?.editDraft && recoveredIndex !== null) {
+        const original = reviewed[recoveredIndex];
+        const matches = original ? preserved.flatMap((row, i) => resultKey(row) === resultKey(original) ? [i] : []) : [];
+        if (matches.length !== 1) throw new Error("Reopen the saved draft to finish the pending label edit.");
+        recoveredIndex = matches[0];
+        setEditingIndex(recoveredIndex);
+      }
       setResults(preserved);
-      await checkpoint({ results: preserved });
+      await checkpoint({ results: preserved, editingIndex: recoveredIndex });
       setOriginalWorkbookUrl(
         completedJob.download_url ?? null
       );
@@ -1504,7 +1513,7 @@ export default function UploadScreen() {
           text: "Remove Result",
           style: "destructive",
           onPress: () => {
-            setRemovedPhotos(current => [...current, resultKey(editDraft)]);
+            setRemovedPhotos(current => [...current, resultKey(results[resultIndex] || editDraft)]);
             setResults((currentResults) =>
               currentResults.filter(
                 (_result, index) =>

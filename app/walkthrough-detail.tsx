@@ -168,7 +168,7 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
 export default function WalkthroughDetailScreen() {
   const { session } = useAuth();
   const goBack = useBackTo('history');
-  const params = useLocalSearchParams<{ walkthroughId?: string; customerName?: string }>();
+  const params = useLocalSearchParams<{ walkthroughId?: string; itemId?: string; customerName?: string }>();
   const walkthroughId = Number(params.walkthroughId || 0);
   const fallbackCustomer = typeof params.customerName === "string" ? params.customerName : "Customer";
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -225,6 +225,17 @@ export default function WalkthroughDetailScreen() {
   useEffect(() => {
     void loadWalkthrough();
   }, [loadWalkthrough]);
+
+  const openedSource = useRef("");
+  useEffect(() => {
+    if (!params.itemId || walkthrough?.id !== walkthroughId) return;
+    const key = walkthroughId + "/" + params.itemId;
+    if (openedSource.current === key) return;
+    const item = walkthrough.items.find(row => row.id === Number(params.itemId));
+    if (!item?.photo_url) return;
+    openedSource.current = key;
+    setPhotoViewer({ uri: item.photo_url, label: [item.location, item.photo].filter(Boolean).join(" · ") });
+  }, [params.itemId, walkthrough, walkthroughId]);
 
   const locationGroups = useMemo<LocationGroup[]>(() => {
     const map = new Map<string, WalkthroughItem[]>();
