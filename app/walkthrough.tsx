@@ -42,6 +42,7 @@ import {
 
 type SelectedPhoto = {
   id: string;
+  assetId?: string | null;
   uri: string;
   fileName: string;
   mimeType: string;
@@ -121,11 +122,22 @@ export default function WalkthroughPhotoScreen() {
     });
     return () => { alive = false; };
   }, [key]);
+  function indexDraft(saved: LocationGroup[]) {
+    if (!session) return Promise.resolve();
+    return saveCaptureDraft(session.user.id, {
+      customerId: String(customerId || ''), customerName: selectedCustomerName,
+      teamSessionId: typeof teamSessionId === 'string' ? teamSessionId : undefined,
+      teamArea: typeof teamArea === 'string' ? teamArea : undefined,
+      contactName: typeof contactName === 'string' ? contactName : '',
+      photoCount: saved.reduce((count, group) => count + group.photos.length, 0),
+      scanCount: saved.reduce((count, group) => count + (group.scans?.length || 0), 0),
+    });
+  }
   useEffect(() => {
     if (!draftReady || !session) return;
     let active = true;
     setSaveStatus('saving');
-    storeGroups(key, groups).then(async saved => { if (active && saved) { await saveCaptureDraft(session.user.id, { customerId: String(customerId || ''), teamSessionId: typeof teamSessionId === 'string' ? teamSessionId : undefined, teamArea: typeof teamArea === 'string' ? teamArea : undefined, customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: saved.reduce((count: number, group: LocationGroup) => count + group.photos.length, 0), scanCount: saved.reduce((count: number, group: LocationGroup) => count + (group.scans?.length || 0), 0) }); if (active) setSaveStatus('saved'); } }).catch(() => {
+    storeGroups(key, groups).then(async saved => { if (active && saved) { await indexDraft(saved); if (active) setSaveStatus('saved'); } }).catch(() => {
       if (active) { setSaveStatus('error'); Alert.alert("Draft could not be saved", "Device storage is full or unavailable. Keep the app open until you finish."); }
     });
     return () => { active = false; };
@@ -142,6 +154,7 @@ export default function WalkthroughPhotoScreen() {
   });
   const [areaNameDraft, setAreaNameDraft] = useState("");
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
   const camera = useRef<CameraView>(null);
   const [cameraArea, setCameraArea] = useState<string | null>(null);
   const [takingShot, setTakingShot] = useState(false);
@@ -197,7 +210,7 @@ export default function WalkthroughPhotoScreen() {
   const pickerOperation = useRef(0);
   const pickerBusy = useRef(false);
   const [pickerCanCancel, setPickerCanCancel] = useState(false);
-  useEffect(() => () => { pickerOperation.current += 1; }, []);
+  useEffect(() => () => { pickerOperation.current += 1; }, [key]);
   function cancelPhotoSelection() {
     pickerOperation.current += 1;
     pickerBusy.current = false;
@@ -237,7 +250,7 @@ export default function WalkthroughPhotoScreen() {
     });
     const saved = await storeGroups(key, next);
     if (!saved) throw new Error('The draft changed while saving. Scan again to confirm the item.');
-    await saveCaptureDraft(session!.user.id, { customerId: String(customerId || ''), teamSessionId: typeof teamSessionId === 'string' ? teamSessionId : undefined, teamArea: typeof teamArea === 'string' ? teamArea : undefined, customerName: selectedCustomerName, contactName: typeof contactName === 'string' ? contactName : '', photoCount: next.reduce((count, group) => count + group.photos.length, 0), scanCount: next.reduce((count, group) => count + (group.scans?.length || 0), 0) });
+    await indexDraft(saved);
     setGroups(saved);
   }
 
@@ -381,7 +394,8 @@ export default function WalkthroughPhotoScreen() {
 
   async function addAssetsToGroup(
     groupId: string,
-    assets: ImagePicker.ImagePickerAsset[]
+    assets: ImagePicker.ImagePickerAsset[],
+    libraryImport = false
   ) {
     if (assets.some(asset => asset.width > 0 && asset.height > 0 && Math.min(asset.width, asset.height) < 700)) {
       Alert.alert("Check photo detail", "A photo has a short edge below 700 pixels. Zoom in to check that part numbers are readable; remove it and retake closer if needed. This checks resolution, not blur or lighting.");
@@ -408,7 +422,13 @@ export default function WalkthroughPhotoScreen() {
       const existingUris = new Set(
         currentGroups.flatMap((group) => group.photos.map((photo) => photo.uri))
       );
-      const uniqueAssets = assets.filter((asset) => !existingUris.has(asset.uri));
+      const assetIds = new Set(currentGroups.flatMap(group => group.photos.map(photo => photo.assetId).filter(Boolean)));
+      const uniqueAssets = assets.filter(asset => {
+        if (existingUris.has(asset.uri) || (asset.assetId && assetIds.has(asset.assetId))) return false;
+        existingUris.add(asset.uri);
+        if (asset.assetId) assetIds.add(asset.assetId);
+        return true;
+      });
       const acceptedAssets = uniqueAssets.slice(0, remainingSlots);
 
       if (uniqueAssets.length > remainingSlots) {
@@ -420,6 +440,7 @@ export default function WalkthroughPhotoScreen() {
 
       const newPhotos: SelectedPhoto[] = acceptedAssets.map((asset, index) => ({
         id: createId(`photo-${index}`),
+        assetId: asset.assetId,
         uri: asset.uri,
         fileName:
           asset.fileName ??
@@ -430,6 +451,48 @@ export default function WalkthroughPhotoScreen() {
         height: asset.height ?? 0,
         fileSize: asset.fileSize ?? 0,
       }));
+
+      if (libraryImport && Platform.OS !== 'web') {
+        const operation = pickerOperation.current;
+        const skipped = assets.length - newPhotos.length;
+        let added = 0;
+        let failed = 0;
+        const total = newPhotos.length;
+        const complete = () => `${added} added · ${skipped} skipped · ${failed} failed`;
+        if (!total) {
+          setImportMessage(complete());
+          return;
+        }
+        setImportMessage(`Saved 0 of ${total} selected originals`);
+        setSaveStatus('saving');
+        try {
+          const saved = await storeGroups(key, currentGroups, {
+            groupId, photos: newPhotos,
+            onCheckpoint: (savedCount, failedCount, checkpoint) => {
+              if (savedCount > added) {
+                // The capture index is advisory. The committed draft owns its photos.
+                void indexDraft(checkpoint).catch(() => {});
+              }
+              added = savedCount;
+              failed = failedCount;
+              if (operation === pickerOperation.current) {
+                setImportMessage(`Saved ${added} of ${total} selected originals${failed ? ` · ${failed} failed` : ''}`);
+              }
+            },
+          });
+          if (operation !== pickerOperation.current) return;
+          if (!saved) throw new Error("The draft changed during import.");
+          setGroups(saved);
+          setSaveStatus('saved');
+        } catch {
+          if (operation !== pickerOperation.current) return;
+          failed = total - added;
+          setSaveStatus('error');
+        }
+        setImportMessage(complete());
+        if (failed) Alert.alert('Some originals could not be saved', complete() + '. You can select the missing photos again.');
+        return;
+      }
 
       const next = currentGroups.map((group) =>
         group.id === groupId
@@ -446,6 +509,7 @@ export default function WalkthroughPhotoScreen() {
 
   async function takePhoto(groupId: string) {
     if (pickerBusy.current) return;
+    setImportMessage('');
     pickerBusy.current = true;
     const operation = ++pickerOperation.current;
     setPickerCanCancel(true);
@@ -498,6 +562,11 @@ export default function WalkthroughPhotoScreen() {
 
   async function choosePhotos(groupId: string) {
     if (pickerBusy.current) return;
+    if (photos.length >= MAX_WALKTHROUGH_PHOTOS) {
+      Alert.alert('500-photo limit reached', 'Remove a photo before adding another one.');
+      return;
+    }
+    setImportMessage('');
     pickerBusy.current = true;
     const operation = ++pickerOperation.current;
     setPickerCanCancel(true);
@@ -528,7 +597,7 @@ export default function WalkthroughPhotoScreen() {
       if (operation !== pickerOperation.current) return;
       setPickerCanCancel(false);
       if (!result.canceled && result.assets.length > 0) {
-        await addAssetsToGroup(groupId, result.assets);
+        await addAssetsToGroup(groupId, result.assets, true);
       }
     } catch (error) {
       if (operation !== pickerOperation.current) return;
@@ -730,7 +799,7 @@ export default function WalkthroughPhotoScreen() {
             {groups.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
-                onPress={openCreateAreaModal}
+                disabled={isOpeningPicker} onPress={openCreateAreaModal}
                 style={({ pressed }) => [
                   styles.addAreaButton,
                   pressed && styles.buttonPressed,
@@ -742,7 +811,7 @@ export default function WalkthroughPhotoScreen() {
             ) : null}
           </View>
 
-          {!teamSessionId && customerId ? <Pressable accessibilityRole="button" disabled={isContinuing || !draftReady} onPress={() => void inviteTeammate()} style={{backgroundColor:'#183655',padding:14,borderRadius:12,marginBottom:16}}><Text style={{color:'#D6E8FF',fontWeight:'700',textAlign:'center'}}>Invite teammate to this walkthrough</Text></Pressable> : null}
+          {!teamSessionId && customerId ? <Pressable accessibilityRole="button" disabled={isOpeningPicker || isContinuing || !draftReady} onPress={() => void inviteTeammate()} style={{backgroundColor:'#183655',padding:14,borderRadius:12,marginBottom:16}}><Text style={{color:'#D6E8FF',fontWeight:'700',textAlign:'center'}}>Invite teammate to this walkthrough</Text></Pressable> : null}
           {teamSessionId ? <Text style={{color:'#9FC4F4',paddingBottom:12}}>Shared walkthrough · Your photos contribute to the combined inventory.</Text> : null}
           {groups.length === 0 ? (
             <View style={styles.emptyState}>
@@ -755,7 +824,7 @@ export default function WalkthroughPhotoScreen() {
               </Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={openCreateAreaModal}
+                disabled={isOpeningPicker} onPress={openCreateAreaModal}
                 style={({ pressed }) => [
                   styles.addFirstAreaButton,
                   pressed && styles.buttonPressed,
@@ -797,7 +866,7 @@ export default function WalkthroughPhotoScreen() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`More options for ${group.name}`}
-                      disabled={scanningArea !== null} onPress={() => showAreaMenu(group)}
+                      disabled={isOpeningPicker || scanningArea !== null} onPress={() => showAreaMenu(group)}
                       style={({ pressed }) => [
                         styles.moreButton,
                         pressed && styles.buttonPressed,
@@ -850,7 +919,7 @@ export default function WalkthroughPhotoScreen() {
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel={`Remove photo ${index + 1}`}
-                            onPress={() => removePhoto(group.id, photo.id)}
+                            disabled={isOpeningPicker} onPress={() => removePhoto(group.id, photo.id)}
                             style={({ pressed }) => [
                               styles.removePhotoButton,
                               pressed && styles.buttonPressed,
@@ -872,7 +941,7 @@ export default function WalkthroughPhotoScreen() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Take a photo for ${group.name}`}
-                      disabled={isOpeningPicker || scanningArea !== null}
+                      disabled={!draftReady || isContinuing || isOpeningPicker || scanningArea !== null}
                       onPress={() => void takePhoto(group.id)}
                       style={({ pressed }) => [
                         styles.photoActionButton,
@@ -888,7 +957,7 @@ export default function WalkthroughPhotoScreen() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Choose photos for ${group.name}`}
-                      disabled={isOpeningPicker || scanningArea !== null}
+                      disabled={!draftReady || isContinuing || isOpeningPicker || scanningArea !== null}
                       onPress={() => void choosePhotos(group.id)}
                       style={({ pressed }) => [
                         styles.photoActionButton,
@@ -905,7 +974,7 @@ export default function WalkthroughPhotoScreen() {
                     blocked={!draftReady || isContinuing || isOpeningPicker || (scanningArea !== null && scanningArea !== group.id)}
                     title={`Scan in ${group.name}`} attachLabel="Save scan in this area" contextText="Scan, set quantity, and optionally photograph the same label. Save & next continues scanning. Works offline."
                     onBusy={busy => setScanningArea(busy ? group.id : null)} onAttach={(scan, photo) => captureBarcode(group.id, scan, photo)} />
-                  <ScannedBarcodes scans={group.scans} onRemove={scanningArea === null ? scan => setGroups(current => current.map(area => area.id === group.id ? { ...area, scans: (area.scans || []).filter(value => scanKey(value) !== scanKey(scan)) } : area)) : undefined} />
+                  <ScannedBarcodes scans={group.scans} onRemove={!isOpeningPicker && scanningArea === null ? scan => setGroups(current => current.map(area => area.id === group.id ? { ...area, scans: (area.scans || []).filter(value => scanKey(value) !== scanKey(scan)) } : area)) : undefined} />
                 </View>
               ))}
             </View>
@@ -936,7 +1005,8 @@ export default function WalkthroughPhotoScreen() {
 
         <View style={styles.footer}>
           <Text accessibilityLiveRegion="polite" style={{ color: saveStatus === 'error' ? '#FCA5A5' : '#A9C9EF', fontSize: 12, textAlign: 'center', marginBottom: 8 }}>
-            {saveStatus === 'saving' ? 'Saving photos on this device…' : saveStatus === 'error' ? 'Device save failed · keep the app open' : `${photos.length} photos · ${scanCount} scans saved on this device`}
+            {importMessage ? importMessage + '\n' : ''}
+            {saveStatus === 'saving' ? (isOpeningPicker && importMessage ? '' : 'Saving photos on this device…') : saveStatus === 'error' ? 'Device save failed · keep the app open' : `${photos.length} photos · ${scanCount} scans saved on this device`}
             {connection === 'offline' ? '\nConnection unavailable · keep taking photos. Upload when connected.' : ''}
             {Platform.OS === 'web' ? '\nBrowser storage can be cleared by your browser.' : ''}
           </Text>

@@ -89,7 +89,13 @@ export async function writeDraft(key: string, value: any) {
     });
   } finally { database.close(); }
 }
-export async function storeGroups(key: string, groups: any[]) {
+type PhotoImport = {
+  groupId: string;
+  photos: { id: string; uri: string; fileName: string }[];
+  onCheckpoint: (added: number, failed: number, groups: any[]) => void;
+};
+
+export async function storeGroups(key: string, groups: any[], photoImport?: PhotoImport) {
   const revision = (revisions.get(key) || 0) + 1;
   revisions.set(key, revision);
   const operation = (saves.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
@@ -101,8 +107,18 @@ export async function storeGroups(key: string, groups: any[]) {
   async function persistPhoto(photo: any) {
     if (fs) {
       if (photo.uri.startsWith(directory)) return photo;
-      const uri = `${directory}${encodeURIComponent(photo.id || photo.uri)}.jpg`;
-      if (!(await fs.getInfoAsync(uri)).exists) await fs.copyAsync({ from: photo.uri, to: uri });
+      const extension = /\.(jpe?g|heic|heif|png|webp|avif)$/i.exec(photo.fileName || '')?.[0] || '.jpg';
+      const uri = `${directory}${encodeURIComponent(photo.id || photo.uri)}${extension}`;
+      if (!(await fs.getInfoAsync(uri)).exists) {
+        const temporary = uri + '.partial';
+        try {
+          await fs.copyAsync({ from: photo.uri, to: temporary });
+          await fs.moveAsync({ from: temporary, to: uri });
+        } catch (error) {
+          await fs.deleteAsync(temporary, { idempotent: true }).catch(() => {});
+          throw error;
+        }
+      }
       return { ...photo, uri };
     }
     // A blob URL identifies immutable bytes. Let removed photo objects be collected.
@@ -124,6 +140,35 @@ export async function storeGroups(key: string, groups: any[]) {
       photos.push(...await Promise.all(group.photos.slice(start, start + 4).map(persistPhoto)));
     }
     saved.push({ ...group, photos });
+  }
+  if (photoImport) {
+    if (!fs) throw new Error("Original photo checkpoints require device storage.");
+    const target = saved.find(group => group.id === photoImport.groupId);
+    if (!target) throw new Error("The selected area is unavailable.");
+    let added = 0;
+    let failed = 0;
+    for (let start = 0; start < photoImport.photos.length; start += 8) {
+      if (revisions.get(key) !== revision) return null;
+      const batch = photoImport.photos.slice(start, start + 8);
+      const copies = await Promise.allSettled(batch.map(persistPhoto));
+      const ready = copies.flatMap(copy => copy.status === 'fulfilled' ? [copy.value] : []);
+      if (revisions.get(key) !== revision) return null;
+      if (ready.length) {
+        target.photos.push(...ready);
+        try {
+          await writeDraft(key, saved);
+        } catch {
+          target.photos.splice(-ready.length);
+          await Promise.all(ready.map(photo => fs.deleteAsync(photo.uri, { idempotent: true }).catch(() => {})));
+          photoImport.onCheckpoint(added, photoImport.photos.length - added, saved);
+          return saved;
+        }
+      }
+      added += ready.length;
+      failed += batch.length - ready.length;
+      photoImport.onCheckpoint(added, failed, saved);
+    }
+    return saved;
   }
   if (revisions.get(key) === revision) { await writeDraft(key, saved); return saved; }
   return null;
