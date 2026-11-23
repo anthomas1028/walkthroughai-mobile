@@ -13,7 +13,7 @@ import { BarcodeSummary, type BarcodeEvidence } from "../components/BarcodeSumma
 import { useConnection } from "../hooks/use-connection";
 import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
-import { clearNativeUpload, nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus } from "../lib/native-upload";
+import { clearNativeUpload, nativeUploadSupported, newBatchId, enqueueNativeUpload, nativeUploadStatus, serverBatchStatus, sendPhotoWhileOpen } from "../lib/native-upload";
 import { completionAlertsSupported, setCompletionAlert, requestCompletionToken } from "../lib/completion-notifications";
 import { SourcingPanel } from "../components/SourcingPanel";
 import { SourcingState, applySourcingSelection } from "../lib/sourcing";
@@ -664,6 +664,19 @@ export default function UploadScreen() {
     useState(false);
 
   const [nativeUploadQueued, setNativeUploadQueued] = useState(false);
+  const [offerForeground, setOfferForeground] = useState(false);
+  const foregroundEnabled = useRef(false);
+  const foregroundTransfer = useRef<AbortController | null>(null);
+  useEffect(() => {
+    function stopForeground() {
+      foregroundEnabled.current = false;
+      foregroundTransfer.current?.abort();
+    }
+    const listener = AppState.addEventListener('change', state => {
+      if (state !== 'active') stopForeground();
+    });
+    return () => { listener.remove(); stopForeground(); };
+  }, []);
   const connection = useConnection();
   const [waitingForConnection, setWaitingForConnection] = useState(false);
   const [receivedPhotos, setReceivedPhotos] = useState(0);
@@ -709,7 +722,7 @@ export default function UploadScreen() {
 
 
 
-  const [, setJobStatusMessage] =
+  const [jobStatusMessage, setJobStatusMessage] =
     useState(
       "Uploading photos and preparing background analysis."
     );
@@ -1053,21 +1066,85 @@ export default function UploadScreen() {
         completion_token: notificationToken,
       });
       setNativeUploadQueued(true);
-      while (true) {
-        if (!uploadMounted.current) throw new Error("Upload continues with iOS. Resume your walkthrough to review it.");
+      let lastProgress = Date.now();
+      let lastCount = 0;
+      let lastBytes = 0;
+      let foregroundError = "";
+      while (uploadMounted.current) {
         if (AppState.currentState === 'active') {
           const local = await nativeUploadStatus(id);
-          const remote = await serverBatchStatus(id);
+          if (local.jobId) return { response: { ok: true } as Response, data: { success: true, job_id: local.jobId } };
+          let remote;
+          try {
+            remote = await serverBatchStatus(id);
+          } catch (error) {
+            if (!(error instanceof TypeError || (error instanceof Error && /network|connection|timed out/i.test(error.message)))) throw error;
+            if (local.error) throw new Error(local.error);
+            setJobStatusMessage("Reconnecting to check this upload. Your photos are saved.");
+            await new Promise(resolve => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
+            continue;
+          }
+          if (!uploadMounted.current) break;
           if (remote?.expired) throw new Error("Upload expired. Resume to start a fresh upload from your saved photos.");
           if (remote?.result?.job_id) return { response: { ok: true } as Response, data: remote.result };
-          if (local.error) throw new Error(local.error);
-          const count = remote?.uploaded_slots?.length ?? 0;
-          // Only server acknowledgements count as received, never queued tasks.
+          // If metadata arrived, a failed native photo can still use the existing batch.
+          if (local.error && (!remote || !local.uploaded?.includes("metadata"))) throw new Error(local.error);
+          const slots = new Set<number>(remote?.uploaded_slots ?? []);
+          const count = slots.size;
+          const bytes = Number(remote?.receiving_bytes) || 0;
+          if (count !== lastCount || bytes !== lastBytes) {
+            lastProgress = Date.now();
+            foregroundError = "";
+          }
+          lastCount = count;
+          lastBytes = bytes;
           setReceivedPhotos(count);
-          setJobStatusMessage(`${count} of ${preparedPhotos.length} photos received. You can switch apps or lock your phone.`);
+          const stalled = Date.now() - lastProgress >= 30_000;
+          setOfferForeground(!!remote && count < preparedPhotos.length && (stalled || !!foregroundError || !!local.error) && !foregroundEnabled.current);
+          if (foregroundEnabled.current && remote && AppState.currentState === 'active') {
+            // The iOS queue starts at the first slot. Assist from the other end.
+            let slot = preparedPhotos.length - 1;
+            while (slot >= 0 && slots.has(slot)) slot--;
+            if (slot >= 0) {
+              const controller = new AbortController();
+              foregroundTransfer.current = controller;
+              setOfferForeground(false);
+              setJobStatusMessage(`Sending photo ${slot + 1}. Keep the app open.`);
+              let timedOut = false;
+              const cancelAfterIdle = () => setTimeout(() => { timedOut = true; controller.abort(); }, 120_000);
+              let timer = cancelAfterIdle();
+              try {
+                await sendPhotoWhileOpen(id, slot, preparedPhotos, controller.signal, percent => {
+                  clearTimeout(timer);
+                  timer = cancelAfterIdle();
+                  setJobStatusMessage(percent < 100 ? `Sending photo ${slot + 1} · ${percent}%. Keep the app open.` : `Waiting for confirmation of photo ${slot + 1}.`);
+                });
+                if (timedOut) throw new Error("The connection timed out.");
+              } catch (error) {
+                foregroundEnabled.current = false;
+                if (timedOut || !controller.signal.aborted) {
+                  foregroundError = error instanceof Error ? error.message : "The transfer was interrupted.";
+                }
+              } finally {
+                clearTimeout(timer);
+                foregroundTransfer.current = null;
+              }
+              continue; // Reconcile acknowledged slots before choosing another file.
+            }
+          }
+          const message = foregroundError ? `${foregroundError} Your upload is saved.`
+            : count === preparedPhotos.length ? "All photos received. Starting analysis."
+            : local.error ? "The background transfer stopped. Use the open app to send the remaining photos."
+            : bytes > 0 ? `Receiving ${(bytes / 1048576).toFixed(1)} MB of photo data.`
+            : stalled && remote ? "Waiting for the next photo. You can send photos with the app open."
+            : stalled ? "Your iPhone is waiting to connect. Keep this walkthrough open or try Wi-Fi."
+            : count === 0 ? "Photos are queued on your iPhone. Waiting for the first photo."
+            : "Your iPhone is uploading. You can switch apps or lock your phone.";
+          setJobStatusMessage(message);
         }
-        await new Promise(resolve => setTimeout(resolve, 2500));
+        await new Promise(resolve => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
       }
+      throw new Error("Upload continues with iOS. Resume your walkthrough to review it.");
     }
 
     async function submitBackgroundJob(): Promise<{
@@ -1213,6 +1290,10 @@ export default function UploadScreen() {
 
     try {
       setIsProcessing(true);
+      setNativeUploadQueued(false);
+      setOfferForeground(false);
+      foregroundEnabled.current = false;
+      setReceivedPhotos(0);
       setCurrentJobId("");
       setJobProgress(0);
       setJobStatusMessage(
@@ -2258,10 +2339,15 @@ export default function UploadScreen() {
               <Text style={styles.processingKeepOpenText}>
                 {currentJobId
                   ? "You can leave this screen. Analysis continues in the background."
-                  : nativeUploadQueued
-                    ? "You can lock your phone or switch apps. Don’t force-close the app."
-                    : "Keep the app open while photos are prepared and uploaded."}
+                  : jobStatusMessage}
               </Text>
+              {!currentJobId && offerForeground && <Pressable accessibilityRole="button" onPress={() => {
+                foregroundEnabled.current = true;
+                setOfferForeground(false);
+                setJobStatusMessage("Checking which photos still need to upload…");
+              }} style={{ minHeight: 44, justifyContent: "center", marginTop: 8 }}>
+                <Text style={{ color: "#64B5FF", fontWeight: "700" }}>Upload with app open</Text>
+              </Pressable>}
               {notificationIssue ? <Text style={{ color: "#FCD34D", marginTop: 12 }}>{notificationIssue}</Text> : null}
               {Boolean(currentJobId) && completionAlertsSupported && <Pressable accessibilityRole="button" disabled={alertBusy} onPress={() => void toggleCompletionAlert()} style={{ minHeight: 44, justifyContent: "center", marginTop: 8 }}>
                 <Text style={{ color: "#93C5FD", textAlign: "center" }}>{alertBusy ? "Updating…" : completionAlertToken ? "Notifications on · Turn off" : "Notify me when finished"}</Text>
