@@ -71,7 +71,9 @@ export async function sendPhotoWhileOpen(id: string, slot: number, photos: Recov
       if (!result || result.status < 200 || result.status >= 300) {
         throw new Error(result ? `Photo ${slot + 1} upload returned HTTP ${result.status}.` : 'Connection interrupted.');
       }
-      if (JSON.parse(result.body)?.success !== true) throw new Error('The server could not confirm this photo.');
+      const receipt = JSON.parse(result.body);
+      if (receipt?.success !== true) throw new Error('The server could not confirm this photo.');
+      return receipt as { uploaded?: number; result?: { success: boolean; job_id: string } };
     } finally { signal.removeEventListener('abort', cancel); }
   } finally {
     if (uri !== photos[slot].uri) await FS.deleteAsync(uri, { idempotent: true }).catch(() => {});

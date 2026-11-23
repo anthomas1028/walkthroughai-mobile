@@ -1053,10 +1053,11 @@ export default function UploadScreen() {
 
     async function submitNativeJob(): Promise<{ response: Response; data: UploadApiResponse }> {
       let id = recoveryRef.current?.nativeBatchId || newBatchId();
-      const existing = recoveryRef.current?.nativeBatchId ? await serverBatchStatus(id) : null;
+      let existing = recoveryRef.current?.nativeBatchId ? await serverBatchStatus(id) : null;
       if (existing?.expired || (recoveryRef.current?.nativeBatchId && !existing && (await nativeUploadStatus(id)).uploaded?.length)) {
         await clearNativeUpload(id);
         id = newBatchId();
+        existing = null;
       }
       if (existing?.result?.job_id) return { response: { ok: true } as Response, data: existing.result };
       await checkpoint({ nativeBatchId: id, completionAlertToken: notificationToken });
@@ -1065,20 +1066,27 @@ export default function UploadScreen() {
         customer, customer_id: customerId, photo_locations: preparedPhotos.map(p => cleanText(p.location)),
         completion_token: notificationToken,
       };
+      setJobStatusMessage("Preparing full-resolution photos for upload…");
       await enqueueNativeUpload(id, preparedPhotos, metadata);
       setNativeUploadQueued(true);
+      let firstActivePass = true;
       let lastProgress = Date.now();
-      let lastCount = 0;
+      let lastCount = existing?.uploaded_slots?.length ?? 0;
       let lastBytes = 0;
+      let lastAssistedSlot: number | undefined;
       let foregroundError = "";
       let renewedNativeQueue = false;
       while (uploadMounted.current) {
         if (AppState.currentState === 'active') {
+          const starting = firstActivePass;
+          firstActivePass = false;
           const local = await nativeUploadStatus(id);
           if (local.jobId) return { response: { ok: true } as Response, data: { success: true, job_id: local.jobId } };
           let remote;
           try {
-            remote = await serverBatchStatus(id);
+            // Preparation and the capacity check have finished. A new batch can
+            // receive its first file ahead of metadata. A resume already has a snapshot.
+            remote = starting ? existing : await serverBatchStatus(id);
           } catch (error) {
             if (!(error instanceof TypeError || (error instanceof Error && /network|connection|timed out/i.test(error.message)))) throw error;
             if (local.error) throw new Error(local.error);
@@ -1103,19 +1111,27 @@ export default function UploadScreen() {
           const slots = new Set<number>(remote?.uploaded_slots ?? []);
           const count = slots.size;
           const bytes = Number(remote?.receiving_bytes) || 0;
+          const ownAcknowledgement = lastAssistedSlot !== undefined && slots.has(lastAssistedSlot) ? 1 : 0;
+          if (starting) {
+            foregroundEnabled.current = true;
+          } else if (!local.error && count > lastCount + ownAcknowledgement) {
+            // iOS is delivering its own files. Let it drain the rest in parallel.
+            foregroundEnabled.current = false;
+          }
+          lastAssistedSlot = undefined;
           if (count !== lastCount || bytes !== lastBytes) {
             lastProgress = Date.now();
             foregroundError = "";
           }
           lastCount = count;
           lastBytes = bytes;
-          setReceivedPhotos(count);
+          if (remote) setReceivedPhotos(count);
           const stalled = Date.now() - lastProgress >= 30_000;
           if (remote && !foregroundError && count < preparedPhotos.length && (stalled || staleQueueLogin)) {
             foregroundEnabled.current = true;
           }
           setOfferForeground(!!remote && count < preparedPhotos.length && (stalled || !!foregroundError || !!local.error) && !foregroundEnabled.current);
-          if (foregroundEnabled.current && remote && AppState.currentState === 'active') {
+          if (foregroundEnabled.current && (starting || remote) && AppState.currentState === 'active') {
             // The iOS queue starts at the first slot. Assist from the other end.
             let slot = preparedPhotos.length - 1;
             while (slot >= 0 && slots.has(slot)) slot--;
@@ -1128,12 +1144,17 @@ export default function UploadScreen() {
               const cancelAfterIdle = () => setTimeout(() => { timedOut = true; controller.abort(); }, 120_000);
               let timer = cancelAfterIdle();
               try {
-                await sendPhotoWhileOpen(id, slot, preparedPhotos, controller.signal, percent => {
+                const receipt = await sendPhotoWhileOpen(id, slot, preparedPhotos, controller.signal, percent => {
                   clearTimeout(timer);
                   timer = cancelAfterIdle();
                   setJobStatusMessage(percent < 100 ? `Sending photo ${slot + 1} · ${percent}%. Keep the app open.` : `Waiting for confirmation of photo ${slot + 1}.`);
                 });
                 if (timedOut) throw new Error("The connection timed out.");
+                if (receipt) {
+                  lastAssistedSlot = slot;
+                  if (typeof receipt.uploaded === 'number') setReceivedPhotos(receipt.uploaded);
+                  if (receipt.result?.job_id) return { response: { ok: true } as Response, data: receipt.result };
+                }
               } catch (error) {
                 foregroundEnabled.current = false;
                 if (timedOut || !controller.signal.aborted) {

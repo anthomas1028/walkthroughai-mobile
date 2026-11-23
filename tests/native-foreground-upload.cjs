@@ -36,7 +36,7 @@ async function verify({ jpeg = true, cancel = false, status = 200 } = {}) {
           uploadAsync: async () => {
             progress({ totalBytesSent: 512, totalBytesExpectedToSend: 1024 });
             if (cancel) { controller.abort(); return null; }
-            return { status, body: '{"success":true}' };
+            return { status, body: '{"success":true,"uploaded":2,"result":{"success":true,"job_id":"one-job"}}' };
           },
           cancelAsync: async () => { cancelled = true; }
         };
@@ -48,7 +48,11 @@ async function verify({ jpeg = true, cancel = false, status = 200 } = {}) {
   } });
   const request = output.sendPhotoWhileOpen('batch', 1, [{}, { uri: source }], controller.signal, n => percentages.push(n));
   if (status === 503) await assert.rejects(request, /503/);
-  else await request;
+  else {
+    const receipt = await request;
+    if (cancel) assert.equal(receipt, undefined);
+    else { assert.equal(receipt.uploaded, 2); assert.equal(receipt.result.job_id, 'one-job'); }
+  }
   assert.ok(closed);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].url, 'https://fixture.invalid/api/native-batches/batch/1');
