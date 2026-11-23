@@ -1061,15 +1061,17 @@ export default function UploadScreen() {
       if (existing?.result?.job_id) return { response: { ok: true } as Response, data: existing.result };
       await checkpoint({ nativeBatchId: id, completionAlertToken: notificationToken });
       // All file transfers and retries are queued natively. No JS "submit" call is required.
-      await enqueueNativeUpload(id, preparedPhotos, {
+      const metadata = {
         customer, customer_id: customerId, photo_locations: preparedPhotos.map(p => cleanText(p.location)),
         completion_token: notificationToken,
-      });
+      };
+      await enqueueNativeUpload(id, preparedPhotos, metadata);
       setNativeUploadQueued(true);
       let lastProgress = Date.now();
       let lastCount = 0;
       let lastBytes = 0;
       let foregroundError = "";
+      let renewedNativeQueue = false;
       while (uploadMounted.current) {
         if (AppState.currentState === 'active') {
           const local = await nativeUploadStatus(id);
@@ -1087,6 +1089,15 @@ export default function UploadScreen() {
           if (!uploadMounted.current) break;
           if (remote?.expired) throw new Error("Upload expired. Resume to start a fresh upload from your saved photos.");
           if (remote?.result?.job_id) return { response: { ok: true } as Response, data: remote.result };
+          // iOS captures a bearer token for each queued request. A long delay can
+          // outlive that token while this screen already has a valid session.
+          const staleQueueLogin = !!local.error && /sign in again|HTTP 401/i.test(local.error);
+          if (staleQueueLogin && !renewedNativeQueue) {
+            renewedNativeQueue = true;
+            setJobStatusMessage("Resuming the saved upload with your current sign-in…");
+            await enqueueNativeUpload(id, preparedPhotos, metadata);
+            continue;
+          }
           // If metadata arrived, a failed native photo can still use the existing batch.
           if (local.error && (!remote || !local.uploaded?.includes("metadata"))) throw new Error(local.error);
           const slots = new Set<number>(remote?.uploaded_slots ?? []);
@@ -1100,6 +1111,9 @@ export default function UploadScreen() {
           lastBytes = bytes;
           setReceivedPhotos(count);
           const stalled = Date.now() - lastProgress >= 30_000;
+          if (remote && !foregroundError && count < preparedPhotos.length && (stalled || staleQueueLogin)) {
+            foregroundEnabled.current = true;
+          }
           setOfferForeground(!!remote && count < preparedPhotos.length && (stalled || !!foregroundError || !!local.error) && !foregroundEnabled.current);
           if (foregroundEnabled.current && remote && AppState.currentState === 'active') {
             // The iOS queue starts at the first slot. Assist from the other end.
@@ -1137,7 +1151,7 @@ export default function UploadScreen() {
             : local.error ? "The background transfer stopped. Use the open app to send the remaining photos."
             : bytes > 0 ? `Receiving ${(bytes / 1048576).toFixed(1)} MB of photo data.`
             : stalled && remote ? "Waiting for the next photo. You can send photos with the app open."
-            : stalled ? "Your iPhone is waiting to connect. Keep this walkthrough open or try Wi-Fi."
+            : stalled ? "Waiting for a connection. The upload will resume on cellular or Wi-Fi."
             : count === 0 ? "Photos are queued on your iPhone. Waiting for the first photo."
             : "Your iPhone is uploading. You can switch apps or lock your phone.";
           setJobStatusMessage(message);
