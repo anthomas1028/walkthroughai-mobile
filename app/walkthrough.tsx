@@ -1,3 +1,5 @@
+import { pickPhotoZip, type PickedZip } from "../lib/pick-photo-zip";
+import { describeZip, importPhotoZip } from "../lib/import-photo-zip";
 import { PhotoExport } from "../components/PhotoExport";
 import { useBackTo } from '../lib/back-navigation';
 import { API_BASE_URL, apiFetch } from "../lib/api";
@@ -615,6 +617,65 @@ export default function WalkthroughPhotoScreen() {
     }
   }
 
+  async function chooseZip(groupId: string) {
+    if (pickerBusy.current) return;
+    const remaining = MAX_WALKTHROUGH_PHOTOS - photos.length;
+    if (remaining <= 0) {
+      Alert.alert('500-photo limit reached', 'Remove a photo before importing a ZIP.');
+      return;
+    }
+    const area = groups.find(group => group.id === groupId);
+    if (!area) return;
+    pickerBusy.current = true;
+    const operation = ++pickerOperation.current;
+    const active = () => operation === pickerOperation.current;
+    setIsOpeningPicker(true);
+    setPickerCanCancel(true);
+    setImportMessage('');
+    let archive: PickedZip | null = null;
+    let committed = groups, added = 0;
+    try {
+      archive = await pickPhotoZip();
+      if (!archive || !active()) return;
+      setPickerCanCancel(false);
+      setImportMessage('Reading ZIP…');
+      const seen = new Set(photos.flatMap(photo => photo.assetId ? [photo.assetId] : []));
+      const result = await importPhotoZip(archive, remaining, seen, async batch => {
+        const originals = batch.map(({ uri, fileName, fileSize, mimeType, assetId, width, height }) => ({
+          id: createId('zip'), uri, fileName, fileSize, mimeType, assetId, width, height, location: area.name,
+        }));
+        const next = committed.map(group => group.id === groupId ? { ...group, photos: [...group.photos, ...originals] } : group);
+        const saved = await storeGroups(key, next);
+        if (!saved) throw new Error('The draft changed. Reopen it before trying again.');
+        committed = Platform.OS === 'web' ? next : saved;
+        added += originals.length;
+        if (active()) await indexDraft(committed).catch(() => {});
+      }, (done, total) => {
+        if (active()) setImportMessage(`Reading ZIP · ${done} of ${total} photos checked · ${added} saved`);
+      }, active);
+      if (active()) {
+        setImportMessage(describeZip(result));
+        if (result.failed) Alert.alert('ZIP import', describeZip(result) + '\n\n' + result.firstFailure);
+      }
+    } catch (error) {
+      if (active()) {
+        const reason = error instanceof Error ? error.message : 'Could not open or save the ZIP.';
+        setImportMessage(`${added} photos saved from ZIP`);
+        Alert.alert('ZIP import stopped', `${reason}\n\n${added} photos saved. You can retry the same ZIP.`);
+      }
+    } finally {
+      try { archive?.close(); }
+      finally {
+        if (active()) {
+          if (added) setGroups(committed);
+          pickerBusy.current = false;
+          setPickerCanCancel(false);
+          setIsOpeningPicker(false);
+        }
+      }
+    }
+  }
+
   function removePhoto(groupId: string, photoId: string) {
     setGroups((current) =>
       current.map((group) =>
@@ -970,6 +1031,16 @@ export default function WalkthroughPhotoScreen() {
                       <Text style={styles.choosePhotosButtonText}>Choose Photos</Text>
                     </Pressable>
                   </View>
+                  <Pressable
+                    accessibilityRole="button" accessibilityLabel={`Import ZIP for ${group.name}`}
+                    disabled={!draftReady || isContinuing || isOpeningPicker || scanningArea !== null}
+                    onPress={() => void chooseZip(group.id)}
+                    style={({ pressed }) => [styles.photoActionButton, styles.choosePhotosButton,
+                      { alignSelf: 'stretch', flex: 0, marginTop: 8 }, pressed && styles.buttonPressed,
+                      isOpeningPicker && styles.disabledButton]}>
+                    <Ionicons name="folder-open-outline" size={19} color="#93C5FD" />
+                    <Text style={styles.choosePhotosButtonText}>Import ZIP</Text>
+                  </Pressable>
                   <BarcodeScanner key={`${group.id}-${scannerEpoch}`} continuous allowLabelPhoto existing={group.scans || []} otherScans={groups.filter(other => other.id !== group.id).flatMap(other => other.scans || [])}
                     blocked={!draftReady || isContinuing || isOpeningPicker || (scanningArea !== null && scanningArea !== group.id)}
                     title={`Scan in ${group.name}`} attachLabel="Save scan in this area" contextText="Scan, set quantity, and optionally photograph the same label. Save & next continues scanning. Works offline."

@@ -7,6 +7,11 @@ const table = Uint32Array.from({ length: 256 }, (_, value) => {
   return value >>> 0;
 });
 
+export function updatePhotoCrc(crc: number, bytes: Uint8Array) {
+  for (let i = 0; i < bytes.length; i++) crc = table[(crc ^ bytes[i]) & 255] ^ (crc >>> 8);
+  return crc;
+}
+
 function record(length: number, signature: number) {
   const bytes = new Uint8Array(length);
   const view = new DataView(bytes.buffer);
@@ -27,9 +32,7 @@ export class PhotoZip {
     const size = photo.length;
     // Individual files are limited to 500 MiB by the upload server.
     if (size >= max32 || filename.length > 65535) throw new Error("ZIP entry exceeds its size limit.");
-    let crc = -1;
-    for (const byte of photo) crc = table[(crc ^ byte) & 255] ^ (crc >>> 8);
-    crc = (crc ^ -1) >>> 0;
+    const crc = (updatePhotoCrc(-1, photo) ^ -1) >>> 0;
     const local = record(30 + filename.length, 0x04034b50);
     local.word(4, 20); local.word(6, 0x800); local.word(12, 0x21);
     local.long(14, crc); local.long(18, size); local.long(22, size);

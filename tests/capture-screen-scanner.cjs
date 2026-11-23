@@ -14,7 +14,7 @@ const states = [], refs = []; let si = 0, ri = 0, pushed, alert;
 const exported = {}, design = {};
 vm.runInNewContext(compile('constants/design.ts'), { exports: design });
 const jsx = (type, props) => typeof type === 'function' ? type(props) : ({ type, props });
-const stubs = { "../lib/back-navigation": {useBackTo:()=>()=>{}}, '../lib/api': { API_BASE_URL: 'https://example.invalid', apiFetch: async () => { throw Error('Unexpected API call'); } },
+const stubs = { '../lib/pick-photo-zip': {}, '../lib/import-photo-zip': {}, "../lib/back-navigation": {useBackTo:()=>()=>{}}, '../lib/api': { API_BASE_URL: 'https://example.invalid', apiFetch: async () => { throw Error('Unexpected API call'); } },
   '../lib/polished-styles': { createPolishedStyles: styles => styles },
   '../components/PhotoExport': { PhotoExport: () => null }, 'expo-camera': { CameraView: 'Camera' },
   '../components/AppBackdrop': { AppBackdrop: () => null },
