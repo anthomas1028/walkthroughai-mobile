@@ -8,6 +8,8 @@ import { sourcePhotos } from "../lib/source-photos";
 import { PhotoNavigation } from "../components/PhotoNavigation";
 import { UI } from "../constants/design";
 import { SourcingSummary } from "../components/SourcingSummary";
+import { FastenalPart } from '../components/FastenalPart';
+import type { FastenalMatch } from '../lib/part-photos';
 import { SavedSourcing } from "../lib/sourcing";
 import { downloadInBrowser } from "../lib/download";
 import { Alert } from "../lib/alerts";
@@ -64,6 +66,7 @@ type ReportRecord = {
   manufacturer?: string | null;
   customer_part_number?: string | null;
   fastenal_part_number?: string | null;
+  fastenal_match?: FastenalMatch | null;
   sourcing_recommendation?: SavedSourcing | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
@@ -812,6 +815,7 @@ export default function CustomerReportScreen() {
             <Ionicons name="chevron-forward" size={20} color="#93C5FD" />
           </Pressable>
 
+          <FastenalPart match={item.fastenal_match} />
           <Pressable
             accessibilityRole="button"
             disabled={!item.photo_url}
@@ -1402,6 +1406,7 @@ export default function CustomerReportScreen() {
             <ScrollView contentContainerStyle={styles.partDetailContent}>
               <Text style={styles.partDetailTitle}>{selectedPart.description || displayPartNumber(selectedPart) || "Unique Part"}</Text>
               {displayPartNumber(selectedPart) ? <Text style={styles.partDetailNumber}>{displayPartNumber(selectedPart)}</Text> : null}
+              <FastenalPart match={selectedPart.fastenal_match} />
               <View style={styles.partDetailCard}>
                 <Text style={styles.partDetailLabel}>Vendor</Text><Text style={styles.partDetailValue}>{selectedPart.vendor || "Not identified"}</Text>
                 <Text style={styles.partDetailLabel}>Manufacturer</Text><Text style={styles.partDetailValue}>{selectedPart.manufacturer || "Not identified"}</Text>
@@ -1477,6 +1482,7 @@ export default function CustomerReportScreen() {
                 </Text>
               </Pressable>
 
+              <FastenalPart match={selectedReviewItem.fastenal_match} />
               <SourcingSummary record={selectedReviewItem.sourcing_recommendation} />
               <BarcodeSummary evidence={selectedReviewItem.barcode_evidence} />
               <ScannedBarcodes scans={selectedReviewItem.scanned_barcodes} />

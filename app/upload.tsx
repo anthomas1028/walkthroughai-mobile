@@ -1,5 +1,6 @@
 import { PartPhotoStrip } from '../components/PartPhotoStrip';
-import type { SourcingPart } from '../lib/part-photos';
+import { FastenalPart } from '../components/FastenalPart';
+import type { FastenalMatch, SourcingPart } from '../lib/part-photos';
 import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
@@ -93,6 +94,7 @@ type RecognitionResult = {
   manufacturer: string;
   customer_part_number: string;
   fastenal_part_number: string;
+  fastenal_match?: FastenalMatch | null;
   manufacturer_part_number: string;
   vendor_part_number: string;
   part_number: string;
@@ -1611,6 +1613,7 @@ export default function UploadScreen() {
     return <View key={result.id} style={styles.resultCard}>
       <Text style={styles.areaReviewTitle}>{part.summary.description || 'Inventory item'}</Text>
       {!!number && <Text selectable style={styles.reviewProgressText}>{number}</Text>}
+      <FastenalPart match={part.fastenal_match} />
       <PartPhotoStrip photos={sources} onSelect={photo => {
         if (sources.every(source => source.uri) && photo.uri) {
           setPartViewer({ title: number || part.summary.description || 'Item photos',
@@ -1749,6 +1752,7 @@ export default function UploadScreen() {
       return {
         ...currentDraft,
         [field]: value,
+        fastenal_match: ["manufacturer", "manufacturer_part_number", "vendor", "vendor_part_number", "description", "size_specification", "fastenal_part_number"].includes(field) ? null : currentDraft.fastenal_match,
       };
     });
   }
@@ -2680,6 +2684,7 @@ export default function UploadScreen() {
                         ]}
                       >
                         <InventoryItemSummary
+                          fastenalMatch={part ? part.fastenal_match : result.fastenal_match}
                           title={result.description || 'Inventory item'}
                           identifier={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number || result.scanned_barcodes?.[0]?.value || ''}
                           identifierLabel={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number ? 'Part number' : 'Scanned code'}
@@ -2878,6 +2883,7 @@ export default function UploadScreen() {
                         ]}
                       >
                         <InventoryItemSummary
+                          fastenalMatch={part ? part.fastenal_match : result.fastenal_match}
                           title={result.description || 'Inventory item'}
                           identifier={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number || result.scanned_barcodes?.[0]?.value || ''}
                           identifierLabel={displayedPartNumber || result.vendor_part_number || result.customer_part_number || result.fastenal_part_number ? 'Part number' : 'Scanned code'}

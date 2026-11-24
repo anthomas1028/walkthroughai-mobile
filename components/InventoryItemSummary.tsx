@@ -1,8 +1,10 @@
+import { FastenalPart } from './FastenalPart';
+import type { FastenalMatch } from '../lib/part-photos';
 import { useState, type ReactNode } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 
-export function InventoryItemSummary({ title, identifier, identifierLabel, photoUri, quantity, location, status, onPhoto, children }: {
-  title: string; identifier: string; identifierLabel: string; photoUri?: string; quantity?: number;
+export function InventoryItemSummary({ title, identifier, identifierLabel, fastenalMatch, photoUri, quantity, location, status, onPhoto, children }: {
+  title: string; identifier: string; identifierLabel: string; fastenalMatch?: FastenalMatch | null; photoUri?: string; quantity?: number;
   location: string; status: 'Ready' | 'Needs details' | 'Saved' | 'Missing details' | 'Saving'; onPhoto: () => void; children: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -16,6 +18,7 @@ export function InventoryItemSummary({ title, identifier, identifierLabel, photo
         <Text style={{ color, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>{status}</Text>
         <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>{title}</Text>
         <Text selectable style={{ color: '#73DCE7', marginTop: 5 }}>{identifierLabel}: {identifier || 'Not captured'}</Text>
+        <FastenalPart match={fastenalMatch} />
         <Text style={{ color: '#B8C8DB', fontSize: 13, marginTop: 5 }}>{location || 'Unassigned'} · Counted: {quantity ?? 'Not entered'}</Text>
       </View>
     </View>

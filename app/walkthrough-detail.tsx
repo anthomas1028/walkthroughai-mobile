@@ -1,4 +1,5 @@
 import { PartPhotoStrip } from '../components/PartPhotoStrip';
+import { FastenalPart } from '../components/FastenalPart';
 import { savedParts, type PartPhoto, type SourcingPart } from '../lib/part-photos';
 import { SourcingItemEditor } from '../components/SourcingItemEditor';
 import { useAuth } from "../contexts/AuthContext";
@@ -839,6 +840,7 @@ export default function WalkthroughDetailScreen() {
                         <Ionicons name="chevron-forward" size={20} color="#6F829A" />
                       </Pressable>
 
+                      <FastenalPart match={item.part?.fastenal_match} />
                       {itemPhotos(item).length > 1
                         ? <PartPhotoStrip photos={itemPhotos(item)} onSelect={photo => showItemPhoto(item, photo)} />
                         : itemPhotos(item).map(photo => <Pressable key={photo.name} accessibilityRole="button"
@@ -897,10 +899,11 @@ export default function WalkthroughDetailScreen() {
                 <DetailRow label="Vendor" value={selectedItem.vendor} />
                 <DetailRow label="Manufacturer" value={selectedItem.manufacturer} />
                 <DetailRow label="Manufacturer Part #" value={selectedItem.manufacturer_part_number} />
+                <FastenalPart match={selectedItem.part?.fastenal_match} />
                 <DetailRow label="Vendor Part #" value={selectedItem.vendor_part_number} />
                 <DetailRow label="Observed Part # (unclassified)" value={selectedItem.part_number} />
                 <DetailRow label="Customer Part #" value={selectedItem.customer_part_number} />
-                <DetailRow label="Fastenal Item #" value={selectedItem.fastenal_part_number} />
+                {!selectedItem.part?.fastenal_match && <DetailRow label="Recorded Fastenal Item #" value={selectedItem.fastenal_part_number} />}
 
 
 
