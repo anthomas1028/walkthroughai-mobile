@@ -1,3 +1,4 @@
+import { SourcingItemEditor } from '../components/SourcingItemEditor';
 import { useAuth } from "../contexts/AuthContext";
 import { PhotoExport } from "../components/PhotoExport";
 import { useBackTo } from '../lib/back-navigation';
@@ -70,6 +71,7 @@ type WalkthroughItem = {
 };
 
 type Walkthrough = {
+  is_read_only?: boolean;
   id: number;
   customer_id: number;
   customer_name: string;
@@ -138,6 +140,10 @@ function displayPartNumber(item: WalkthroughItem): string {
     item.part_number ||
     ""
   );
+}
+
+function incompleteItem(item: WalkthroughItem): boolean {
+  return !item.description?.trim() || /^inventory item$/i.test(item.description.trim()) || !displayPartNumber(item).trim();
 }
 
 function itemTitle(item: WalkthroughItem): string {
@@ -250,6 +256,7 @@ export default function WalkthroughDetailScreen() {
   useEffect(() => setVisibleCount(40), [selectedLocation, selectedVendor]);
   const visibleItems = useMemo(() => {
     if (!walkthrough) return [];
+    if (selectedLocation === "__INCOMPLETE__") return walkthrough.items.filter(incompleteItem);
     if (selectedLocation === "__ALL__") return walkthrough.items;
     if (!selectedLocation) return [];
     return walkthrough.items.filter(
@@ -413,7 +420,7 @@ export default function WalkthroughDetailScreen() {
   const screenTitle = showingParts
     ? selectedLocation === "__ALL__"
       ? "All Inventory"
-      : selectedLocation
+      : selectedLocation === "__INCOMPLETE__" ? "Incomplete rows" : selectedLocation
     : showingVendorItems
       ? selectedVendor || "Vendor"
       : selectedMetricView === "photos"
@@ -601,6 +608,16 @@ export default function WalkthroughDetailScreen() {
                   <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
                 </Pressable>
 
+                {walkthrough.items.some(incompleteItem) && (
+                  <Pressable accessibilityRole="button" style={styles.navigationCard} onPress={() => setSelectedLocation("__INCOMPLETE__")}>
+                    <View style={styles.navigationText}>
+                      <Text style={styles.navigationTitle}>Review incomplete rows ({walkthrough.items.filter(incompleteItem).length})</Text>
+                      <Text style={styles.navigationMeta}>Missing a description or part number. Open a row to check its source.</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
+                  </Pressable>
+                )}
+
                 <Text style={styles.sectionTitle}>Export</Text>
                 <View style={styles.exportCard}>
                   <View style={styles.exportStatusRow}>
@@ -767,7 +784,7 @@ export default function WalkthroughDetailScreen() {
                       ? selectedVendor
                       : selectedLocation === "__ALL__"
                         ? "All Inventory"
-                        : selectedLocation}
+                        : selectedLocation === "__INCOMPLETE__" ? "Incomplete rows" : selectedLocation}
                   </Text>
                   <Text style={styles.partsSummaryMeta}>
                     {plural(
@@ -855,6 +872,7 @@ export default function WalkthroughDetailScreen() {
                 <Text style={styles.itemDetailPartNumber}>{displayPartNumber(selectedItem)}</Text>
               ) : null}
 
+              {walkthrough?.is_read_only === false && <SourcingItemEditor key={selectedItem.id} item={selectedItem} onSaved={() => { setSelectedItem(null); void loadWalkthrough(false); }} />}
               <SourcingSummary record={selectedItem.sourcing_recommendation} />
               <BarcodeSummary evidence={selectedItem.barcode_evidence} />
               <ScannedBarcodes scans={selectedItem.scanned_barcodes} />

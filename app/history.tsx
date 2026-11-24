@@ -1,3 +1,4 @@
+import { PrivateReviews } from '../components/PrivateReviews';
 import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
@@ -793,6 +794,7 @@ export default function HistoryScreen() {
           </View>
         ) : (
           <FlatList
+            ListHeaderComponent={!showArchived ? <PrivateReviews customerId={customerId} customerName={customerName} onSaved={() => loadHistory(false)} /> : null}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={
               walkthroughs.length === 0

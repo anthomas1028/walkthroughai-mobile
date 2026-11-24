@@ -71,15 +71,38 @@ export function cleanupRecoveryPhotos(draft: RecoveryDraft) {
     }
   }
 }
-export async function retainPhotos(photos: RecoveryPhoto[], prefix: string): Promise<RecoveryPhoto[]> {
+export async function retainPhotos(photos: RecoveryPhoto[], prefix: string,
+  onProgress?: (ready: number) => void): Promise<RecoveryPhoto[]> {
   if (Platform.OS === 'web') return photos;
+  const { copyAsync } = await import('expo-file-system/legacy');
   const directory = new Directory(Paths.document, 'walkthrough-recovery');
   directory.create({ intermediates: true, idempotent: true });
-  return photos.map((photo, index) => {
-    const source = new File(photo.uri);
-    if (photo.uri.startsWith(directory.uri)) return photo;
-    const target = new File(directory, `${prefix}-${index}.jpg`);
-    source.copy(target);
-    return { ...photo, uri: target.uri };
-  });
+  const retained = new Array<RecoveryPhoto>(photos.length);
+  const created: File[] = [];
+  let next = 0, ready = 0;
+  let failed = false;
+  async function copyPhotos() {
+    while (!failed && next < photos.length) {
+      const index = next++;
+      const photo = photos[index];
+      try {
+        if (photo.uri.startsWith(directory.uri)) retained[index] = photo;
+        else {
+          const target = new File(directory, `${prefix}-${index}.jpg`);
+          created.push(target);
+          await copyAsync({ from: photo.uri, to: target.uri });
+          retained[index] = { ...photo, uri: target.uri };
+        }
+        onProgress?.(++ready);
+      } catch (error) { failed = true; throw error; }
+    }
+  }
+  const workers = await Promise.allSettled([copyPhotos(), copyPhotos()]);
+  for (const worker of workers) {
+    if (worker.status === 'rejected') {
+      for (const file of created) { try { if (file.exists) file.delete(); } catch {} }
+      throw worker.reason;
+    }
+  }
+  return retained;
 }

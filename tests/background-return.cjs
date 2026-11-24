@@ -2,14 +2,14 @@ const fs=require('fs'),vm=require('vm'),ts=require('typescript'),assert=require(
 const code=ts.transpileModule(fs.readFileSync('components/RecoveryBanner.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText;
 (async()=>{
  for(const status of ['queued','complete','failed']) {
-  const state=[],effects=[],routes=[];let cursor=0;
+  const state=[],effects=[],routes=[];let cursor=0;let path='/';let customerId;
   const draft={customerId:'customer-a',customerName:'Customer A',photos:[{id:'1'},{id:'2'}],nativeBatchId:'batch-a',jobId:'',results:[]};
   const output={};
   vm.runInNewContext(code,{exports:output,setInterval:()=>1,clearInterval:()=>{},require:name=>{
    if(name==='react')return{useState:init=>{const i=cursor++;if(!(i in state))state[i]=init;return[state[i],v=>state[i]=v]},useEffect:fn=>effects.push(fn)};
    if(name==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
    if(name==='react-native')return{View:'View',Text:'Text',Pressable:'Pressable',AppState:{currentState:'active',addEventListener:()=>({remove(){}})}};
-   if(name==='expo-router')return{usePathname:()=> '/',router:{push:r=>routes.push(r)}};
+   if(name==='expo-router')return{usePathname:()=> path,useGlobalSearchParams:()=>({customerId}),router:{push:r=>routes.push(r)}};
    if(name.includes('AuthContext'))return{useAuth:()=>({session:{user:{id:'owner'}}})};
    if(name.includes('safe-area'))return{useSafeAreaInsets:()=>({top:0})};
    if(name.includes('capture-drafts'))return{captureDrafts:async()=>[]};
@@ -20,6 +20,9 @@ const code=ts.transpileModule(fs.readFileSync('components/RecoveryBanner.tsx','u
   }});
   output.RecoveryBanner();effects[0]();await new Promise(r=>setImmediate(r));cursor=0;
   const view=output.RecoveryBanner();view.props.children.props.onPress();
+  path='/customer-dashboard';customerId='other-customer';cursor=0;assert.equal(output.RecoveryBanner(),null);
+  customerId='customer-a';cursor=0;assert.ok(output.RecoveryBanner());
+  path='/walkthrough-detail';cursor=0;assert.equal(output.RecoveryBanner(),null);
   assert.equal(routes[0].params.resumeJobId,'job-a');assert.equal(routes[0].params.customerId,'customer-a');
   assert.match(state[2],status==='complete'?/Results ready/:status==='failed'?/needs attention/:/Analyzing/);
  }

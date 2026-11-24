@@ -9,6 +9,7 @@ function load(path) {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, {
     exports, require: name => {
       if (name.includes('async-storage')) return { default: storage };
+      if (name === 'expo-file-system/legacy') return {copyAsync:async ({from,to})=>{ new File(from).copy(new File(to)); }};
       if (name === 'expo-file-system') return { Directory, File, Paths: { document: { uri: 'file:documents' } } };
       if (name === 'react-native') return { Platform: { OS: 'ios' } };
       if (name === './supabase') return { supabase: { auth: { getSession: async () => { authCalls++; throw Error('Network unavailable'); } } } };

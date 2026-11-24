@@ -16,7 +16,7 @@ async function run({ expired = false, fresh = false, backgroundPicksUp = false }
   const received = new Set(fresh ? [] : [0]);
   let now = 0, queues = 0, polls = 0;
   const sent = [];
-  const context = {
+  const context = { recoveryMetadata: {},
     recoveryRef: { current: { nativeBatchId: fresh ? undefined : id } }, newBatchId: () => id,
     checkpoint: async snapshot => assert.equal(snapshot.nativeBatchId, id),
     uploadMounted: { current: true }, AppState: { currentState: 'active' },

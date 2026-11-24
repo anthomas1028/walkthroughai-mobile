@@ -7,6 +7,7 @@ class File { constructor(...parts) { this.uri = parts.map(p => typeof p === 'obj
 const out = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/recovery.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: out, require: name => {
  if (name.includes('async-storage')) return { default: storage };
+ if (name === 'expo-file-system/legacy') return {copyAsync: async ({from,to}) => {assert(files.has(from));files.set(to,files.get(from));}};
  if (name === 'expo-file-system') return { Directory, File, Paths: { document: { uri: 'file:documents' } } };
  if (name === 'react-native') return { Platform: { OS: 'ios' } };
  if (name === './supabase') return { supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: user } } } }) } } };

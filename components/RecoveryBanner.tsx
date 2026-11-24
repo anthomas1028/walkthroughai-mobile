@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppState, Pressable, Text, View } from 'react-native';
-import { usePathname, router } from 'expo-router';
+import { useGlobalSearchParams, usePathname, router } from 'expo-router';
 import { loadRecovery, RecoveryDraft } from '../lib/recovery';
 import { serverBatchStatus } from '../lib/native-upload';
 import { API_BASE_URL, apiFetch } from '../lib/api';
@@ -11,6 +11,10 @@ import { captureDrafts, type CaptureDraft } from '../lib/capture-drafts';
 export function RecoveryBanner() {
   const { session } = useAuth();
   const pathname = usePathname();
+  const { customerId } = useGlobalSearchParams<{ customerId?: string }>();
+  const home = pathname === '/';
+  const customerDashboard = pathname === '/customer-dashboard' && Boolean(customerId);
+  const showBanner = home || customerDashboard;
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<RecoveryDraft | null>(null);
   const [draftOwner, setDraftOwner] = useState('');
@@ -23,11 +27,11 @@ export function RecoveryBanner() {
     let active = true;
     let busy = false;
     async function refresh() {
-      if (busy || !session || pathname === '/upload' || AppState.currentState !== 'active') return;
+      if (busy || !session || !showBanner || AppState.currentState !== 'active') return;
       busy = true;
       try {
         const captures = await captureDrafts(session!.user.id);
-        if (active) { setCapture(captures[0] || null); setCaptureOwner(session!.user.id); }
+        if (active) { setCapture(captures.find(item => home || String(item.customerId) === customerId) || null); setCaptureOwner(session!.user.id); }
         const value = await loadRecovery(session!.user.id);
         if (!active) return;
         setDraft(value);
@@ -62,10 +66,10 @@ export function RecoveryBanner() {
     const timer = setInterval(() => void refresh(), 5000);
     const sub = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
     return () => { active = false; clearInterval(timer); sub.remove(); };
-  }, [pathname, session?.user.id]);
-  if (!session || pathname === '/upload' || pathname === '/walkthrough') return null;
-  const visibleDraft = draftOwner === session.user.id ? draft : null;
-  if (!visibleDraft && capture && captureOwner === session.user.id) return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/walkthrough', params: { customerId: capture.customerId, teamSessionId: capture.teamSessionId || "", teamArea: capture.teamArea || "", customerName: capture.customerName, contactName: capture.contactName } })}>
+  }, [pathname, customerId, session?.user.id]);
+  if (!session || !showBanner) return null;
+  const visibleDraft = draftOwner === session.user.id && (home || String(draft?.customerId) === customerId) ? draft : null;
+  if (!visibleDraft && capture && (home || String(capture.customerId) === customerId) && captureOwner === session.user.id) return <View style={{ backgroundColor: '#17344B', padding: 12, paddingTop: insets.top + 8 }}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/walkthrough', params: { customerId: capture.customerId, teamSessionId: capture.teamSessionId || "", teamArea: capture.teamArea || "", customerName: capture.customerName, contactName: capture.contactName } })}>
     <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Continue walkthrough · {capture.customerName}</Text>
     <Text style={{ color: '#CBD5E1', marginTop: 3 }}>{capture.photoCount} photos · {capture.scanCount || 0} scans saved on this device. Available offline.</Text>
   </Pressable></View>;

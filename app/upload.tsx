@@ -561,6 +561,7 @@ export default function UploadScreen() {
   const finalizationBusy = useRef(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [backendDiagnostics, setBackendDiagnostics] = useState<Record<string, string>>({});
+  const [reviewLimit, setReviewLimit] = useState(40);
   const [showPhotoDetails, setShowPhotoDetails] = useState(false);
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
 
@@ -875,13 +876,36 @@ export default function UploadScreen() {
 
   const hasResults = results.length > 0;
 
-  const photoOutcomes = photos.map((photo, index) => {
-    const rows = results.filter(row => getSourcePhotoIndex(row.photo, photos.length) === index);
-    const excluded = removedPhotos.some(key => { try { return getSourcePhotoIndex(JSON.parse(key)[0], photos.length) === index; } catch { return false; } });
-    return { photo, index, rows, status: photoOutcome(rows, excluded) };
-  });
+  const photoOutcomes = useMemo(() => {
+    const byPhoto = photos.map((): RecognitionResult[] => []);
+    for (const row of results) {
+      const index = getSourcePhotoIndex(row.photo, photos.length);
+      if (index !== null) byPhoto[index].push(row);
+    }
+    const excluded = new Set<number | null>();
+    for (const key of removedPhotos) {
+      try { excluded.add(getSourcePhotoIndex(JSON.parse(key)[0], photos.length)); }
+      catch { /* Older drafts may contain an invalid removal key. */ }
+    }
+    return photos.map((photo, index) => ({
+      photo, index, rows: byPhoto[index], status: photoOutcome(byPhoto[index], excluded.has(index)),
+    }));
+  }, [photos, results, removedPhotos]);
   const countOutcome = (status: string) => photoOutcomes.filter(photo => photo.status === status).length;
 
+  const duplicateRows = useMemo(() => {
+    const first = new Map<string, number>();
+    const duplicates = new Set<number>();
+    results.forEach((row, index) => {
+      const part = cleanText(row.manufacturer_part_number || row.part_number || row.vendor_part_number).toUpperCase();
+      if (!part) return;
+      const key = JSON.stringify([part, cleanText(row.location).toUpperCase()]);
+      const previous = first.get(key);
+      if (previous === undefined) first.set(key, index);
+      else { duplicates.add(previous); duplicates.add(index); }
+    });
+    return duplicates;
+  }, [results]);
   const reviewGroups = useMemo(() => {
     const groups = new Map<
       string,
@@ -1051,6 +1075,9 @@ export default function UploadScreen() {
       }
     }
 
+    const privateReview = teamSessionId ? "" : JSON.stringify({ name: '', scans: recoveryRef.current?.captureScans || capturedScans });
+    const recoveryMetadata = privateReview && privateReview.length <= 48000 ? { private_review: privateReview } : {};
+
     async function submitNativeJob(): Promise<{ response: Response; data: UploadApiResponse }> {
       let id = recoveryRef.current?.nativeBatchId || newBatchId();
       let existing = recoveryRef.current?.nativeBatchId ? await serverBatchStatus(id) : null;
@@ -1063,7 +1090,7 @@ export default function UploadScreen() {
       await checkpoint({ nativeBatchId: id, completionAlertToken: notificationToken });
       // All file transfers and retries are queued natively. No JS "submit" call is required.
       const metadata = {
-        customer, customer_id: customerId, photo_locations: preparedPhotos.map(p => cleanText(p.location)),
+        ...recoveryMetadata, customer, customer_id: customerId, photo_locations: preparedPhotos.map(p => cleanText(p.location)),
         completion_token: notificationToken,
       };
       setJobStatusMessage("Preparing full-resolution photos for upload…");
@@ -1232,6 +1259,7 @@ export default function UploadScreen() {
       }
       setJobStatusMessage("All photos uploaded. Starting analysis.");
       const body = new FormData();
+      if (recoveryMetadata.private_review) body.append("private_review", recoveryMetadata.private_review);
       body.append("customer", customer);
       if (customerId) body.append("customer_id", customerId);
       body.append("photo_locations", JSON.stringify(preparedPhotos.map(photo => cleanText(photo.location))));
@@ -1342,6 +1370,7 @@ export default function UploadScreen() {
       setEmailSent(false);
       setEmailedRecipient("");
 
+      setJobStatusMessage("Checking your connection…");
       if (!(await connection.refresh())) {
         const originals = recoveryRef.current?.photos || await retainPhotos(photos, `source-${Date.now()}`);
         await checkpoint({ photos: originals, uploadRequested: true });
@@ -1352,15 +1381,15 @@ export default function UploadScreen() {
       setWaitingForConnection(false);
       await checkpoint({ uploadRequested: false });
 
-      if (completionAlertsSupported && !notificationOptOut.current && !notificationToken && !recoveryRef.current?.nativeBatchId && !recoveryRef.current?.jobId && !resumeJobId) {
-        try {
-          notificationToken = await requestCompletionToken();
-          setCompletionAlertToken(notificationToken);
-          setNotificationIssue("");
-        } catch (error) {
-          setNotificationIssue(error instanceof Error ? error.message : "Notifications unavailable. Return here to view your results.");
-        }
-      }
+      // Fetch permission/token while retaining originals. iOS still receives the token with its durable queue.
+      const requestToken = completionAlertsSupported && !notificationOptOut.current && !notificationToken &&
+        !recoveryRef.current?.nativeBatchId && !recoveryRef.current?.jobId && !resumeJobId;
+      const pendingToken = requestToken ? requestCompletionToken().then(token => {
+        setCompletionAlertToken(token); setNotificationIssue(""); return token;
+      }).catch(error => {
+        setNotificationIssue(error instanceof Error ? error.message : "Completion notifications unavailable.");
+        return "";
+      }) : null;
       const uploadKey = JSON.stringify([customer, customerId, photos]);
       if (!(recoveryRef.current?.jobId || resumeJobId) && (!pendingUpload.current || pendingUpload.current.key !== uploadKey || !pendingUpload.current.prepared.length)) {
         const prior = recoveryRef.current;
@@ -1368,7 +1397,10 @@ export default function UploadScreen() {
           !!photo.id && photo.id === prior.photos[index].id && photo.location === prior.photos[index].location);
         const priorUpload = samePhotos ? prior?.uploadId || "" : "";
         const nativeBatchId = samePhotos ? prior?.nativeBatchId : undefined;
-        const originals = samePhotos && Platform.OS !== "web" ? prior.photos : await retainPhotos(photos, `source-${Date.now()}`);
+        setJobStatusMessage("Preparing originals on this device…");
+        const originals = samePhotos && Platform.OS !== "web" ? prior.photos : await retainPhotos(photos, `source-${Date.now()}`, ready => {
+          if (ready === 1 || ready % 5 === 0 || ready === photos.length) setJobStatusMessage(`Preparing originals · ${ready} of ${photos.length} saved`);
+        });
         recoveryRef.current = { version: 1, customerId, teamSessionId, teamArea, customerName: customer, contactName: selectedContactName, captureScans: capturedScans, uploadRequested: false, photos: originals, prepared: [], uploaded: [], uploadId: priorUpload, nativeBatchId, jobId: "", results: [], updatedAt: new Date().toISOString() };
         await saveRecovery(recoveryRef.current, session?.user.id);
         preparedPhotos = nativeUploadSupported ? originals : await retainPhotos(await preparePhotosForUpload(originals), `upload-${Date.now()}`);
@@ -1382,6 +1414,10 @@ export default function UploadScreen() {
         "Uploading photos to Walkthrough AI."
       );
 
+      if (pendingToken) {
+        setJobStatusMessage("Checking notification permission before sending photos…");
+        notificationToken = await pendingToken;
+      }
       await checkpoint({ completionAlertToken: notificationToken });
       const existingJobId = recoveryRef.current?.jobId || resumeJobId;
       if (!existingJobId && !pendingUpload.current?.uploadId && !recoveryRef.current?.nativeBatchId) {
@@ -2359,7 +2395,7 @@ export default function UploadScreen() {
                 {currentJobId ? "Analyzing inventory" : "Uploading photos"}
               </Text>
               <Text accessibilityLiveRegion="polite" style={styles.processingNote}>
-                {currentJobId ? `${jobProgress}% complete` : `${receivedPhotos} of ${photoCount} photos uploaded`}
+                {currentJobId ? `${jobProgress}% complete` : receivedPhotos === 0 ? jobStatusMessage : `${receivedPhotos} of ${photoCount} photos uploaded`}
               </Text>
               <View accessibilityRole="progressbar"
                 accessibilityLabel={currentJobId ? "Analysis progress" : "Upload progress"}
@@ -2374,7 +2410,7 @@ export default function UploadScreen() {
               <Text style={styles.processingKeepOpenText}>
                 {currentJobId
                   ? "You can leave this screen. Analysis continues in the background."
-                  : jobStatusMessage}
+                  : receivedPhotos === 0 ? `${photoCount} photos in this upload` : jobStatusMessage}
               </Text>
               {!currentJobId && offerForeground && <Pressable accessibilityRole="button" onPress={() => {
                 foregroundEnabled.current = true;
@@ -2559,7 +2595,7 @@ export default function UploadScreen() {
 
                           {!isCollapsed && (
                             <View style={styles.areaReviewItems}>
-                {group.items.map(
+                {group.items.filter(({ index }) => index < reviewLimit).map(
                   ({ result, index }) => {
                     const confidence =
                       getConfidencePercent(
@@ -2571,8 +2607,7 @@ export default function UploadScreen() {
                       result.part_number;
 
                     const reviewReasons = getReviewReasons(result);
-                    const part = cleanText(result.manufacturer_part_number || result.part_number || result.vendor_part_number).toUpperCase();
-                    if (part && results.some(other => other !== result && cleanText(other.manufacturer_part_number || other.part_number || other.vendor_part_number).toUpperCase() === part && cleanText(other.location).toUpperCase() === cleanText(result.location).toUpperCase())) reviewReasons.push("Possible repeated part in this area. Compare labels before removing a duplicate. Package size is not a stock count.");
+                    if (duplicateRows.has(index)) reviewReasons.push("Possible repeated part in this area. Compare labels before removing a duplicate. Package size is not a stock count.");
 
                     return (
                       <View
@@ -2757,7 +2792,7 @@ export default function UploadScreen() {
                         </View>
                       );
                     })
-                  : results.map(
+                  : results.slice(0, reviewLimit).map(
                   (result, index) => {
                     const confidence =
                       getConfidencePercent(
@@ -2769,8 +2804,7 @@ export default function UploadScreen() {
                       result.part_number;
 
                     const reviewReasons = getReviewReasons(result);
-                    const part = cleanText(result.manufacturer_part_number || result.part_number || result.vendor_part_number).toUpperCase();
-                    if (part && results.some(other => other !== result && cleanText(other.manufacturer_part_number || other.part_number || other.vendor_part_number).toUpperCase() === part && cleanText(other.location).toUpperCase() === cleanText(result.location).toUpperCase())) reviewReasons.push("Possible repeated part in this area. Compare labels before removing a duplicate. Package size is not a stock count.");
+                    if (duplicateRows.has(index)) reviewReasons.push("Possible repeated part in this area. Compare labels before removing a duplicate. Package size is not a stock count.");
 
                     return (
                       <View
@@ -2950,6 +2984,9 @@ export default function UploadScreen() {
                     );
                   }
                 )}
+                {results.length > reviewLimit && <Pressable accessibilityRole="button" onPress={() => setReviewLimit(value => value + 40)} style={{padding:16}}>
+                  <Text style={{color:'#93C5FD'}}>Show more items ({reviewLimit} of {results.length})</Text>
+                </Pressable>}
               </View>
             )}
         </ScrollView>

@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
 import { UI } from "../constants/design";
@@ -35,6 +36,23 @@ export default function SignInScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const source = useLocalSearchParams<{ walkthroughId?: string; itemId?: string }>();
+  async function requestPasswordReset() {
+    if (!email.trim()) { notify("Email required", "Enter your email address first."); return; }
+    setIsSubmitting(true);
+    try {
+      const target = new URL('https://walkthroughai.app/reset-password');
+      if (/^[1-9]\d*$/.test(source.walkthroughId || '') && /^[1-9]\d*$/.test(source.itemId || '')) {
+        target.searchParams.set('walkthroughId', source.walkthroughId!);
+        target.searchParams.set('itemId', source.itemId!);
+      }
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: target.toString() });
+      if (error) throw error;
+      notify('Check your email', 'If your account exists, you will receive a password reset link.');
+    } catch (error) { notify('Password reset unavailable', error instanceof Error ? error.message : 'Try again.'); }
+    finally { setIsSubmitting(false); }
+  }
+
   async function submit() {
     setNotice("");
     const cleanedEmail = email.trim().toLowerCase();
@@ -45,7 +63,7 @@ export default function SignInScreen() {
       return;
     }
 
-    if (password.length < 8) {
+    if (isCreatingAccount && password.length < 8) {
       notify("Password too short", "Use at least 8 characters.");
       return;
     }
@@ -184,6 +202,10 @@ export default function SignInScreen() {
                 />
               </Pressable>
             </View>
+
+            {!isCreatingAccount && <Pressable accessibilityRole="button" disabled={isSubmitting} onPress={() => void requestPasswordReset()} style={{minHeight:44, justifyContent:'center'}}>
+              <Text style={{color:'#93C5FD'}}>Forgot password?</Text>
+            </Pressable>}
 
             <Pressable accessibilityRole="button"
               disabled={isSubmitting}

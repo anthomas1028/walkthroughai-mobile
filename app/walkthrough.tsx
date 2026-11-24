@@ -154,6 +154,19 @@ export default function WalkthroughPhotoScreen() {
     mode: "create",
     groupId: null,
   });
+  const [knownAreas, setKnownAreas] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    setKnownAreas([]);
+    if (customerId && areaModal.visible) {
+      apiFetch(`${API_BASE_URL}/api/customers/${customerId}/dashboard`)
+        .then(async response => response.ok ? (await response.json()).dashboard?.locations : [])
+        .then(locations => {
+          if (active && Array.isArray(locations)) setKnownAreas(locations.map(location => location.name).filter(name => typeof name === 'string' && name.trim() && !/^unassigned( area)?$/i.test(name)));
+        }).catch(() => {});
+    }
+    return () => { active = false; };
+  }, [customerId, areaModal.visible]);
   const [areaNameDraft, setAreaNameDraft] = useState("");
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
   const [importMessage, setImportMessage] = useState('');
@@ -1145,6 +1158,11 @@ export default function WalkthroughPhotoScreen() {
                   Use the name people at this facility will recognize.
                 </Text>
 
+                {knownAreas.filter(name => !groups.some(group => group.name.toLowerCase() === name.toLowerCase())).map(name => (
+                  <Pressable key={name} accessibilityRole="button" onPress={() => setAreaNameDraft(name)} style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <Text style={{ color: '#93C5FD' }}>{name}</Text>
+                  </Pressable>
+                ))}
                 <TextInput
                   ref={areaInputRef}
                   value={areaNameDraft}
