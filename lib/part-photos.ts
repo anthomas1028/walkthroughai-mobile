@@ -1,5 +1,5 @@
 export type PartPhoto = { name: string; item_id: number; uri?: string };
-export type FastenalMatch = { sku: string; label: 'Exact Match' | 'Suggested Equivalent' | 'Saved cross-reference'; url: string };
+export type FastenalMatch = { sku: string; label: 'Exact Match' | 'Suggested Equivalent' | 'Published cross-reference' | 'Saved cross-reference'; url: string };
 export type SourcingPart = {
   fastenal_match?: FastenalMatch | null;
   item_ids: number[];
