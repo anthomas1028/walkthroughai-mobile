@@ -1,3 +1,5 @@
+import { PartPhotoStrip } from '../components/PartPhotoStrip';
+import { savedParts, type PartPhoto, type SourcingPart } from '../lib/part-photos';
 import { SourcingItemEditor } from '../components/SourcingItemEditor';
 import { useAuth } from "../contexts/AuthContext";
 import { PhotoExport } from "../components/PhotoExport";
@@ -38,6 +40,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { API_BASE_URL, apiFetch } from "../lib/api";
 
 type WalkthroughItem = {
+  part?: SourcingPart;
   scanned_barcodes?: BarcodeScan[];
   barcode_evidence?: BarcodeEvidence | null;
   retake_evidence?: { photo: string; photo_url?: string | null }[];
@@ -71,6 +74,7 @@ type WalkthroughItem = {
 };
 
 type Walkthrough = {
+  sourcing_parts?: SourcingPart[];
   is_read_only?: boolean;
   id: number;
   customer_id: number;
@@ -146,6 +150,18 @@ function incompleteItem(item: WalkthroughItem): boolean {
   return !item.description?.trim() || /^inventory item$/i.test(item.description.trim()) || !displayPartNumber(item).trim();
 }
 
+function itemPhotos(item: WalkthroughItem): PartPhoto[] {
+  if (item.part) return item.part.photos;
+  const sources: PartPhoto[] = [];
+  if (item.photo && item.photo_url && !isScanReference(item.photo)) {
+    sources.push({ name: item.photo.split(',')[0].trim(), uri: item.photo_url, item_id: item.id });
+  }
+  for (const photo of item.retake_evidence || []) {
+    if (photo.photo_url) sources.push({ name: photo.photo, uri: photo.photo_url, item_id: item.id });
+  }
+  return sources;
+}
+
 function itemTitle(item: WalkthroughItem): string {
   return item.description || displayPartNumber(item) || "Inventory Item";
 }
@@ -168,7 +184,7 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
 export default function WalkthroughDetailScreen() {
   const { session } = useAuth();
   const goBack = useBackTo('history');
-  const params = useLocalSearchParams<{ walkthroughId?: string; itemId?: string; customerName?: string }>();
+  const params = useLocalSearchParams<{ walkthroughId?: string; itemId?: string; photoName?: string; customerName?: string }>();
   const walkthroughId = Number(params.walkthroughId || 0);
   const fallbackCustomer = typeof params.customerName === "string" ? params.customerName : "Customer";
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -189,7 +205,8 @@ export default function WalkthroughDetailScreen() {
   const photoViewerScrollRef = useRef<ScrollView>(null);
   const lastPhotoViewerTapTime = useRef(0);
   const photoViewerIsZoomed = useRef(false);
-  const pendingPhotoViewer = useRef<PhotoViewer | null>(null);
+  const [itemGallery, setItemGallery] = useState<{title: string; photos: PhotoViewer[]} | null>(null);
+  const inventory = useMemo(() => savedParts(walkthrough?.items || [], walkthrough?.sourcing_parts), [walkthrough]);
 
   const loadWalkthrough = useCallback(async (showLoading = true) => {
     if (!walkthroughId) {
@@ -229,17 +246,23 @@ export default function WalkthroughDetailScreen() {
   const openedSource = useRef("");
   useEffect(() => {
     if (!params.itemId || walkthrough?.id !== walkthroughId) return;
-    const key = walkthroughId + "/" + params.itemId;
+    const key = JSON.stringify([walkthroughId, params.itemId, params.photoName]);
     if (openedSource.current === key) return;
-    const item = walkthrough.items.find(row => row.id === Number(params.itemId));
-    if (!item?.photo_url) return;
+    const id = Number(params.itemId);
+    const raw = walkthrough.items.find(row => row.id === id);
+    if (!raw) return;
+    const item = inventory.find(row => row.id === id || row.part?.item_ids.includes(id)) || raw;
+    const sources = itemPhotos(item);
+    const source = sources.find(photo => photo.item_id === id && (!params.photoName || photo.name === params.photoName));
+    if (!source?.uri) return;
     openedSource.current = key;
-    setPhotoViewer({ uri: item.photo_url, label: [item.location, item.photo].filter(Boolean).join(" · ") });
-  }, [params.itemId, walkthrough, walkthroughId]);
+    setSelectedItem(item);
+    showItemPhoto(item, source);
+  }, [params.itemId, params.photoName, walkthrough, walkthroughId, inventory]);
 
   const locationGroups = useMemo<LocationGroup[]>(() => {
     const map = new Map<string, WalkthroughItem[]>();
-    for (const item of walkthrough?.items || []) {
+    for (const item of inventory) {
       const location = item.location?.trim() || "Unassigned";
       map.set(location, [...(map.get(location) || []), item]);
     }
@@ -247,27 +270,27 @@ export default function WalkthroughDetailScreen() {
       .map(([name, items]) => ({
         name,
         items,
-        photoCount: new Set(items.map((item) => item.photo).filter(photo => photo && !isScanReference(photo))).size,
+        photoCount: new Set(items.flatMap(item => itemPhotos(item).map(photo => photo.name))).size,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [walkthrough]);
+  }, [inventory]);
 
   const [visibleCount, setVisibleCount] = useState(40);
   useEffect(() => setVisibleCount(40), [selectedLocation, selectedVendor]);
   const visibleItems = useMemo(() => {
     if (!walkthrough) return [];
-    if (selectedLocation === "__INCOMPLETE__") return walkthrough.items.filter(incompleteItem);
-    if (selectedLocation === "__ALL__") return walkthrough.items;
+    if (selectedLocation === "__INCOMPLETE__") return inventory.filter(incompleteItem);
+    if (selectedLocation === "__ALL__") return inventory;
     if (!selectedLocation) return [];
-    return walkthrough.items.filter(
+    return inventory.filter(
       (item) => (item.location?.trim() || "Unassigned") === selectedLocation
     );
-  }, [selectedLocation, walkthrough]);
+  }, [selectedLocation, walkthrough, inventory]);
 
   const [photoInventory, setPhotoInventory] = useState<{ id: number; photos: SavedOriginal[] } | null>(null);
   const [photoListError, setPhotoListError] = useState("");
   const [photoListAttempt, setPhotoListAttempt] = useState(0);
-  const showingPhotos = selectedMetricView === "photos" || !!photoViewer;
+  const showingPhotos = selectedMetricView === "photos" || (!!photoViewer && !itemGallery);
   const fetchOriginals = useCallback(async () => {
     const response = await apiFetch(API_BASE_URL + "/api/walkthroughs/" + walkthroughId + "/photos");
     if (!response.ok) throw new Error("Could not load the complete photo list.");
@@ -292,7 +315,7 @@ export default function WalkthroughDetailScreen() {
   const vendorGroups = useMemo<VendorGroup[]>(() => {
     const map = new Map<string, WalkthroughItem[]>();
 
-    for (const item of walkthrough?.items || []) {
+    for (const item of inventory) {
       const vendorName = item.vendor?.trim();
       if (!vendorName) continue;
       map.set(vendorName, [...(map.get(vendorName) || []), item]);
@@ -301,7 +324,7 @@ export default function WalkthroughDetailScreen() {
     return Array.from(map.entries())
       .map(([name, items]) => ({ name, items }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [walkthrough]);
+  }, [inventory]);
 
   const vendorCount = vendorGroups.length;
 
@@ -363,30 +386,22 @@ export default function WalkthroughDetailScreen() {
     lastPhotoViewerTapTime.current = 0;
     photoViewerIsZoomed.current = false;
 
-    if (selectedItem !== null) {
-      pendingPhotoViewer.current = nextPhotoViewer;
-      setSelectedItem(null);
-      return;
-    }
-
+    setItemGallery(null);
     setPhotoViewer(nextPhotoViewer);
   }
 
-  function handlePartDetailsDismiss() {
-    const queuedPhotoViewer = pendingPhotoViewer.current;
-
-    if (!queuedPhotoViewer) {
-      return;
-    }
-
-    pendingPhotoViewer.current = null;
-
-    requestAnimationFrame(() => {
-      setPhotoViewer(queuedPhotoViewer);
-    });
+  function showItemPhoto(item: WalkthroughItem, source: PartPhoto) {
+    const photos = itemPhotos(item).flatMap(photo => photo.uri ? [{ uri: photo.uri, label: photo.name }] : []);
+    const selected = photos.find(photo => photo.uri === source.uri);
+    if (!selected) return;
+    setItemGallery({ title: displayPartNumber(item) || itemTitle(item), photos });
+    lastPhotoViewerTapTime.current = 0;
+    photoViewerIsZoomed.current = false;
+    setPhotoViewer(selected);
   }
 
   function closePhotoViewer() {
+    setItemGallery(null);
     setPhotoViewer(null);
     lastPhotoViewerTapTime.current = 0;
     photoViewerIsZoomed.current = false;
@@ -522,7 +537,7 @@ export default function WalkthroughDetailScreen() {
                       <Ionicons name="cube-outline" size={21} color="#93C5FD" />
                       <Ionicons name="chevron-forward" size={17} color="#58708D" />
                     </View>
-                    <Text style={styles.statValue}>{walkthrough.item_count}</Text>
+                    <Text style={styles.statValue}>{inventory.length}</Text>
                     <Text style={styles.statLabel}>Parts</Text>
                   </Pressable>
 
@@ -602,16 +617,16 @@ export default function WalkthroughDetailScreen() {
                   <View style={styles.navigationText}>
                     <Text style={styles.navigationTitle}>Complete Parts List</Text>
                     <Text style={styles.navigationMeta}>
-                      {plural(walkthrough.item_count, "part")} across {plural(locationGroups.length, "area")}
+                      {plural(inventory.length, "part")} across {plural(locationGroups.length, "area")}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
                 </Pressable>
 
-                {walkthrough.items.some(incompleteItem) && (
+                {inventory.some(incompleteItem) && (
                   <Pressable accessibilityRole="button" style={styles.navigationCard} onPress={() => setSelectedLocation("__INCOMPLETE__")}>
                     <View style={styles.navigationText}>
-                      <Text style={styles.navigationTitle}>Review incomplete rows ({walkthrough.items.filter(incompleteItem).length})</Text>
+                      <Text style={styles.navigationTitle}>Review incomplete rows ({inventory.filter(incompleteItem).length})</Text>
                       <Text style={styles.navigationMeta}>Missing a description or part number. Open a row to check its source.</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={22} color="#93C5FD" />
@@ -793,8 +808,7 @@ export default function WalkthroughDetailScreen() {
                     )} · {plural(
                       new Set(
                         (selectedVendor ? selectedVendorItems : visibleItems)
-                          .map((item) => item.photo)
-                          .filter(Boolean)
+                          .flatMap(item => itemPhotos(item).map(photo => photo.name))
                       ).size,
                       "photo"
                     )}
@@ -825,19 +839,14 @@ export default function WalkthroughDetailScreen() {
                         <Ionicons name="chevron-forward" size={20} color="#6F829A" />
                       </Pressable>
 
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`View source photo for ${itemTitle(item)}`}
-                        onPress={() => openSourcePhoto(item)}
-                        style={({ pressed }) => [
-                          styles.photoButton,
-                          !item.photo_url && styles.photoButtonDisabled,
-                          pressed && item.photo_url && styles.buttonPressed,
-                        ]}
-                      >
-                        <Ionicons name="image-outline" size={22} color={item.photo_url ? "#93C5FD" : "#52657D"} />
-                        <Text style={[styles.photoButtonText, !item.photo_url && styles.photoButtonTextDisabled]}>Photo</Text>
-                      </Pressable>
+                      {itemPhotos(item).length > 1
+                        ? <PartPhotoStrip photos={itemPhotos(item)} onSelect={photo => showItemPhoto(item, photo)} />
+                        : itemPhotos(item).map(photo => <Pressable key={photo.name} accessibilityRole="button"
+                            accessibilityLabel={`View source photo for ${itemTitle(item)}`}
+                            onPress={() => showItemPhoto(item, photo)} style={styles.photoButton}>
+                            <Ionicons name="image-outline" size={22} color="#93C5FD" />
+                            <Text style={styles.photoButtonText}>Photo</Text>
+                          </Pressable>)}
                     </View>
                   ))}
                 {(selectedVendor ? selectedVendorItems : visibleItems).length > visibleCount ? <Pressable accessibilityRole="button" onPress={() => setVisibleCount(count => count + 40)} style={{ padding: 18, backgroundColor: "#1b2c43", borderRadius: 12 }}><Text style={{ color: "#bfdbfe", textAlign: "center", fontWeight: "700" }}>Show 40 more products</Text></Pressable> : null}
@@ -851,13 +860,13 @@ export default function WalkthroughDetailScreen() {
       </View>
 
       <Modal
-        visible={selectedItem !== null}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onDismiss={handlePartDetailsDismiss}
-        onRequestClose={() => setSelectedItem(null)}
+        visible={!!selectedItem || !!photoViewer}
+        animationType="fade"
+        presentationStyle="fullScreen"
+        onRequestClose={() => photoViewer ? closePhotoViewer() : setSelectedItem(null)}
       >
-        <SafeAreaView style={styles.modalSafeArea}>
+        {selectedItem && (
+        <SafeAreaView style={[styles.modalSafeArea, photoViewer && { display: 'none' }]}>
           <View style={styles.modalHeader}>
             <Pressable accessibilityRole="button" onPress={() => setSelectedItem(null)} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>Close</Text>
@@ -872,11 +881,17 @@ export default function WalkthroughDetailScreen() {
                 <Text style={styles.itemDetailPartNumber}>{displayPartNumber(selectedItem)}</Text>
               ) : null}
 
-              {walkthrough?.is_read_only === false && <SourcingItemEditor key={selectedItem.id} item={selectedItem} onSaved={() => { setSelectedItem(null); void loadWalkthrough(false); }} />}
+              {itemPhotos(selectedItem).length > 0 && <PartPhotoStrip photos={itemPhotos(selectedItem)}
+                onSelect={photo => showItemPhoto(selectedItem, photo)} />}
+              {walkthrough?.is_read_only === false && walkthrough.items.filter(row =>
+                selectedItem.part ? selectedItem.part.item_ids.includes(row.id) : row.id === selectedItem.id
+              ).map(row => <View key={row.id}>
+                {(selectedItem.part?.item_ids.length || 0) > 1 && <Text style={styles.partMeta}>{row.photo}</Text>}
+                <SourcingItemEditor item={row} onSaved={() => { setSelectedItem(null); void loadWalkthrough(false); }} />
+              </View>)}
               <SourcingSummary record={selectedItem.sourcing_recommendation} />
               <BarcodeSummary evidence={selectedItem.barcode_evidence} />
               <ScannedBarcodes scans={selectedItem.scanned_barcodes} />
-              {selectedItem.retake_evidence?.map((evidence, index) => evidence.photo_url ? <Pressable key={evidence.photo} accessibilityRole="button" onPress={() => openSourcePhoto({ ...selectedItem, photo_url: evidence.photo_url, photo: `Label close-up ${index + 1}` })} style={styles.viewPhotoButton}><Text style={styles.viewPhotoButtonText}>View attached label close-up {index + 1}</Text></Pressable> : null)}
               <View style={styles.detailsCard}>
                 <DetailRow label="Location" value={selectedItem.location || "Unassigned"} />
                 <DetailRow label="Vendor" value={selectedItem.vendor} />
@@ -893,26 +908,12 @@ export default function WalkthroughDetailScreen() {
                 <DetailRow label="Package Quantity" value={selectedItem.package_quantity} />
                 <DetailRow label="Notes" value={selectedItem.notes} />
               </View>
-              <Pressable accessibilityRole="button"
-                disabled={!selectedItem.photo_url}
-                onPress={() => openSourcePhoto(selectedItem)}
-                style={({ pressed }) => [styles.viewPhotoButton, !selectedItem.photo_url && styles.disabled, pressed && styles.buttonPressed]}
-              >
-                <Ionicons name="image-outline" size={22} color="#FFFFFF" />
-                <Text style={styles.viewPhotoButtonText}>View Source Photo</Text>
-              </Pressable>
+
             </ScrollView>
           ) : null}
         </SafeAreaView>
-      </Modal>
-
-      <Modal
-        visible={photoViewer !== null}
-        animationType="fade"
-        presentationStyle="fullScreen"
-        onDismiss={closePhotoViewer}
-        onRequestClose={closePhotoViewer}
-      >
+        )}
+        {photoViewer && (
         <View style={[styles.viewerSafeArea, { paddingBottom: safeAreaInsets.bottom }]}>
           <View style={[styles.viewerHeader, { minHeight: 68 + safeAreaInsets.top, paddingTop: safeAreaInsets.top }]}>
             <Pressable accessibilityRole="button" accessibilityLabel="Close source photo" onPress={closePhotoViewer} style={styles.viewerCloseButton}>
@@ -920,7 +921,7 @@ export default function WalkthroughDetailScreen() {
             </Pressable>
             {photoViewer && <PhotoExport photos={() => [{ uri: photoViewer.uri, name: photoViewer.label }]} />}
             <View style={styles.viewerTitleArea}>
-              <Text numberOfLines={1} style={styles.viewerTitle}>{photoViewer?.label || "Source Photo"}</Text>
+              <Text numberOfLines={1} style={styles.viewerTitle}>{itemGallery?.title || photoViewer?.label || "Source Photo"}</Text>
               <Text style={styles.viewerHint}>Swipe photos · pinch to zoom</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Fit source photo to screen" style={styles.viewerCloseButton} onPress={() => {
@@ -929,7 +930,7 @@ export default function WalkthroughDetailScreen() {
             }}><Text style={styles.viewerCloseText}>Fit</Text></Pressable>
           </View>
           {photoViewer ? (
-            <PhotoNavigation photos={photoGroups.filter(photo => !!photo.uri)} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
+            <PhotoNavigation photos={itemGallery?.photos ?? photoGroups.filter(photo => !!photo.uri)} current={photoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setPhotoViewer(photo); }}>
 <ScrollView
               ref={photoViewerScrollRef}
               key={photoViewer.uri}
@@ -955,6 +956,7 @@ export default function WalkthroughDetailScreen() {
 </PhotoNavigation>
           ) : null}
         </View>
+        )}
       </Modal>
     </SafeAreaView>
   );

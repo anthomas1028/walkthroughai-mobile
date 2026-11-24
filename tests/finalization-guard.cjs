@@ -6,7 +6,7 @@ const code=ts.transpileModule(source.slice(start,end).replace('async function','
  let release,calls=0,download,error,cleanup=0;
  const ctx={exports:{},finalizationBusy:{current:false},teamSessionId:"",teamArea:"",contributionRevision:{current:0},captureSaveId:{current:"capture-test-123456"},autosaveAttempt:{current:""},recipientEmail:'',results:[],completedCustomer:'Synthetic',walkthroughName:'Synthetic',walkthroughTitle:'Audit',customerId:'1',selectedContactName:'',currentJobId:'job',FINALIZE_API_URL:'/api/finalize',photos:[],session:{user:{id:'owner'}},activeKey:'active',photoDraftKey:'photos',recoveryRef:{current:{photos:[]}},completedPhotoCleanup:{current:null},
    apiFetch:async()=>{calls++;await new Promise(r=>release=r);return {ok:true}},readJsonResponse:async()=>({success:true,download_url:'saved.xlsx',results:[]}),normalizeResult:r=>r,
-   setIsFinalizing:()=>{},setErrorMessage:v=>error=v,setResults:()=>{},setPhotos:()=>{},setCorrectedWorkbookUrl:v=>download=v,
+   setIsFinalizing:()=>{},setErrorMessage:v=>error=v,setResults:()=>{},setPhotos:()=>{},setSavedLayout(){},setCorrectedWorkbookUrl:v=>download=v,
    clearRecovery:async()=>{cleanup++;throw Error('local storage failure')},AsyncStorage:{multiRemove:async()=>{}},writeDraft:async()=>{},saveCaptureDraft:async()=>{},setEmailSent:()=>{},setEmailedRecipient:()=>{},Alert:{alert:()=>{throw Error('Should not claim successful report failed')}},console,Error,Array};
  vm.runInNewContext(code,ctx);
  const first=ctx.exports.finalizeWalkthrough(false);

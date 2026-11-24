@@ -1,3 +1,5 @@
+import { PartPhotoStrip } from '../components/PartPhotoStrip';
+import type { SourcingPart } from '../lib/part-photos';
 import { useBackTo } from '../lib/back-navigation';
 import { createPolishedStyles } from "../lib/polished-styles";
 import { AppBackdrop } from "../components/AppBackdrop";
@@ -81,6 +83,7 @@ type SelectedPhoto = {
 };
 
 type RecognitionResult = {
+  id?: number;
   scanned_barcodes?: BarcodeScan[];
   barcode_evidence?: BarcodeEvidence | null;
   photo: string;
@@ -157,6 +160,8 @@ type JobStatusApiResponse = {
 };
 
 type FinalizeApiResponse = {
+  sourcing_parts?: SourcingPart[];
+  walkthrough?: { id: number } | null;
   contribution_revision?: number;
   success: boolean;
   customer?: string;
@@ -761,6 +766,8 @@ export default function UploadScreen() {
     setCorrectedWorkbookUrl,
   ] = useState<string | null>(null);
 
+  const [savedLayout, setSavedLayout] = useState<{id: number; parts: SourcingPart[]} | null>(null);
+  const [partViewer, setPartViewer] = useState<{ title: string; photos: SourcePhotoViewer[] } | null>(null);
   const [completedCustomer, setCompletedCustomer] =
     useState("");
 
@@ -906,28 +913,39 @@ export default function UploadScreen() {
     });
     return duplicates;
   }, [results]);
+  const reviewRows = useMemo(() => {
+    const rows = results.map((result, index) => ({ result, index, part: undefined as SourcingPart | undefined }));
+    if (!correctedWorkbookUrl || !savedLayout) return rows;
+    const byId = new Map(rows.map(row => [row.result.id, row]));
+    return savedLayout.parts.flatMap(part => {
+      const row = byId.get(part.item_ids[0]);
+      return row ? [{ ...row, part }] : [];
+    });
+  }, [results, correctedWorkbookUrl, savedLayout]);
+  const visibleReviewRows = useMemo(() => new Set(reviewRows.slice(0, reviewLimit)), [reviewRows, reviewLimit]);
   const reviewGroups = useMemo(() => {
     const groups = new Map<
       string,
-      { location: string; items: Array<{ result: RecognitionResult; index: number }> }
+      { location: string; items: typeof reviewRows }
     >();
 
-    results.forEach((result, index) => {
+    reviewRows.forEach(row => {
+      const { result } = row;
       const location = cleanText(result.location) || "Unassigned Area";
       const existingGroup = groups.get(location);
 
       if (existingGroup) {
-        existingGroup.items.push({ result, index });
+        existingGroup.items.push(row);
       } else {
         groups.set(location, {
           location,
-          items: [{ result, index }],
+          items: [row],
         });
       }
     });
 
     return Array.from(groups.values());
-  }, [results]);
+  }, [reviewRows]);
 
   function toggleAreaCollapsed(location: string) {
     setCollapsedAreas((current) => ({
@@ -1581,6 +1599,41 @@ export default function UploadScreen() {
     setEditDraft(null);
   }
 
+  function renderMultiPhotoPart(part: SourcingPart, result: RecognitionResult) {
+    const sources = part.photos.map(photo => {
+      const member = results.find(row => row.id === photo.item_id);
+      const primary = member?.photo?.split(',')[0].trim() === photo.name;
+      const local = primary ? resolveReviewPhoto({ photo: photo.name, photo_url: photo.uri || member?.photo_url },
+        recoveryRef.current?.photos || photos) : null;
+      return { ...photo, uri: local?.uri || photo.uri, fallbackUri: local?.fallbackUri, label: photo.name };
+    });
+    const number = part.summary.manufacturer_part_number || part.summary.vendor_part_number || result.part_number;
+    return <View key={result.id} style={styles.resultCard}>
+      <Text style={styles.areaReviewTitle}>{part.summary.description || 'Inventory item'}</Text>
+      {!!number && <Text selectable style={styles.reviewProgressText}>{number}</Text>}
+      <PartPhotoStrip photos={sources} onSelect={photo => {
+        if (sources.every(source => source.uri) && photo.uri) {
+          setPartViewer({ title: number || part.summary.description || 'Item photos',
+            photos: sources.map(source => ({ ...source, uri: source.uri! })) });
+          setSourcePhotoError(false);
+          photoViewerIsZoomed.current = false;
+          lastPhotoViewerTapTime.current = 0;
+          setSourcePhotoViewer({ ...photo, uri: photo.uri });
+        } else if (savedLayout) {
+          router.push({ pathname: '/walkthrough-detail', params: {
+            walkthroughId: String(savedLayout.id), itemId: String(photo.item_id), photoName: photo.name } });
+        }
+      }} />
+      {part.item_ids.map(id => {
+        const index = results.findIndex(row => row.id === id);
+        return index >= 0 && <Pressable key={id} accessibilityRole="button" onPress={() => beginEditing(index)}
+          style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={styles.reviewProgressText}>Edit {part.item_ids.length > 1 ? results[index].photo : 'item'}</Text>
+        </Pressable>;
+      })}
+    </View>;
+  }
+
   function viewSourcePhoto(
     result: RecognitionResult
   ) {
@@ -1591,6 +1644,7 @@ export default function UploadScreen() {
       return;
     }
     setSourcePhotoError(false);
+    setPartViewer({ title: result.manufacturer_part_number || result.vendor_part_number || result.part_number || result.description || source.label, photos: [source] });
     setSourcePhotoViewer(source);
     lastPhotoViewerTapTime.current = 0;
     photoViewerIsZoomed.current = false;
@@ -1886,6 +1940,7 @@ export default function UploadScreen() {
       if (typeof data.contribution_revision === "number") { contributionRevision.current = data.contribution_revision; if (recoveryRef.current) await checkpoint({contributionRevision:data.contribution_revision,results:finalizedResults}); }
       autosaveAttempt.current = JSON.stringify(finalizedResults);
       setResults(finalizedResults);
+      setSavedLayout(data.sourcing_parts && data.walkthrough ? { id: data.walkthrough.id, parts: data.sourcing_parts } : null);
       // Keep source bytes available while this completed report remains on screen.
       const viewerPhotos = recoveryRef.current?.photos || photos;
       setPhotos(viewerPhotos as SelectedPhoto[]);
@@ -2490,7 +2545,7 @@ export default function UploadScreen() {
             !isFinalizing && (
               <View style={styles.resultsSection}>
                 <Text style={styles.completedTitle}>{correctedWorkbookUrl ? 'Inventory saved' : errorMessage ? 'Inventory not saved yet' : 'Saving inventory…'}</Text>
-                <Text style={styles.completedText}>{results.length} items · Edit any item or open its photo. Missing details do not block saving.</Text>
+                <Text style={styles.completedText}>{reviewRows.length} items · Edit any item or open its photo. Missing details do not block saving.</Text>
                     {photoCount > 0 && <View style={styles.reviewProgressCard}>
                       <Text style={styles.reviewProgressTitle}>Photo accounting</Text>
                       <Text style={styles.reviewProgressText}>{photoCount} submitted · {countOutcome("Ready to review") + countOutcome("Confirmed")} captured · {countOutcome("Needs retake / review")} need a clearer label · {countOutcome("Failed / missing")} failed/missing · {countOutcome("Excluded after review")} excluded</Text>
@@ -2518,7 +2573,7 @@ export default function UploadScreen() {
                     <Text style={styles.resultsSubtitle}>
                       {reviewMode === "area"
                         ? `${reviewGroups.length} ${reviewGroups.length === 1 ? "area" : "areas"}`
-                        : `${results.length} ${results.length === 1 ? "item" : "items"}`}
+                        : `${reviewRows.length} ${reviewRows.length === 1 ? "item" : "items"}`}
                     </Text>
                   </View>
 
@@ -2595,8 +2650,9 @@ export default function UploadScreen() {
 
                           {!isCollapsed && (
                             <View style={styles.areaReviewItems}>
-                {group.items.filter(({ index }) => index < reviewLimit).map(
-                  ({ result, index }) => {
+                {group.items.filter(row => visibleReviewRows.has(row)).map(
+                  ({ result, index, part }) => {
+                    if (part && part.photos.length > 1) return renderMultiPhotoPart(part, result);
                     const confidence =
                       getConfidencePercent(
                         result.confidence
@@ -2792,8 +2848,9 @@ export default function UploadScreen() {
                         </View>
                       );
                     })
-                  : results.slice(0, reviewLimit).map(
-                  (result, index) => {
+                  : reviewRows.slice(0, reviewLimit).map(
+                  ({ result, index, part }) => {
+                    if (part && part.photos.length > 1) return renderMultiPhotoPart(part, result);
                     const confidence =
                       getConfidencePercent(
                         result.confidence
@@ -2984,8 +3041,8 @@ export default function UploadScreen() {
                     );
                   }
                 )}
-                {results.length > reviewLimit && <Pressable accessibilityRole="button" onPress={() => setReviewLimit(value => value + 40)} style={{padding:16}}>
-                  <Text style={{color:'#93C5FD'}}>Show more items ({reviewLimit} of {results.length})</Text>
+                {reviewRows.length > reviewLimit && <Pressable accessibilityRole="button" onPress={() => setReviewLimit(value => value + 40)} style={{padding:16}}>
+                  <Text style={{color:'#93C5FD'}}>Show more items ({reviewLimit} of {reviewRows.length})</Text>
                 </Pressable>}
               </View>
             )}
@@ -3137,7 +3194,7 @@ export default function UploadScreen() {
                   numberOfLines={1}
                   style={styles.photoViewerTitle}
                 >
-                  {sourcePhotoViewer?.label ||
+                  {partViewer?.title || sourcePhotoViewer?.label ||
                     "Source Photo"}
                 </Text>
                 <Text style={styles.photoViewerHint}>
@@ -3153,7 +3210,7 @@ export default function UploadScreen() {
             </View>
 
             {sourcePhotoViewer && (
-              <PhotoNavigation photos={reviewPhotos(results, recoveryRef.current?.photos || photos)} current={sourcePhotoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setSourcePhotoError(false); setSourcePhotoViewer(photo); }}>
+              <PhotoNavigation photos={partViewer?.photos ?? reviewPhotos(results, recoveryRef.current?.photos || photos)} current={sourcePhotoViewer} isZoomed={photoViewerIsZoomed} onSelect={photo => { lastPhotoViewerTapTime.current = 0; photoViewerIsZoomed.current = false; setSourcePhotoError(false); setSourcePhotoViewer(photo); }}>
 <ScrollView key={sourcePhotoViewer.uri}
                 ref={photoViewerScrollRef}
                 style={styles.photoViewerScroll}
@@ -3188,7 +3245,9 @@ export default function UploadScreen() {
                 >
                   {sourcePhotoError && <Text style={{ color: '#FCA5A5', padding: 16 }}>This photo could not load. Check your connection and try again, or open its saved copy in customer History.</Text>}
                   <Image
-                    onError={() => { if (sourcePhotoViewer.fallbackUri && sourcePhotoViewer.fallbackUri !== sourcePhotoViewer.uri) { setSourcePhotoViewer({ ...sourcePhotoViewer, uri: sourcePhotoViewer.fallbackUri, fallbackUri: undefined }); } else setSourcePhotoError(true); }}
+                    onError={() => { if (sourcePhotoViewer.fallbackUri && sourcePhotoViewer.fallbackUri !== sourcePhotoViewer.uri) { const replacement = { ...sourcePhotoViewer, uri: sourcePhotoViewer.fallbackUri, fallbackUri: undefined };
+                    setPartViewer(group => group && ({ ...group, photos: group.photos.map(photo => photo.uri === sourcePhotoViewer.uri ? replacement : photo) }));
+                    setSourcePhotoViewer(replacement); } else setSourcePhotoError(true); }}
                     source={{
                       uri: sourcePhotoViewer.uri,
                     }}
