@@ -238,6 +238,8 @@ export default function WalkthroughPhotoScreen() {
   const continueLock = useRef(false);
   const [photoViewer, setPhotoViewer] = useState<PhotoViewer | null>(null);
 
+  const captureScrollRef = useRef<ScrollView>(null);
+  const newAreaToReveal = useRef<string | null>(null);
   const areaInputRef = useRef<TextInput>(null);
   const photoViewerScrollRef = useRef<ScrollView>(null);
   const lastPhotoViewerTapTime = useRef(0);
@@ -275,25 +277,16 @@ export default function WalkthroughPhotoScreen() {
     setTimeout(() => areaInputRef.current?.focus(), 300);
   }
 
+  function addArea(name: string) {
+    if (newAreaToReveal.current === name) return;
+    const area = { id: createId("area"), name, photos: [] };
+    newAreaToReveal.current = name;
+    setGroups(current => [...current, area]);
+  }
+
   function useUnassignedArea() {
-    setGroups((current) => {
-      const existingUnassigned = current.find(
-        (group) => group.name.trim().toLowerCase() === "unassigned"
-      );
-
-      if (existingUnassigned) {
-        return current;
-      }
-
-      return [
-        ...current,
-        {
-          id: createId("area"),
-          name: "Unassigned",
-          photos: [],
-        },
-      ];
-    });
+    if (!draftReady || groups.some(group => group.name.trim().toLowerCase() === "unassigned")) return;
+    addArea("Unassigned");
   }
 
   function openRenameAreaModal(group: LocationGroup) {
@@ -345,14 +338,7 @@ export default function WalkthroughPhotoScreen() {
         )
       );
     } else {
-      setGroups((current) => [
-        ...current,
-        {
-          id: createId("area"),
-          name: cleanedName,
-          photos: [],
-        },
-      ]);
+      addArea(cleanedName);
     }
 
     closeAreaModal();
@@ -854,6 +840,7 @@ export default function WalkthroughPhotoScreen() {
         </View>
 
         <ScrollView
+          ref={captureScrollRef}
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -924,8 +911,15 @@ export default function WalkthroughPhotoScreen() {
               </Pressable>
             </View>
           ) : (
-            <View style={styles.areaList}>
-              {groups.map((group) => (
+            <View
+              style={styles.areaList}
+              onLayout={({ nativeEvent }) => {
+                if (newAreaToReveal.current !== groups[groups.length - 1]?.name) return;
+                newAreaToReveal.current = null;
+                captureScrollRef.current?.scrollTo({ y: nativeEvent.layout.y, animated: true });
+              }}
+            >
+              {groups.slice().reverse().map((group) => (
                 <View key={group.id} style={styles.areaCard}>
                   <View style={styles.areaHeader}>
                     <View style={styles.areaHeaderText}>
@@ -1011,23 +1005,22 @@ export default function WalkthroughPhotoScreen() {
                     </Text>
                   )}
 
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Take a photo for ${group.name}`}
+                    disabled={!draftReady || isContinuing || isOpeningPicker || scanningArea !== null}
+                    onPress={() => void takePhoto(group.id)}
+                    style={({ pressed }) => [
+                      styles.photoActionButton,
+                      styles.takePhotoButton,
+                      pressed && styles.buttonPressed,
+                      isOpeningPicker && styles.disabledButton,
+                    ]}
+                  >
+                    <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.takePhotoButtonText}>Take Photo</Text>
+                  </Pressable>
                   <View style={styles.photoActionRow}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Take a photo for ${group.name}`}
-                      disabled={!draftReady || isContinuing || isOpeningPicker || scanningArea !== null}
-                      onPress={() => void takePhoto(group.id)}
-                      style={({ pressed }) => [
-                        styles.photoActionButton,
-                        styles.takePhotoButton,
-                        pressed && styles.buttonPressed,
-                        isOpeningPicker && styles.disabledButton,
-                      ]}
-                    >
-                      <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.takePhotoButtonText}>Take Photo</Text>
-                    </Pressable>
-
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Choose photos for ${group.name}`}
@@ -1043,17 +1036,17 @@ export default function WalkthroughPhotoScreen() {
                       <Ionicons name="images-outline" size={20} color="#93C5FD" />
                       <Text style={styles.choosePhotosButtonText}>Choose Photos</Text>
                     </Pressable>
+                    <Pressable
+                      accessibilityRole="button" accessibilityLabel={`Import ZIP for ${group.name}`}
+                      disabled={!draftReady || isContinuing || isOpeningPicker || scanningArea !== null}
+                      onPress={() => void chooseZip(group.id)}
+                      style={({ pressed }) => [styles.photoActionButton, styles.choosePhotosButton,
+                        pressed && styles.buttonPressed,
+                        isOpeningPicker && styles.disabledButton]}>
+                      <Ionicons name="folder-open-outline" size={19} color="#93C5FD" />
+                      <Text style={styles.choosePhotosButtonText}>Import ZIP</Text>
+                    </Pressable>
                   </View>
-                  <Pressable
-                    accessibilityRole="button" accessibilityLabel={`Import ZIP for ${group.name}`}
-                    disabled={!draftReady || isContinuing || isOpeningPicker || scanningArea !== null}
-                    onPress={() => void chooseZip(group.id)}
-                    style={({ pressed }) => [styles.photoActionButton, styles.choosePhotosButton,
-                      { alignSelf: 'stretch', flex: 0, marginTop: 8 }, pressed && styles.buttonPressed,
-                      isOpeningPicker && styles.disabledButton]}>
-                    <Ionicons name="folder-open-outline" size={19} color="#93C5FD" />
-                    <Text style={styles.choosePhotosButtonText}>Import ZIP</Text>
-                  </Pressable>
                   <BarcodeScanner key={`${group.id}-${scannerEpoch}`} continuous allowLabelPhoto existing={group.scans || []} otherScans={groups.filter(other => other.id !== group.id).flatMap(other => other.scans || [])}
                     blocked={!draftReady || isContinuing || isOpeningPicker || (scanningArea !== null && scanningArea !== group.id)}
                     title={`Scan in ${group.name}`} attachLabel="Save scan in this area" contextText="Scan, set quantity, and optionally photograph the same label. Save & next continues scanning. Works offline."
@@ -1232,8 +1225,8 @@ export default function WalkthroughPhotoScreen() {
                 {takingShot ? "Saving photo…" : photos.length >= MAX_WALKTHROUGH_PHOTOS ? "500-photo limit reached" :
                   `${groups.find(group => group.id === cameraArea)?.photos.length ?? 0} photos in this area`}
               </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", padding: 16 }}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Done, return to Capture Inventory" disabled={takingShot} onPress={closeCamera} style={{ padding: 12 }}>
+              <View style={styles.cameraControls}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Done, return to Capture Inventory" disabled={takingShot} onPress={closeCamera} style={styles.cameraDone}>
                   <Text style={{ color: "white" }}>Done</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel="Take photo" disabled={!cameraReady || takingShot || photos.length >= MAX_WALKTHROUGH_PHOTOS}
@@ -1563,7 +1556,20 @@ const styles = createPolishedStyles({
     fontSize: 13,
     paddingVertical: 18,
   },
+  cameraControls: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+  },
+  cameraDone: {
+    position: "absolute",
+    left: 16,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+  },
   photoActionRow: {
+    marginTop: 8,
     flexDirection: "row",
     gap: 10,
   },
@@ -1579,6 +1585,7 @@ const styles = createPolishedStyles({
     gap: 7,
   },
   takePhotoButton: {
+    flex: 0,
     backgroundColor: "#2D6BF0",
   },
   choosePhotosButton: {

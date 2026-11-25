@@ -63,5 +63,30 @@ function find(tree, type) { const values = []; const walk = node => { if (!node 
   assert.equal(alert[2][0].text, 'Keep scanning');
   alert[2][1].onPress(); await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(pushed.pathname, '/upload'); assert.equal(states[1][0].scans.length, 3);
+  // Older drafts store areas in creation order, including photos used for report numbering.
+  const oldArea = { id: 'first', name: 'First', photos: [] };
+  const nextArea = { id: 'second', name: 'Second', photos: [] };
+  states[1] = [oldArea, nextArea];
+  const areaNames = () => find(render(), 'AreaScanner').map(node => node.props.title);
+  assert.deepEqual(areaNames(), ['Scan in Second', 'Scan in First']);
+  tree = render();
+  find(tree, 'Button').find(button => button.props.onPress?.name === 'openCreateAreaModal').props.onPress();
+  const areaInput = () => find(render(), 'Input').find(input => input.props.placeholder === 'Example: Maintenance Area');
+  areaInput().props.onChangeText('Third');
+  areaInput().props.onSubmitEditing();
+  assert.deepEqual(areaNames(), ['Scan in Third', 'Scan in Second', 'Scan in First']);
+  assert.deepEqual(Array.from(states[1], area => area.name), ['First', 'Second', 'Third']);
+
+  tree = render();
+  const offsets = [];
+  find(tree, 'Scroll')[0].props.ref.current = { scrollTo: ({ y }) => offsets.push(y) };
+  const layout = () => find(render(), 'View').find(view => view.props.onLayout).props.onLayout({ nativeEvent: { layout: { y: 212 } } });
+  layout();
+  // A capture in an older area must neither move its card nor scroll back to the latest area.
+  const olderScanner = find(render(), 'AreaScanner').find(node => node.props.title === 'Scan in First');
+  await olderScanner.props.onAttach({ ...scan, value: 'NEW' });
+  layout();
+  assert.deepEqual(offsets, [212]);
+  assert.deepEqual(areaNames(), ['Scan in Third', 'Scan in Second', 'Scan in First']);
   console.log('PASS: visible area scanner at zero photos, offline scan save, stable scan identity, no invented part numbers and scan-only continuation.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
