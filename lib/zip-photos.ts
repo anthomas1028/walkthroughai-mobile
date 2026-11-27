@@ -9,7 +9,7 @@ export type ZipPhoto = {
 };
 const MiB = 1024 * 1024;
 const maxFile = 500 * MiB;
-const maxBatch = 4096 * MiB;
+const maxBatch = 8192 * MiB;
 const max32 = 0xffffffff;
 const types: Record<string, string> = {
   jpg: 'jpeg', jpeg: 'jpeg', png: 'png', webp: 'webp', heic: 'heic', heif: 'heif', avif: 'avif',
@@ -75,7 +75,7 @@ export async function listZipPhotos(source: ZipSource) {
         if (offset === max32) offset = wide();
       }
       total += size;
-      if (total > maxBatch) throw new Error('The photos in this ZIP exceed 4 GB. Split them into smaller ZIPs.');
+      if (total > maxBatch) throw new Error('The photos in this ZIP exceed 8 GiB. Split them into smaller ZIPs.');
       photos.push({ name, mime: 'image/' + type, size, compressed, offset, method: dir.getUint16(pos + 10, true),
         encrypted: !!(dir.getUint16(pos + 8, true) & 1), crc: dir.getUint32(pos + 16, true) });
     } else if (name && !parts.some(p => p.startsWith('.') || p === '__MACOSX')) ignored++;

@@ -75,6 +75,7 @@ type WalkthroughItem = {
 };
 
 type Walkthrough = {
+  source_photos_pending?: boolean;
   sourcing_parts?: SourcingPart[];
   is_read_only?: boolean;
   id: number;
@@ -510,6 +511,11 @@ export default function WalkthroughDetailScreen() {
               />
             }
           >
+            {walkthrough.source_photos_pending && (
+              <Text accessibilityRole="alert" style={styles.loadingText}>
+                Original photos are still pending. Finish saving from the review screen before sharing the report.
+              </Text>
+            )}
             {!showingParts && !showingMetricView ? (
               <>
                 <View style={styles.reportHero}>
@@ -522,7 +528,7 @@ export default function WalkthroughDetailScreen() {
                       </Text>
                     </View>
                     <View style={styles.completedBadge}>
-                      <Text style={styles.completedBadgeText}>Completed</Text>
+                      <Text style={styles.completedBadgeText}>{walkthrough.source_photos_pending ? "Photos pending" : "Completed"}</Text>
                     </View>
                   </View>
                 </View>

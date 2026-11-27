@@ -35,7 +35,7 @@ export async function apiFetch(
   } catch (error) {
     if (!init.signal && controller.signal.aborted) {
       const timeoutError = new Error(finalizing
-        ? "Saving took longer than expected. Your report may already be saved. Check this customer's History before retrying; do not restart the analysis."
+        ? "Saving took longer than expected. Check this customer's History for the photo status. If photos are pending, return to your review and tap Save inventory again."
         : "The connection timed out. Check your internet connection and try again.");
       if (finalizing) timeoutError.name = "FinalizationPendingError";
       throw timeoutError;

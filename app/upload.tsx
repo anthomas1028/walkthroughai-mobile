@@ -162,6 +162,7 @@ type JobStatusApiResponse = {
 };
 
 type FinalizeApiResponse = {
+  photos_pending?: boolean;
   sourcing_parts?: SourcingPart[];
   walkthrough?: { id: number } | null;
   contribution_revision?: number;
@@ -735,6 +736,7 @@ export default function UploadScreen() {
       "Uploading photos and preparing background analysis."
     );
 
+  const [pendingPhotoJob, setPendingPhotoJob] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] =
     useState(false);
 
@@ -1927,6 +1929,7 @@ export default function UploadScreen() {
           response
         );
 
+      setPendingPhotoJob(data.photos_pending ? currentJobId : null);
       if (!response.ok || !data.success) {
         throw new Error(
           data.error ||
@@ -2498,14 +2501,15 @@ export default function UploadScreen() {
               <Text
                 style={styles.processingTitle}
               >
-                Finalizing workbook
+                Saving inventory
               </Text>
 
               <Text
                 style={styles.processingText}
               >
-                The corrected Excel workbook is
-                being created and emailed.
+                {currentJobId && !teamSessionId
+                  ? "Saving the Excel report and original photos. Large photo sets can take a few minutes."
+                  : "Saving the reviewed inventory."}
               </Text>
 
               <Text
@@ -2548,7 +2552,7 @@ export default function UploadScreen() {
             !isProcessing &&
             !isFinalizing && (
               <View style={styles.resultsSection}>
-                <Text style={styles.completedTitle}>{correctedWorkbookUrl ? 'Inventory saved' : errorMessage ? 'Inventory not saved yet' : 'Saving inventory…'}</Text>
+                <Text style={styles.completedTitle}>{pendingPhotoJob && pendingPhotoJob === currentJobId && errorMessage ? 'Excel ready · photos pending' : correctedWorkbookUrl ? 'Inventory saved' : errorMessage ? 'Inventory not saved yet' : 'Saving inventory…'}</Text>
                 <Text style={styles.completedText}>{reviewRows.length} items · Edit any item or open its photo. Missing details do not block saving.</Text>
                     {photoCount > 0 && <View style={styles.reviewProgressCard}>
                       <Text style={styles.reviewProgressTitle}>Photo accounting</Text>
